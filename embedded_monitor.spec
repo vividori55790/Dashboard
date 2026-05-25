@@ -19,7 +19,7 @@ added_files = [
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=[],
     datas=added_files,
     hiddenimports=[

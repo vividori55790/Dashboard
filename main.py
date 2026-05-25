@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v1.1.0 (2026-05-25)
+# - Current Version: v1.2.0 (2026-05-25)
 # - Target Environment: Production / Python 3.10+ & PyQt6
 # - Integrity Check: Central workspace entry launcher for real & virtual telemetry monitoring
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v1.2.0 (2026-05-25) - Antigravity: Restructured codebase by moving modular source files into 'src/' folder.
 # * v1.1.0 (2026-05-25) - Antigravity: Added single-instance protection using QSharedMemory.
 # * v1.0.0 (2026-05-22) - Antigravity: Initial creation of standard central launcher.
 # ======================================================================
@@ -12,6 +13,9 @@
 import os
 import sys
 import argparse
+
+# Dynamically inject 'src' directory into Python search path to resolve modular imports cleanly
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
 
 def setup_simulation_mock():
     """
