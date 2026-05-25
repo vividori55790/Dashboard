@@ -37,7 +37,8 @@ a = Analysis(
         'plugins.trend_charts',
         'plugins.mcu_terminal',
         'plugins.parameter_manager',
-        'plugins.service_console'
+        'plugins.service_console',
+        'plugins.notion_dashboard'
     ],
     hookspath=[],
     hooksconfig={},

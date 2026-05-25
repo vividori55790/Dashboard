@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
     QGridLayout, QGroupBox, QLabel, QPushButton, QComboBox, 
     QTableWidget, QTableWidgetItem, QHeaderView, QSlider, 
     QDoubleSpinBox, QSpinBox, QTextEdit, QFileDialog, QRadioButton, QButtonGroup,
-    QTabWidget, QDockWidget, QCheckBox, QFrame, QListView, QLineEdit, QDialog,
-    QDialogButtonBox, QMessageBox, QScrollArea
+    QTabWidget, QDockWidget, QCheckBox, QFrame, QListView, QListWidget, QLineEdit, QDialog,
+    QDialogButtonBox, QMessageBox, QScrollArea, QSplitter, QColorDialog
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import QFont, QColor
@@ -97,15 +97,15 @@ class WorkspaceSetupTab(QWidget):
         
         # 1. Premium SCADA Header Panel
         header_widget = QWidget()
-        header_widget.setStyleSheet("background-color: #171821; border: 1px solid #272a38; border-radius: 6px;")
+        header_widget.setObjectName("header_widget")
         header_lay = QVBoxLayout(header_widget)
         header_lay.setContentsMargins(15, 10, 15, 10)
         header_lay.setSpacing(2)
         
         title_lbl = QLabel("🛠️ Enterprise Embedded Workspace Configurator")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #38bdf8; border: none; background: transparent;")
+        title_lbl.setObjectName("title_lbl")
         desc_lbl = QLabel("Establish physical USB COM ports list, register logical microcontroller subsystems, assign routing signatures, and build mathematical formulas.")
-        desc_lbl.setStyleSheet("font-size: 11px; color: #8e94a6; border: none; background: transparent;")
+        desc_lbl.setObjectName("desc_lbl")
         
         header_lay.addWidget(title_lbl)
         header_lay.addWidget(desc_lbl)
@@ -120,32 +120,33 @@ class WorkspaceSetupTab(QWidget):
         self.setup_routing_tab()
         self.setup_formulas_tab()
         self.setup_plugins_tab()
+        self.setup_theme_tab()
         
         # 3. Actions Footer Panel
         btn_panel = QWidget()
-        btn_panel.setStyleSheet("background-color: #121216; border: 1px solid #272a38; border-radius: 6px;")
+        btn_panel.setObjectName("footer_panel")
         btn_lay = QHBoxLayout(btn_panel)
         btn_lay.setContentsMargins(15, 8, 15, 8)
         btn_lay.setSpacing(10)
         
         btn_apply = QPushButton("✅ Apply & Commit Changes")
-        btn_apply.setStyleSheet("background-color: #059669; border-color: #10b981; color: white; font-weight: bold; padding: 6px 18px;")
+        btn_apply.setObjectName("btn_apply")
         btn_apply.clicked.connect(self.validate_and_save)
         
         btn_save_as = QPushButton("💾 Save Profile As...")
-        btn_save_as.setStyleSheet("background-color: #2563eb; border-color: #3b82f6; color: white; font-weight: bold; padding: 6px 18px;")
+        btn_save_as.setObjectName("btn_save_as")
         btn_save_as.clicked.connect(self.main_window.save_profile_as)
         
         btn_load = QPushButton("📂 Load Profile...")
-        btn_load.setStyleSheet("background-color: #374151; border-color: #4b5563; color: white; font-weight: bold; padding: 6px 18px;")
+        btn_load.setObjectName("btn_load")
         btn_load.clicked.connect(self.main_window.load_profile)
         
         btn_presets = QPushButton("📋 프리셋 템플릿 로드/조합...")
-        btn_presets.setStyleSheet("background-color: #7c3aed; border-color: #8b5cf6; color: white; font-weight: bold; padding: 6px 18px;")
+        btn_presets.setObjectName("btn_presets")
         btn_presets.clicked.connect(self.open_preset_dialog)
         
         btn_revert = QPushButton("🔄 Revert Uncommitted Changes")
-        btn_revert.setStyleSheet("background-color: #1b1c24; border-color: #272a38; color: #8e94a6; padding: 6px 18px;")
+        btn_revert.setObjectName("btn_revert")
         btn_revert.clicked.connect(self.load_configuration_into_ui)
         
         btn_lay.addWidget(btn_apply)
@@ -208,15 +209,16 @@ class WorkspaceSetupTab(QWidget):
         self.tbl_ports.blockSignals(False)
         
         # 2. Subsystems Tab
-        self.combo_subs.blockSignals(True)
-        self.combo_subs.clear()
+        self.list_subs.blockSignals(True)
+        self.list_subs.clear()
         for s in self.config_data.get("subsystems", []):
-            self.combo_subs.addItem(s["name"])
-        self.combo_subs.blockSignals(False)
+            self.list_subs.addItem(s["name"])
+        self.list_subs.blockSignals(False)
         
         # Trigger selection reload for subsystems details
-        if self.combo_subs.count() > 0:
-            self.on_subsystem_selection_changed(self.combo_subs.currentText())
+        if self.list_subs.count() > 0:
+            self.list_subs.setCurrentRow(0)
+            self.on_subsystem_selection_changed(self.list_subs.currentItem().text())
         else:
             self.rebuild_subsystem_details_panel("")
             
@@ -236,6 +238,46 @@ class WorkspaceSetupTab(QWidget):
         
         # 5. Plugins Tab synchronization
         self.main_window.load_plugins_from_profile()
+        
+        # 6. Theme Config Tab synchronization
+        theme_cfg = self.config_data.get("theme_config", {
+            "window_bg": "#0e0f12",
+            "card_bg": "#13141a",
+            "border": "#272a38",
+            "accent": "#38bdf8",
+            "text": "#a0a5b5"
+        })
+        
+        # Load theme_cfg colors into self.custom_colors
+        if hasattr(self, "custom_colors") and self.custom_colors:
+            for key, val in theme_cfg.items():
+                if key in self.custom_colors:
+                    self.custom_colors[key]["color"] = val
+                    if self.custom_colors[key]["preview"]:
+                        self.custom_colors[key]["preview"].setStyleSheet(f"background-color: {val}; border: 1px solid #475569; border-radius: 4px;")
+                        
+            # Match against presets to set combo box
+            presets = {
+                "Classic Dark": {"window_bg": "#0e0f12", "card_bg": "#13141a", "border": "#272a38", "accent": "#38bdf8", "text": "#a0a5b5"},
+                "Cyberpunk Neon": {"window_bg": "#09090e", "card_bg": "#12121e", "border": "#ff007f", "accent": "#00f0ff", "text": "#e2e8f0"},
+                "Emerald Forest": {"window_bg": "#0b0f0c", "card_bg": "#121a14", "border": "#203a27", "accent": "#10b981", "text": "#d1fae5"},
+                "Sunset Amber": {"window_bg": "#110d0b", "card_bg": "#1c1512", "border": "#36251c", "accent": "#f97316", "text": "#fed7aa"},
+                "Arctic Slate": {"window_bg": "#0f1115", "card_bg": "#181c24", "border": "#2e3545", "accent": "#60a5fa", "text": "#e2e8f0"}
+            }
+            
+            matched_idx = -1
+            for idx, (p_name, p_colors) in enumerate(presets.items()):
+                if all(theme_cfg.get(k) == p_colors[k] for k in p_colors):
+                    matched_idx = idx
+                    break
+                    
+            if hasattr(self, "combo_theme_presets") and self.combo_theme_presets:
+                self.combo_theme_presets.blockSignals(True)
+                self.combo_theme_presets.setCurrentIndex(matched_idx)
+                self.combo_theme_presets.blockSignals(False)
+            
+            self.update_live_preview()
+            self.apply_setup_tab_theme()
 
     def setup_ports_tab(self):
         tab = QWidget()
@@ -295,10 +337,10 @@ class WorkspaceSetupTab(QWidget):
         lbl_list.setStyleSheet("font-weight: bold; color: #ffffff;")
         left_lay.addWidget(lbl_list)
         
-        self.combo_subs = QComboBox()
-        self.combo_subs.setView(QListView())
-        self.combo_subs.currentTextChanged.connect(self.on_subsystem_selection_changed)
-        left_lay.addWidget(self.combo_subs)
+        self.list_subs = QListWidget()
+        self.list_subs.setObjectName("list_subs")
+        self.list_subs.currentTextChanged.connect(self.on_subsystem_selection_changed)
+        left_lay.addWidget(self.list_subs, 1)
         
         btn_sub_lay = QHBoxLayout()
         btn_add_sub = QPushButton("➕ Add Sub")
@@ -308,7 +350,6 @@ class WorkspaceSetupTab(QWidget):
         btn_sub_lay.addWidget(btn_add_sub)
         btn_sub_lay.addWidget(btn_del_sub)
         left_lay.addLayout(btn_sub_lay)
-        left_lay.addStretch()
         
         lay.addWidget(left_panel, 1)
         
@@ -329,8 +370,8 @@ class WorkspaceSetupTab(QWidget):
         if ok and text.strip():
             sub_id = text.strip()
             # Verify duplication
-            for idx in range(self.combo_subs.count()):
-                if self.combo_subs.itemText(idx) == sub_id:
+            for idx in range(self.list_subs.count()):
+                if self.list_subs.item(idx).text() == sub_id:
                     QMessageBox.warning(self, "Error", "Subsystem ID already exists!")
                     return
             
@@ -346,17 +387,28 @@ class WorkspaceSetupTab(QWidget):
                 "temp_transformer_var": ""
             }
             self.config_data["subsystems"].append(new_sub)
-            self.combo_subs.addItem(sub_id)
-            self.combo_subs.setCurrentText(sub_id)
+            self.list_subs.addItem(sub_id)
+            
+            # Select the newly added item
+            items = self.list_subs.findItems(sub_id, Qt.MatchFlag.MatchExact)
+            if items:
+                self.list_subs.setCurrentItem(items[0])
 
     def remove_selected_subsystem(self):
-        cur_id = self.combo_subs.currentText()
-        if not cur_id:
+        cur_item = self.list_subs.currentItem()
+        if not cur_item:
             return
+        cur_id = cur_item.text()
         
         self.config_data["subsystems"] = [s for s in self.config_data["subsystems"] if s["name"] != cur_id]
-        idx = self.combo_subs.currentIndex()
-        self.combo_subs.removeItem(idx)
+        row = self.list_subs.row(cur_item)
+        self.list_subs.takeItem(row)
+        
+        # Select another item if possible
+        if self.list_subs.count() > 0:
+            self.list_subs.setCurrentRow(0)
+        else:
+            self.rebuild_subsystem_details_panel("")
 
     def on_subsystem_selection_changed(self, sub_id):
         self.rebuild_subsystem_details_panel(sub_id)
@@ -662,43 +714,646 @@ class WorkspaceSetupTab(QWidget):
         tab.setObjectName("tab_plugins")
         lay = QVBoxLayout(tab)
         lay.setContentsMargins(20, 20, 20, 20)
-        lay.setSpacing(15)
+        lay.setSpacing(12)
         
-        desc = QLabel("🧩 기능 모듈 및 확장 플러그인 관리 (Plugins Manager)")
-        desc.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 14px;")
+        # Header Info
+        desc = QLabel("🧩 통합 플러그인 센터 (IDE Plugins Manager)")
+        desc.setObjectName("lbl_plugins_header")
         lay.addWidget(desc)
         
-        hint = QLabel(
-            "대시보드의 기능을 확장하는 플러그인을 활성화하거나 비활성화할 수 있습니다.<br/>"
-            "새로운 파이썬 플러그인(.py) 파일을 시스템에 추가로 설치하여 커스텀 연동 뷰 및 특수 제어 패널을 생성할 수도 있습니다."
-        )
-        hint.setStyleSheet("font-size: 11px; color: #8e94a6; line-height: 1.5;")
-        lay.addWidget(hint)
+        # Splitter Layout
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setObjectName("plugin_splitter")
         
-        # Separator line
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        line.setStyleSheet("background-color: #272a38; max-height: 1px;")
-        lay.addWidget(line)
+        # 1. LEFT PANEL (Plugin Catalog List)
+        left_panel = QWidget()
+        left_panel.setObjectName("left_panel")
+        left_lay = QVBoxLayout(left_panel)
+        left_lay.setContentsMargins(10, 10, 10, 10)
+        left_lay.setSpacing(8)
         
-        # Checklist container inside a Scroll Area for elegance
+        # Search Box
+        self.plugin_search = QLineEdit()
+        self.plugin_search.setObjectName("plugin_search")
+        self.plugin_search.setPlaceholderText("🔍 플러그인 이름 또는 키워드 검색...")
+        self.plugin_search.textChanged.connect(self.on_plugin_search_changed)
+        left_lay.addWidget(self.plugin_search)
+        
+        # Category Tabs (Installed vs Marketplace)
+        cat_lay = QHBoxLayout()
+        cat_lay.setSpacing(6)
+        
+        self.btn_cat_installed = QPushButton("설치됨")
+        self.btn_cat_installed.setObjectName("btn_cat_installed")
+        self.btn_cat_installed.setCheckable(True)
+        self.btn_cat_installed.setChecked(True)
+        self.btn_cat_installed.clicked.connect(self.on_plugin_cat_installed_clicked)
+        
+        self.btn_cat_market = QPushButton("마켓플레이스")
+        self.btn_cat_market.setObjectName("btn_cat_market")
+        self.btn_cat_market.setCheckable(True)
+        self.btn_cat_market.clicked.connect(self.on_plugin_cat_market_clicked)
+        
+        cat_lay.addWidget(self.btn_cat_installed)
+        cat_lay.addWidget(self.btn_cat_market)
+        left_lay.addLayout(cat_lay)
+        
+        # Scroll area for items list
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background-color: #050507; border: 1px solid #272a38; border-radius: 6px;")
+        scroll.setStyleSheet("border: none; background: transparent;")
         
         scroll_widget = QWidget()
-        scroll_widget.setObjectName("scroll_widget")
-        scroll_widget.setStyleSheet("background-color: #050507;")
-        
+        scroll_widget.setStyleSheet("background: transparent;")
         self.plugins_checkbox_lay = QVBoxLayout(scroll_widget)
-        self.plugins_checkbox_lay.setContentsMargins(15, 15, 15, 15)
-        self.plugins_checkbox_lay.setSpacing(12)
+        self.plugins_checkbox_lay.setContentsMargins(0, 0, 0, 0)
+        self.plugins_checkbox_lay.setSpacing(6)
         
         scroll.setWidget(scroll_widget)
-        lay.addWidget(scroll, 1)
+        left_lay.addWidget(scroll, 1)
+        
+        # Manual Local install link/label in left panel bottom
+        btn_manual = QPushButton("📂 로컬 플러그인 파일(.py) 수동 설치...")
+        btn_manual.setObjectName("btn_manual")
+        btn_manual.clicked.connect(self.install_custom_plugin)
+        left_lay.addWidget(btn_manual)
+        
+        splitter.addWidget(left_panel)
+        
+        # 2. RIGHT PANEL (Master Detail View)
+        self.plugin_detail_panel = QWidget()
+        self.plugin_detail_panel.setObjectName("plugin_detail_panel")
+        self.detail_lay = QVBoxLayout(self.plugin_detail_panel)
+        self.detail_lay.setContentsMargins(20, 20, 20, 20)
+        self.detail_lay.setSpacing(15)
+        
+        # Selected plugin ID tracker
+        self.selected_plugin_id = None
+        
+        self.show_no_plugin_selected()
+        splitter.addWidget(self.plugin_detail_panel)
+        
+        splitter.setSizes([320, 480])
+        lay.addWidget(splitter, 1)
         
         self.tabs.addTab(tab, "🧩 플러그인 관리")
+
+    def on_plugin_search_changed(self, text):
+        self.main_window.load_plugins_from_profile()
+
+    def on_plugin_cat_installed_clicked(self):
+        self.btn_cat_installed.setChecked(True)
+        self.btn_cat_market.setChecked(False)
+        self.btn_cat_installed.style().unpolish(self.btn_cat_installed)
+        self.btn_cat_installed.style().polish(self.btn_cat_installed)
+        self.btn_cat_market.style().unpolish(self.btn_cat_market)
+        self.btn_cat_market.style().polish(self.btn_cat_market)
+        self.main_window.load_plugins_from_profile()
+
+    def on_plugin_cat_market_clicked(self):
+        self.btn_cat_installed.setChecked(False)
+        self.btn_cat_market.setChecked(True)
+        self.btn_cat_installed.style().unpolish(self.btn_cat_installed)
+        self.btn_cat_installed.style().polish(self.btn_cat_installed)
+        self.btn_cat_market.style().unpolish(self.btn_cat_market)
+        self.btn_cat_market.style().polish(self.btn_cat_market)
+        self.main_window.load_plugins_from_profile()
+
+    def show_no_plugin_selected(self):
+        # Clear layout
+        while self.detail_lay.count():
+            item = self.detail_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+                
+        lbl_hint = QLabel("👈 좌측에서 플러그인을 선택하면 상세 정보가 이곳에 나타납니다.")
+        lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_hint.setStyleSheet("font-size: 11px; color: #64748b; font-weight: bold; margin-top: 120px; border: none; background: transparent;")
+        self.detail_lay.addWidget(lbl_hint)
+        self.detail_lay.addStretch()
+
+    def show_plugin_details(self, pid, pdata):
+        # Clear layout
+        while self.detail_lay.count():
+            item = self.detail_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+                
+        # 1. Header Card Info
+        hdr_frame = QWidget()
+        hdr_frame.setStyleSheet("background: transparent; border: none;")
+        hdr_lay = QHBoxLayout(hdr_frame)
+        hdr_lay.setContentsMargins(0, 0, 0, 0)
+        
+        lbl_icon = QLabel(pdata["icon"])
+        lbl_icon.setStyleSheet("font-size: 32px; padding: 5px; border: none; background: transparent;")
+        hdr_lay.addWidget(lbl_icon)
+        
+        lbl_info = QWidget()
+        lbl_info.setStyleSheet("background: transparent; border: none;")
+        lbl_info_lay = QVBoxLayout(lbl_info)
+        lbl_info_lay.setContentsMargins(0, 0, 0, 0)
+        lbl_info_lay.setSpacing(4)
+        
+        lbl_name = QLabel(pdata["name"])
+        lbl_name.setObjectName("lbl_plugin_name")
+        lbl_info_lay.addWidget(lbl_name)
+        
+        lbl_meta = QLabel(f"버전: {pdata['version']}  |  제작자: {pdata['author']}")
+        lbl_meta.setObjectName("lbl_plugin_meta")
+        lbl_info_lay.addWidget(lbl_meta)
+        
+        hdr_lay.addWidget(lbl_info, 1)
+        self.detail_lay.addWidget(hdr_frame)
+        
+        # 2. Action row
+        act_frame = QWidget()
+        act_frame.setStyleSheet("background: transparent; border: none;")
+        act_lay = QHBoxLayout(act_frame)
+        act_lay.setContentsMargins(0, 0, 0, 0)
+        act_lay.setSpacing(12)
+        
+        if pdata["installed"]:
+            # Active Switch Button (Enable/Disable toggle)
+            self.btn_toggle_active = QPushButton("✅ 활성화 상태" if pdata["active"] else "⬜ 비활성화 상태")
+            self.btn_toggle_active.setObjectName("btn_toggle_active")
+            self.btn_toggle_active.setCheckable(True)
+            self.btn_toggle_active.setChecked(pdata["active"])
+            # Connect toggle handler safely
+            self.btn_toggle_active.clicked.connect(lambda checked, p=pid: self.main_window.on_plugin_checkbox_toggled(p, checked))
+            act_lay.addWidget(self.btn_toggle_active)
+            
+            # Uninstall Button (Only for external plugins - i.e. NOT internal ones)
+            is_internal = pid in ["telemetry_cards", "trend_charts", "service_console", "parameter_manager", "mcu_terminal", "topology_visualizer"]
+            if not is_internal:
+                btn_del = QPushButton("❌ 플러그인 삭제")
+                btn_del.setObjectName("btn_plugin_del")
+                btn_del.clicked.connect(lambda checked, p=pid: self.install_plugin_in_detail(p)) # will call uninstall via helper
+                btn_del.clicked.disconnect()
+                btn_del.clicked.connect(lambda checked, p=pid: self.uninstall_plugin_in_detail(p))
+                act_lay.addWidget(btn_del)
+        else:
+            # Install Button for marketplace
+            btn_inst = QPushButton("🌐 플러그인 온라인 설치")
+            btn_inst.setObjectName("btn_plugin_inst")
+            btn_inst.clicked.connect(lambda checked, p=pid: self.install_plugin_in_detail(p))
+            act_lay.addWidget(btn_inst)
+            
+        act_lay.addStretch()
+        self.detail_lay.addWidget(act_frame)
+        
+        # Divider line
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("background-color: #272a38; max-height: 1px; border: none;")
+        self.detail_lay.addWidget(line)
+        
+        # 3. Description Area
+        lbl_desc_title = QLabel("상세 정보 및 기능 설명")
+        lbl_desc_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #e2e8f0; border: none; background: transparent;")
+        self.detail_lay.addWidget(lbl_desc_title)
+        
+        lbl_desc = QLabel(pdata["description"])
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("font-size: 11px; color: #a0a5b5; line-height: 1.5; border: none; background: transparent;")
+        self.detail_lay.addWidget(lbl_desc)
+        
+        # 4. Status Indicator Box
+        status_box = QFrame()
+        status_box.setStyleSheet("background-color: #12131a; border: 1px solid #272a38; border-radius: 4px; padding: 10px;")
+        status_lay = QVBoxLayout(status_box)
+        status_lay.setContentsMargins(10, 10, 10, 10)
+        
+        stat_text = "● 현재 플러그인은 로컬 부팅 모듈로 대기 중입니다."
+        if pdata["active"]:
+            stat_text = "🟢 현재 플러그인이 실행되고 있으며 메인 윈도우 독(Dock)에 로드되었습니다."
+        elif not pdata["installed"]:
+            stat_text = "🔵 온라인 스토어에 연결되어 다운로드 즉시 실행 가능합니다."
+            
+        lbl_stat = QLabel(stat_text)
+        lbl_stat.setStyleSheet("font-size: 10px; color: #10b981;" if pdata["active"] else ("font-size: 10px; color: #38bdf8;" if not pdata["installed"] else "font-size: 10px; color: #a0a5b5;"))
+        lbl_stat.setStyleSheet(lbl_stat.styleSheet() + " border: none; background: transparent;")
+        status_lay.addWidget(lbl_stat)
+        self.detail_lay.addWidget(status_box)
+        
+        self.detail_lay.addStretch()
+
+    def install_plugin_in_detail(self, plugin_id):
+        self.main_window.install_plugin_from_ide_view(plugin_id)
+
+    def uninstall_plugin_in_detail(self, plugin_id):
+        self.main_window.uninstall_plugin_from_ide_view(plugin_id)
+
+    def install_custom_plugin(self):
+        self.main_window.install_custom_plugin()
+
+    def setup_theme_tab(self):
+        # Initialize custom colors dictionary with defaults
+        self.custom_colors = {
+            "window_bg": {"label": "Window Background (창 배경)", "color": "#0e0f12", "btn": None, "preview": None},
+            "card_bg": {"label": "Surface / Card Background (카드 표면)", "color": "#13141a", "btn": None, "preview": None},
+            "border": {"label": "Component Border Color (테두리선)", "color": "#272a38", "btn": None, "preview": None},
+            "accent": {"label": "Neon Highlight / Accent Color (액센트 포인트)", "color": "#38bdf8", "btn": None, "preview": None},
+            "text": {"label": "Primary Font / Text Color (메인 텍스트)", "color": "#a0a5b5", "btn": None, "preview": None}
+        }
+        
+        tab = QWidget()
+        tab.setObjectName("tab_theme")
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setSpacing(15)
+        
+        # Title/Description
+        desc = QLabel("🎨 대시보드 맞춤형 테마 커스터마이저 (Dashboard Theme Settings)")
+        desc.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 14px; border: none; background: transparent;")
+        desc_sub = QLabel("원하는 색상 테마 프리셋을 사용하거나, 각 컴포넌트의 색상을 자유롭게 변경하여 사용자만의 전용 모니터링 환경을 완성할 수 있습니다.")
+        desc_sub.setStyleSheet("color: #8e94a6; font-size: 11px; border: none; background: transparent;")
+        
+        lay.addWidget(desc)
+        lay.addWidget(desc_sub)
+        
+        # Splitter Layout
+        split = QSplitter(Qt.Orientation.Horizontal)
+        split.setStyleSheet("QSplitter::handle { background-color: #272a38; width: 4px; }")
+        
+        # Left Panel (Theme Customization Controls)
+        left_ctrl = QWidget()
+        left_ctrl_lay = QVBoxLayout(left_ctrl)
+        left_ctrl_lay.setContentsMargins(0, 0, 10, 0)
+        left_ctrl_lay.setSpacing(15)
+        
+        # Presets GroupBox
+        grp_presets = QGroupBox("🎨 기본 테마 프리셋 선택")
+        grp_presets.setStyleSheet("QGroupBox { font-size: 12px; }")
+        preset_lay = QVBoxLayout(grp_presets)
+        preset_lay.setSpacing(10)
+        preset_lay.setContentsMargins(15, 20, 15, 15)
+        
+        self.combo_theme_presets = QComboBox()
+        self.combo_theme_presets.addItems([
+            "Classic Dark (기본 다크)",
+            "⚡ Cyberpunk Neon (사이버펑크 네온)",
+            "🔋 Emerald Forest (에메랄드 포레스트)",
+            "🔥 Sunset Amber (선셋 앰버)",
+            "❄️ Arctic Slate (아틱 슬레이트)"
+        ])
+        self.combo_theme_presets.currentIndexChanged.connect(self.on_theme_preset_changed)
+        preset_lay.addWidget(self.combo_theme_presets)
+        left_ctrl_lay.addWidget(grp_presets)
+        
+        # Custom Color Picker GroupBox
+        grp_custom = QGroupBox("⚙️ 상세 요소별 커스텀 색상")
+        grp_custom.setStyleSheet("QGroupBox { font-size: 12px; }")
+        custom_lay = QGridLayout(grp_custom)
+        custom_lay.setSpacing(12)
+        custom_lay.setContentsMargins(15, 20, 15, 15)
+        
+        row = 0
+        for key, val in self.custom_colors.items():
+            lbl = QLabel(val["label"])
+            lbl.setStyleSheet("font-weight: bold; color: #e2e8f0; border: none; background: transparent;")
+            
+            # Color preview block
+            preview = QFrame()
+            preview.setFixedSize(24, 24)
+            preview.setStyleSheet(f"background-color: {val['color']}; border: 1px solid #475569; border-radius: 4px;")
+            val["preview"] = preview
+            
+            # Pick Button
+            btn = QPushButton("색상 선택...")
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1b1c24; border: 1px solid #272a38; color: #a0a5b5; padding: 4px 10px; font-size: 10px;
+                }
+                QPushButton:hover { border-color: #38bdf8; color: #ffffff; }
+            """)
+            btn.clicked.connect(lambda checked, k=key: self.pick_custom_color(k))
+            val["btn"] = btn
+            
+            custom_lay.addWidget(lbl, row, 0)
+            custom_lay.addWidget(preview, row, 1)
+            custom_lay.addWidget(btn, row, 2)
+            row += 1
+            
+        left_ctrl_lay.addWidget(grp_custom)
+        left_ctrl_lay.addStretch()
+        
+        # Right Panel (Interactive Theme Live Preview)
+        right_preview = QFrame()
+        right_preview.setObjectName("theme_preview_board")
+        right_preview.setStyleSheet("background-color: #0c0c0f; border: 1px solid #272a38; border-radius: 8px;")
+        right_lay = QVBoxLayout(right_preview)
+        right_lay.setContentsMargins(20, 20, 20, 20)
+        right_lay.setSpacing(12)
+        
+        preview_title = QLabel("🖥️ 실시간 적용 미리보기 (Live Preview)")
+        preview_title.setStyleSheet("font-weight: bold; font-size: 12px; color: #38bdf8; border: none; background: transparent;")
+        right_lay.addWidget(preview_title)
+        
+        # Sample Card Preview inside
+        self.preview_card = QFrame()
+        self.preview_card.setObjectName("preview_card")
+        self.preview_card.setFrameShape(QFrame.Shape.StyledPanel)
+        self.preview_card_lay = QVBoxLayout(self.preview_card)
+        self.preview_card_lay.setContentsMargins(15, 15, 15, 15)
+        self.preview_card_lay.setSpacing(10)
+        
+        card_lbl = QLabel("🔌 DAB Subsystem Node")
+        card_lbl.setObjectName("preview_card_lbl")
+        card_lbl.setStyleSheet("font-weight: bold; font-size: 13px;")
+        
+        card_desc = QLabel("Vin: 385.2 V  |  Iin: 8.4 A  |  Eff: 96.4 %")
+        card_desc.setObjectName("preview_card_desc")
+        card_desc.setStyleSheet("font-size: 11px;")
+        
+        self.preview_card_btn = QPushButton("Active Control Relay")
+        self.preview_card_btn.setObjectName("preview_card_btn")
+        self.preview_card_btn.setFixedWidth(160)
+        
+        self.preview_card_lay.addWidget(card_lbl)
+        self.preview_card_lay.addWidget(card_desc)
+        self.preview_card_lay.addWidget(self.preview_card_btn)
+        
+        right_lay.addWidget(self.preview_card)
+        
+        # Sample alarm button
+        btn_test_alert = QPushButton("🔔 테마 동기화된 알림창(QMessageBox) 테스트")
+        btn_test_alert.setStyleSheet("""
+            QPushButton {
+                background-color: #1e1e2d; border: 1px solid #38bdf8; color: #38bdf8; padding: 8px; border-radius: 4px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #38bdf8; color: #0c0c0e; }
+        """)
+        btn_test_alert.clicked.connect(self.show_test_alert)
+        right_lay.addWidget(btn_test_alert)
+        
+        right_lay.addStretch()
+        
+        split.addWidget(left_ctrl)
+        split.addWidget(right_preview)
+        split.setSizes([450, 450])
+        
+        lay.addWidget(split)
+        self.tabs.addTab(tab, "🎨 테마 설정")
+
+    def on_theme_preset_changed(self, index):
+        preset_name = self.combo_theme_presets.currentText()
+        
+        name_clean = preset_name
+        if "Classic" in preset_name:
+            name_clean = "Classic Dark"
+        elif "Cyberpunk" in preset_name:
+            name_clean = "Cyberpunk Neon"
+        elif "Emerald" in preset_name:
+            name_clean = "Emerald Forest"
+        elif "Sunset" in preset_name:
+            name_clean = "Sunset Amber"
+        elif "Arctic" in preset_name:
+            name_clean = "Arctic Slate"
+            
+        presets = {
+            "Classic Dark": {
+                "window_bg": "#0e0f12",
+                "card_bg": "#13141a",
+                "border": "#272a38",
+                "accent": "#38bdf8",
+                "text": "#a0a5b5"
+            },
+            "Cyberpunk Neon": {
+                "window_bg": "#09090e",
+                "card_bg": "#12121e",
+                "border": "#ff007f",
+                "accent": "#00f0ff",
+                "text": "#e2e8f0"
+            },
+            "Emerald Forest": {
+                "window_bg": "#0b0f0c",
+                "card_bg": "#121a14",
+                "border": "#203a27",
+                "accent": "#10b981",
+                "text": "#d1fae5"
+            },
+            "Sunset Amber": {
+                "window_bg": "#110d0b",
+                "card_bg": "#1c1512",
+                "border": "#36251c",
+                "accent": "#f97316",
+                "text": "#fed7aa"
+            },
+            "Arctic Slate": {
+                "window_bg": "#0f1115",
+                "card_bg": "#181c24",
+                "border": "#2e3545",
+                "accent": "#60a5fa",
+                "text": "#e2e8f0"
+            }
+        }
+        
+        if name_clean in presets:
+            colors = presets[name_clean]
+            for key, color in colors.items():
+                self.custom_colors[key]["color"] = color
+                self.custom_colors[key]["preview"].setStyleSheet(f"background-color: {color}; border: 1px solid #475569; border-radius: 4px;")
+            self.update_live_preview()
+            
+    def pick_custom_color(self, key):
+        current_hex = self.custom_colors[key]["color"]
+        color = QColorDialog.getColor(QColor(current_hex), self, f"Select {self.custom_colors[key]['label']}")
+        if color.isValid():
+            hex_name = color.name()
+            self.custom_colors[key]["color"] = hex_name
+            self.custom_colors[key]["preview"].setStyleSheet(f"background-color: {hex_name}; border: 1px solid #475569; border-radius: 4px;")
+            
+            # De-select preset combo since color is now custom
+            self.combo_theme_presets.blockSignals(True)
+            self.combo_theme_presets.setCurrentIndex(-1)
+            self.combo_theme_presets.blockSignals(False)
+            
+            self.update_live_preview()
+            
+    def update_live_preview(self):
+        win_bg = self.custom_colors["window_bg"]["color"]
+        card_bg = self.custom_colors["card_bg"]["color"]
+        border = self.custom_colors["border"]["color"]
+        accent = self.custom_colors["accent"]["color"]
+        text = self.custom_colors["text"]["color"]
+        
+        preview_board = self.findChild(QFrame, "theme_preview_board")
+        if preview_board:
+            preview_board.setStyleSheet(f"""
+                QFrame#theme_preview_board {{
+                    background-color: {win_bg};
+                    border: 1px solid {border};
+                    border-radius: 8px;
+                }}
+            """)
+            
+        if hasattr(self, "preview_card") and self.preview_card:
+            self.preview_card.setStyleSheet(f"""
+                QFrame#preview_card {{
+                    background-color: {card_bg};
+                    border: 1px solid {border};
+                    border-radius: 6px;
+                }}
+                QLabel {{
+                    color: {text};
+                    border: none;
+                    background: transparent;
+                }}
+                QLabel#preview_card_lbl {{
+                    color: {accent};
+                    font-weight: bold;
+                }}
+            """)
+            
+        if hasattr(self, "preview_card_btn") and self.preview_card_btn:
+            self.preview_card_btn.setStyleSheet(f"""
+                QPushButton#preview_card_btn {{
+                    background-color: {card_bg};
+                    border: 1px solid {border};
+                    color: {accent};
+                    font-weight: bold;
+                    padding: 6px 14px;
+                    border-radius: 4px;
+                }}
+                QPushButton#preview_card_btn:hover {{
+                    background-color: {win_bg};
+                    border-color: {accent};
+                }}
+                QPushButton#preview_card_btn:pressed {{
+                    background-color: {accent};
+                    color: {win_bg};
+                }}
+            """)
+            
+    def show_test_alert(self):
+        QMessageBox.information(self, "🔔 알림창 테마 동기화 테스트", "사용자가 커스텀 설정한 테마 컬러와 일관되게 어울리는 멋진 다크 스타일시트(QMessageBox)가 적용되었습니다!")
+
+    def apply_setup_tab_theme(self):
+        theme_cfg = self.main_window.config_data.get("theme_config", {
+            "window_bg": "#0e0f12",
+            "card_bg": "#13141a",
+            "border": "#272a38",
+            "accent": "#38bdf8",
+            "text": "#a0a5b5"
+        })
+        win_bg = theme_cfg.get("window_bg", "#0e0f12")
+        card_bg = theme_cfg.get("card_bg", "#13141a")
+        border = theme_cfg.get("border", "#272a38")
+        accent = theme_cfg.get("accent", "#38bdf8")
+        text = theme_cfg.get("text", "#a0a5b5")
+        
+        self.setStyleSheet(f"""
+            WorkspaceSetupTab {{ background-color: {win_bg}; }}
+            QWidget {{ color: {text}; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; }}
+            
+            /* Tabs styling */
+            QTabWidget::pane {{ border: 1px solid {border}; background-color: {card_bg}; border-radius: 6px; top: -1px; }}
+            QTabWidget > QWidget {{ background-color: {card_bg}; }}
+            QTabBar::tab {{ background-color: {win_bg}; color: {text}; padding: 8px 20px; border: 1px solid {border}; border-bottom: none; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px;}}
+            QTabBar::tab:selected {{ background-color: {card_bg}; color: {accent}; border-bottom: 2px solid {accent}; }}
+            QTabBar::tab:hover {{ color: #ffffff; background-color: {border}; }}
+            
+            /* ScrollArea styling */
+            QScrollArea {{ background-color: {card_bg}; border: none; }}
+            QScrollArea::viewport {{ background-color: {card_bg}; }}
+            #right_container {{ background-color: {card_bg}; }}
+            
+            /* Nested widgets inside tabs */
+            QWidget#left_panel {{ background-color: {win_bg}; border-right: 1px solid {border}; }}
+            
+            /* Table Widget */
+            QTableWidget {{ background-color: {win_bg}; border: 1px solid {border}; gridline-color: {border}; border-radius: 4px; color: #ffffff; }}
+            QHeaderView::section {{ background-color: {card_bg}; color: {accent}; font-weight: bold; border: 1px solid {border}; padding: 4px; }}
+            QTableWidget QTableCornerButton::section {{ background-color: {card_bg}; border: 1px solid {border}; }}
+            
+            /* List Widget (Subsystems List View) */
+            QListWidget {{
+                background-color: {win_bg};
+                border: 1px solid {border};
+                border-radius: 4px;
+                color: #ffffff;
+                padding: 4px;
+            }}
+            QListWidget::item {{
+                padding: 8px 12px;
+                border-bottom: 1px solid {card_bg};
+                border-radius: 3px;
+                font-weight: bold;
+                color: {text};
+            }}
+            QListWidget::item:hover {{
+                background-color: {card_bg};
+                color: {accent};
+            }}
+            QListWidget::item:selected {{
+                background-color: {border};
+                color: #ffffff;
+                border-left: 3px solid {accent};
+            }}
+            
+            /* Inputs & Controls */
+            QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {{ background-color: {win_bg}; border: 1px solid {border}; border-radius: 4px; padding: 4px; color: #ffffff; }}
+            QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus {{ border-color: {accent}; }}
+            QComboBox QAbstractItemView {{ background-color: {card_bg}; border: 1px solid {border}; selection-background-color: {win_bg}; selection-color: {accent}; color: #ffffff; }}
+            
+            /* Group Box */
+            QGroupBox {{ border: 1px solid {border}; border-radius: 6px; margin-top: 10px; padding-top: 12px; font-weight: bold; color: {accent}; }}
+            QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 10px; padding: 0 5px; background-color: {card_bg}; }}
+            
+            /* Buttons */
+            QPushButton {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 4px; color: {accent}; font-weight: bold; padding: 6px 14px; }}
+            QPushButton:hover {{ background-color: {win_bg}; border-color: {accent}; }}
+            QPushButton:pressed {{ background-color: {accent}; color: {win_bg}; }}
+            
+            /* Checkboxes */
+            QCheckBox {{ spacing: 6px; font-weight: bold; color: {text}; background: transparent; }}
+            QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid {border}; background-color: {win_bg}; border-radius: 3px; }}
+            QCheckBox::indicator:checked {{ background-color: {accent}; border-color: {accent}; }}
+            
+            /* Labels */
+            QLabel {{ background: transparent; }}
+            
+            /* Workspace Config Tab Specific Headers */
+            QWidget#header_widget {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 6px; }}
+            QLabel#title_lbl {{ font-size: 15px; font-weight: bold; color: {accent}; border: none; background: transparent; }}
+            QLabel#desc_lbl {{ font-size: 11px; color: {text}; border: none; background: transparent; }}
+            
+            /* Workspace Config Tab Footer Panel */
+            QWidget#footer_panel {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 6px; }}
+            QPushButton#btn_apply {{ background-color: {accent}; border: 1px solid {accent}; color: {win_bg}; font-weight: bold; padding: 6px 18px; }}
+            QPushButton#btn_apply:hover {{ background-color: {card_bg}; color: {accent}; }}
+            QPushButton#btn_save_as {{ background-color: {card_bg}; border: 1px solid {border}; color: {accent}; font-weight: bold; padding: 6px 18px; }}
+            QPushButton#btn_save_as:hover {{ background-color: {win_bg}; border-color: {accent}; }}
+            QPushButton#btn_load, QPushButton#btn_presets, QPushButton#btn_revert {{ background-color: {card_bg}; border: 1px solid {border}; color: {text}; font-weight: bold; padding: 6px 18px; }}
+            QPushButton#btn_load:hover, QPushButton#btn_presets:hover, QPushButton#btn_revert:hover {{ background-color: {win_bg}; border-color: {accent}; color: #ffffff; }}
+            
+            /* IDE Plugins Manager Styles */
+            QLineEdit#plugin_search {{ background-color: {win_bg}; border: 1px solid {border}; border-radius: 4px; padding: 8px 12px; color: #ffffff; font-size: 11px; }}
+            QLineEdit#plugin_search:focus {{ border-color: {accent}; }}
+            
+            QPushButton#btn_cat_installed, QPushButton#btn_cat_market {{ background-color: {card_bg}; border: 1px solid {border}; color: {text}; font-size: 10px; font-weight: bold; padding: 5px; border-radius: 4px; }}
+            QPushButton#btn_cat_installed:checked, QPushButton#btn_cat_market:checked {{ background-color: {accent}; border-color: {accent}; color: {win_bg}; }}
+            
+            QPushButton#btn_manual {{ background-color: {card_bg}; border: 1px dashed {border}; color: {text}; font-size: 10px; padding: 6px; border-radius: 4px; }}
+            QPushButton#btn_manual:hover {{ border-color: {accent}; color: #ffffff; }}
+            
+            QWidget#plugin_detail_panel {{ background-color: {win_bg}; border: 1px solid {border}; border-radius: 6px; }}
+            QLabel#lbl_plugin_name {{ font-size: 16px; font-weight: bold; color: {accent}; border: none; background: transparent; }}
+            QLabel#lbl_plugin_meta {{ font-size: 10px; color: {text}; border: none; background: transparent; }}
+            
+            /* Dynamic Action Toggle switch inside Plugin detail view */
+            QPushButton#btn_toggle_active {{
+                background-color: {accent}50; border: 1px solid {accent}; color: white; padding: 8px 16px; font-weight: bold; font-size: 11px; border-radius: 4px;
+            }}
+            QPushButton#btn_toggle_active:!checked {{
+                background-color: {card_bg}; border-color: {border}; color: {text};
+            }}
+            QPushButton#btn_plugin_del {{ background-color: #7f1d1d; border: 1px solid #f87171; color: white; padding: 8px 16px; font-weight: bold; font-size: 11px; border-radius: 4px; }}
+            QPushButton#btn_plugin_del:hover {{ background-color: #b91c1c; }}
+            QPushButton#btn_plugin_inst {{ background-color: {accent}; border: 1px solid {accent}; color: {win_bg}; padding: 10px 20px; font-weight: bold; font-size: 11px; border-radius: 4px; }}
+            QPushButton#btn_plugin_inst:hover {{ background-color: {card_bg}; color: {accent}; }}
+        """)
 
     def validate_and_save(self):
         # 1. Ports
@@ -741,6 +1396,16 @@ class WorkspaceSetupTab(QWidget):
                     "formula": form_item.text().strip()
                 })
         self.config_data["linking_formulas"] = links_list
+
+        # 4. Save Theme configuration
+        theme_cfg = {}
+        for key, val in self.custom_colors.items():
+            theme_cfg[key] = val["color"]
+        self.config_data["theme_config"] = theme_cfg
+        
+        # Save and Apply to main window configuration
+        self.main_window.apply_new_workspace_configuration(self.config_data)
+        QMessageBox.information(self, "성공", "워크스페이스 설정 및 테마 구성이 성공적으로 적용되어 저장되었습니다!")
         
 # ======================================================================
 # TELEMETRY CONFIGURATION PRESETS (기초 프리셋 템플릿)
@@ -791,7 +1456,8 @@ DAB_CONVERTER_PRESET = {
         "trend_charts",
         "service_console",
         "parameter_manager",
-        "mcu_terminal"
+        "mcu_terminal",
+        "topology_visualizer"
     ]
 }
 
@@ -833,7 +1499,8 @@ EV_BMS_PRESET = {
         "trend_charts",
         "service_console",
         "parameter_manager",
-        "mcu_terminal"
+        "mcu_terminal",
+        "topology_visualizer"
     ]
 }
 
@@ -873,7 +1540,8 @@ ARDUINO_PLOTTER_PRESET = {
         "trend_charts",
         "service_console",
         "parameter_manager",
-        "mcu_terminal"
+        "mcu_terminal",
+        "topology_visualizer"
     ]
 }
 
@@ -1302,9 +1970,7 @@ class DashboardWindow(QMainWindow):
         
         def create_ribbon_group(title):
             group_frame = QFrame()
-            group_frame.setStyleSheet("""
-                QFrame { background-color: #121216; border: 1px solid #23232e; border-radius: 6px; }
-            """)
+            group_frame.setObjectName("RibbonGroup")
             layout = QVBoxLayout(group_frame)
             layout.setContentsMargins(8, 4, 8, 4)
             layout.setSpacing(2)
@@ -1438,19 +2104,6 @@ class DashboardWindow(QMainWindow):
             
             layout.addWidget(chk_row)
             
-        # Add dynamic installer button to install external plugins
-        btn_install = QPushButton("➕ 새 플러그인 파일(.py) 추가/설치...")
-        btn_install.setStyleSheet("background-color: #0284c7; border-color: #0369a1; color: white; padding: 10px; font-size: 11px; font-weight: bold; border-radius: 4px;")
-        btn_install.clicked.connect(self.install_custom_plugin)
-        
-        # Add installer button row
-        install_row = QWidget()
-        install_row_lay = QHBoxLayout(install_row)
-        install_row_lay.setContentsMargins(10, 15, 10, 10)
-        install_row_lay.addWidget(btn_install)
-        install_row_lay.addStretch()
-        
-        layout.addWidget(install_row)
         layout.addStretch()
         
         # Load states persistently inside manager
@@ -1859,62 +2512,172 @@ class DashboardWindow(QMainWindow):
                         break
 
     def apply_premium_dark_styling(self):
-        qss = """
-        QMainWindow { background-color: #0e0f12; }
-        QWidget { color: #a0a5b5; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; }
+        theme_cfg = self.config_data.get("theme_config", {
+            "window_bg": "#0e0f12",
+            "card_bg": "#13141a",
+            "border": "#272a38",
+            "accent": "#38bdf8",
+            "text": "#a0a5b5"
+        })
+        
+        win_bg = theme_cfg.get("window_bg", "#0e0f12")
+        card_bg = theme_cfg.get("card_bg", "#13141a")
+        border = theme_cfg.get("border", "#272a38")
+        accent = theme_cfg.get("accent", "#38bdf8")
+        text = theme_cfg.get("text", "#a0a5b5")
+        
+        qss = f"""
+        QMainWindow {{ background-color: {win_bg}; }}
+        QWidget {{ color: {text}; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; }}
         
         /* Ribbon frame */
-        #RibbonBar { background-color: #13141a; border-bottom: 1px solid #272a38; }
+        #RibbonBar {{ background-color: {card_bg}; border-bottom: 1px solid {border}; }}
+        QFrame#RibbonGroup {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 6px; }}
+        QFrame#RibbonGroup QLabel {{ color: {text}; }}
         
         /* Tab Widget inside the central pane and other widgets */
-        QTabWidget::pane { border: 1px solid #272a38; background-color: #13141a; border-radius: 4px; top: -1px; }
-        QTabBar::tab { background-color: #1b1c24; color: #8e94a6; padding: 6px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; border: 1px solid #272a38; border-bottom: none; font-weight: bold; }
-        QTabBar::tab:selected { background-color: #13141a; color: #38bdf8; border-bottom: 2px solid #38bdf8; }
-        QTabBar::tab:hover { color: #ffffff; background-color: #222530; }
+        QTabWidget::pane {{ border: 1px solid {border}; background-color: {card_bg}; border-radius: 4px; top: -1px; }}
+        QTabBar::tab {{ background-color: {win_bg}; color: {text}; padding: 6px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; border: 1px solid {border}; border-bottom: none; font-weight: bold; }}
+        QTabBar::tab:selected {{ background-color: {card_bg}; color: {accent}; border-bottom: 2px solid {accent}; }}
+        QTabBar::tab:hover {{ color: #ffffff; background-color: {border}; }}
         
-        QMainWindow::separator { background-color: #0e0f12; width: 6px; height: 6px; }
-        QMainWindow::separator:hover { background-color: #38bdf8; }
+        QMainWindow::separator {{ background-color: {win_bg}; width: 6px; height: 6px; }}
+        QMainWindow::separator:hover {{ background-color: {accent}; }}
         
         /* Dock Widgets */
-        QDockWidget { background-color: #0e0f12; color: #e2e8f0; font-weight: bold; border: none; }
-        QDockWidget::title { background-color: #1e202b; padding: 6px 10px; border: 1px solid #272a38; border-bottom: 1px solid #13141a; border-top-left-radius: 4px; border-top-right-radius: 4px; color: #38bdf8; font-weight: bold; }
-        QDockWidget::close-button, QDockWidget::float-button { background-color: #1e202b; border: 1px solid #272a38; border-radius: 3px; padding: 2px; }
-        QDockWidget::close-button:hover { background-color: #dc2626; border: 1px solid #ef4444; }
-        QDockWidget::float-button:hover { background-color: #38bdf8; border: 1px solid #7dd3fc; }
-        QDockWidget > QWidget { background-color: #13141a; border: 1px solid #272a38; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }
+        QDockWidget {{ background-color: {win_bg}; color: #ffffff; font-weight: bold; border: none; }}
+        QDockWidget::title {{ background-color: {card_bg}; padding: 6px 10px; border: 1px solid {border}; border-bottom: 1px solid {card_bg}; border-top-left-radius: 4px; border-top-right-radius: 4px; color: {accent}; font-weight: bold; }}
+        QDockWidget::close-button, QDockWidget::float-button {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 3px; padding: 2px; }}
+        QDockWidget::close-button:hover {{ background-color: #dc2626; border: 1px solid #ef4444; }}
+        QDockWidget::float-button:hover {{ background-color: {accent}; border: 1px solid {accent}; }}
+        QDockWidget > QWidget {{ background-color: {card_bg}; border: 1px solid {border}; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }}
         
         /* Standard Group Boxes */
-        QGroupBox { border: 1px solid #272a38; border-radius: 4px; margin-top: 10px; padding-top: 12px; font-weight: bold; color: #38bdf8; }
-        QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; padding: 0 5px; background-color: #13141a; }
+        QGroupBox {{ border: 1px solid {border}; border-radius: 4px; margin-top: 10px; padding-top: 12px; font-weight: bold; color: {accent}; }}
+        QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 10px; padding: 0 5px; background-color: {card_bg}; }}
         
         /* Inputs & Controls */
-        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QTextEdit { background-color: #0a0b0d; border: 1px solid #272a38; border-radius: 4px; padding: 3px; color: #ffffff; }
-        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QTextEdit:focus { border-color: #38bdf8; }
-        QComboBox QAbstractItemView { background-color: #13141a; border: 1px solid #272a38; selection-background-color: #1e202b; selection-color: #38bdf8; }
+        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QTextEdit {{ background-color: {win_bg}; border: 1px solid {border}; border-radius: 4px; padding: 3px; color: #ffffff; }}
+        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QTextEdit:focus {{ border-color: {accent}; }}
+        QComboBox QAbstractItemView {{ background-color: {card_bg}; border: 1px solid {border}; selection-background-color: {win_bg}; selection-color: {accent}; color: #ffffff; }}
         
         /* Buttons */
-        QPushButton { background-color: #1b1c24; border: 1px solid #272a38; border-radius: 4px; padding: 5px 12px; color: #38bdf8; font-weight: bold; }
-        QPushButton:hover { background-color: #222530; border-color: #38bdf8; }
-        QPushButton:pressed { background-color: #38bdf8; color: #0e0f12; }
-        QPushButton:disabled { background-color: #14151b; border-color: #1e202b; color: #64748b; }
+        QPushButton {{ background-color: {card_bg}; border: 1px solid {border}; border-radius: 4px; padding: 5px 12px; color: {accent}; font-weight: bold; }}
+        QPushButton:hover {{ background-color: {win_bg}; border-color: {accent}; }}
+        QPushButton:pressed {{ background-color: {accent}; color: {win_bg}; }}
+        QPushButton:disabled {{ background-color: {card_bg}; border-color: {border}; color: #64748b; }}
         
         /* Checkboxes */
-        QCheckBox { spacing: 6px; font-weight: bold; color: #8e94a6; }
-        QCheckBox::indicator { width: 13px; height: 13px; border: 1px solid #272a38; background-color: #0a0b0d; border-radius: 3px; }
-        QCheckBox::indicator:checked { background-color: #38bdf8; border-color: #38bdf8; }
-        QCheckBox:hover { color: #ffffff; }
+        QCheckBox {{ spacing: 6px; font-weight: bold; color: {text}; }}
+        QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid {border}; background-color: {win_bg}; border-radius: 3px; }}
+        QCheckBox::indicator:checked {{ background-color: {accent}; border-color: {accent}; }}
+        QCheckBox:hover {{ color: #ffffff; }}
         
         /* Table / Grid */
-        QTableWidget { background-color: #0a0b0d; border: 1px solid #272a38; gridline-color: #1f212a; border-radius: 4px; }
-        QHeaderView::section { background-color: #1b1c24; color: #38bdf8; font-weight: bold; border: 1px solid #272a38; padding: 4px; }
+        QTableWidget {{ background-color: {win_bg}; border: 1px solid {border}; gridline-color: {border}; border-radius: 4px; color: #ffffff; }}
+        QHeaderView::section {{ background-color: {card_bg}; color: {accent}; font-weight: bold; border: 1px solid {border}; padding: 4px; }}
         
         /* ScrollBar */
-        QScrollBar:vertical { border: none; background: #0e0f12; width: 10px; margin: 0px; }
-        QScrollBar::handle:vertical { background: #272a38; min-height: 20px; border-radius: 5px; }
-        QScrollBar::handle:vertical:hover { background: #38bdf8; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        QScrollBar:vertical {{ border: none; background: {win_bg}; width: 10px; margin: 0px; }}
+        QScrollBar::handle:vertical {{ background: {border}; min-height: 20px; border-radius: 5px; }}
+        QScrollBar::handle:vertical:hover {{ background: {accent}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+        
+        /* QMessageBox Premium Dark Styling */
+        QMessageBox {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+        }}
+        QMessageBox QLabel {{
+            color: #ffffff;
+            font-size: 12px;
+        }}
+        QMessageBox QPushButton {{
+            background-color: {win_bg};
+            border: 1px solid {border};
+            color: {accent};
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 4px;
+            min-width: 70px;
+        }}
+        QMessageBox QPushButton:hover {{
+            background-color: {card_bg};
+            border-color: {accent};
+        }}
+        QMessageBox QPushButton:pressed {{
+            background-color: {accent};
+            color: {win_bg};
+        }}
+        
+        /* QListWidget Styling */
+        QListWidget {{
+            background-color: {win_bg};
+            border: 1px solid {border};
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 4px;
+        }}
+        QListWidget::item {{
+            padding: 8px 12px;
+            border-bottom: 1px solid {card_bg};
+            border-radius: 3px;
+            font-weight: bold;
+            color: {text};
+        }}
+        QListWidget::item:hover {{
+            background-color: {card_bg};
+            color: {accent};
+        }}
+        QListWidget::item:selected {{
+            background-color: {border};
+            color: #ffffff;
+            border-left: 3px solid {accent};
+        }}
+        
+        /* QDialog and QInputDialog Styling (Add Subsystem Screen) */
+        QDialog, QInputDialog {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+        }}
+        QDialog QLabel, QInputDialog QLabel {{
+            color: #ffffff;
+            font-size: 12px;
+            background: transparent;
+        }}
+        QDialog QPushButton, QInputDialog QPushButton {{
+            background-color: {win_bg};
+            border: 1px solid {border};
+            color: {accent};
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 4px;
+            min-width: 70px;
+        }}
+        QDialog QPushButton:hover, QInputDialog QPushButton:hover {{
+            background-color: {card_bg};
+            border-color: {accent};
+        }}
+        QDialog QPushButton:pressed, QInputDialog QPushButton:pressed {{
+            background-color: {accent};
+            color: {win_bg};
+        }}
+        QDialog QLineEdit, QInputDialog QLineEdit {{
+            background-color: {win_bg};
+            border: 1px solid {border};
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: #ffffff;
+        }}
+        QDialog QLineEdit:focus, QInputDialog QLineEdit:focus {{
+            border-color: {accent};
+        }}
         """
         self.setStyleSheet(qss)
+        
+        # Keep config setup tab style sheet updated synchronously as well if it exists
+        if hasattr(self, "setup_tab"):
+            self.setup_tab.apply_setup_tab_theme()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

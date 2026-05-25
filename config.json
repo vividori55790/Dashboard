@@ -66,6 +66,14 @@
         "trend_charts",
         "service_console",
         "parameter_manager",
-        "mcu_terminal"
-    ]
+        "mcu_terminal",
+        "topology_visualizer"
+    ],
+    "theme_config": {
+        "window_bg": "#110d0b",
+        "card_bg": "#1c1512",
+        "border": "#36251c",
+        "accent": "#f97316",
+        "text": "#fed7aa"
+    }
 }
