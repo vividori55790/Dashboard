@@ -1,0 +1,71 @@
+{
+    "ports": [
+        {
+            "port": "COM6",
+            "baudrate": 115200
+        }
+    ],
+    "subsystems": [
+        {
+            "name": "ArduinoNode",
+            "display_name": "\ud83d\udd0c Arduino General Plotter",
+            "variables": [
+                {
+                    "name": "val1",
+                    "display_name": "Sensor Value 1",
+                    "column_index": "0",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "",
+                    "is_numerical": true
+                },
+                {
+                    "name": "val2",
+                    "display_name": "Sensor Value 2",
+                    "column_index": "1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "",
+                    "is_numerical": true
+                },
+                {
+                    "name": "val3",
+                    "display_name": "Sensor Value 3",
+                    "column_index": "2",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "",
+                    "is_numerical": true
+                }
+            ],
+            "thresholds": {
+                "ovp_var": "",
+                "ovp_val": 1000.0,
+                "ocp_var": "",
+                "ocp_val": 1000.0,
+                "otp_var": "",
+                "otp_val": 100.0,
+                "standby_var": "",
+                "standby_val": 1.0
+            },
+            "temp_mosfet_var": "",
+            "temp_transformer_var": ""
+        }
+    ],
+    "routing_rules": [
+        {
+            "port": "COM6",
+            "type": "PREFIX",
+            "pattern": "ARD",
+            "target": "ArduinoNode"
+        }
+    ],
+    "linking_formulas": [],
+    "active_plugins": [
+        "telemetry_cards",
+        "trend_charts",
+        "service_console",
+        "parameter_manager",
+        "mcu_terminal"
+    ]
+}
