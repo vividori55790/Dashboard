@@ -60,11 +60,11 @@ try {
     Write-Host "🎉 COMPILATION SUCCESSFULLY COMPLETED!" -ForegroundColor Green
     Write-Host "============================================================" -ForegroundColor Green
     
-    $outputDir = Join-Path $PSScriptRoot "dist\EmbeddedTelemetryMonitor"
+    $outputDir = Join-Path $PSScriptRoot "dist"
     Write-Host "📂 Output Packaged Directory:" -ForegroundColor Gray
     Write-Host "   $outputDir" -ForegroundColor Yellow
     Write-Host "`n💡 To launch your standalone app:" -ForegroundColor Gray
-    Write-Host "   Double-click: dist\EmbeddedTelemetryMonitor\EmbeddedTelemetryMonitor.exe" -ForegroundColor Green
+    Write-Host "   Double-click: dist\EmbeddedTelemetryMonitor.exe" -ForegroundColor Green
     Write-Host "============================================================" -ForegroundColor Green
 } catch {
     Write-Host "`n❌ COMPILATION FAILED!" -ForegroundColor Red

@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v1.0.0 (2026-05-22)
+# - Current Version: v1.1.0 (2026-05-25)
 # - Target Environment: Production / Python 3.10+ & PyQt6
 # - Integrity Check: Central workspace entry launcher for real & virtual telemetry monitoring
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v1.1.0 (2026-05-25) - Antigravity: Added single-instance protection using QSharedMemory.
 # * v1.0.0 (2026-05-22) - Antigravity: Initial creation of standard central launcher.
 # ======================================================================
 
@@ -149,8 +150,28 @@ def main():
     # Launch GUI
     print("[LAUNCHER]: Launching PyQt6 GUI...")
     from dashboard import DashboardWindow, QApplication
+    from PyQt6.QtCore import QSharedMemory
+    from PyQt6.QtWidgets import QMessageBox
     
     app = QApplication(sys.argv)
+
+    # Single-Instance Protection using QSharedMemory
+    shared_memory_key = "EmbeddedTelemetryMonitor_SingleInstance_Key_v1.0.0"
+    shared_memory = QSharedMemory(shared_memory_key)
+    if not shared_memory.create(1):
+        print("[LAUNCHER]: Embedded Telemetry Monitor is already running. Exiting second instance.")
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle("Instance Already Active")
+        msg_box.setText("Embedded Telemetry Monitor is already running.")
+        msg_box.setInformativeText("Only one instance of this application is allowed to run.")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
+        sys.exit(0)
+
+    # Attach to app to maintain reference lifetime and prevent garbage collection
+    app.shared_memory = shared_memory
+    
     window = DashboardWindow()
     window.show()
     sys.exit(app.exec())
