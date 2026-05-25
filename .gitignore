@@ -1,7 +1,39 @@
-.venv/
+# ======================================================================
+# Git Ignore Rules for Universal Embedded Telemetry Monitor
+# ======================================================================
 
-!.gitignore
-
-__pycache__/
-
+# 1. PyInstaller 빌드 결과물 & 배포 바이너리 (Build Artifacts & Standalone Binaries)
+# 이유: 빌드 결과물(dist/)과 임시 컴파일 캐시(build/)는 용량이 크며, 개발 환경과 OS에 의존적입니다.
+#       특히 dist/ 안의 .exe 바이너리 파일은 깃허브의 'Releases' 탭에 수동으로 직접 업로드하는 것이
+#       레포지토리의 용량 최적화 및 복제 속도 측면에서 올바른 관리 기법입니다.
 dist/
+build/
+
+# 2. Python 가상환경 및 종속성 패키지 (Python Virtual Environments)
+# 이유: 가상환경 폴더(.venv/)는 설치된 외부 라이브러리들(PyQt6, numpy 등)의 바이너리를 포함하고 있어서
+#       용량이 수십~수백 MB에 달하고 컴퓨터 환경마다 호환되지 않습니다.
+#       코드 종속성은 requirements.txt 혹은 빌드 스크립트(build.ps1)를 통해 언제든 자동 복구할 수 있습니다.
+.venv/
+venv/
+ENV/
+
+# 3. Python 런타임 바이트코드 캐시 (Python Runtime Cache)
+# 이유: 파이썬이 실행되면서 로컬 모듈을 더 빠르게 임포트하기 위해 자동 생성하는 바이트코드(*.pyc, __pycache__/)입니다.
+#       이는 소스 코드가 아니며 매번 코드가 돌아갈 때마다 유동적으로 변하므로 추적할 필요가 전혀 없습니다.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 4. 애플리케이션 로그 & 진단 파일 (Runtime Application Logs)
+# 이유: 시리얼 통신 로그나 실행 로그 데이터는 실행 시점마다 계속해서 변경되는 일회성 데이터이므로 제외합니다.
+logs/
+*.log
+
+# 5. IDE(통합개발환경) & OS 개인 설정 파일 (IDE Settings & System Files)
+# 이유: 개발자 개인의 VS Code, PyCharm 설정 및 OS가 임의로 만드는 썸네일/인덱스 파일 등은 
+#       다른 협업 개발자의 설정과 충돌할 수 있는 개인 환경 요소이므로 깃 추적에서 제외합니다.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
