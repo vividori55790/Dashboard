@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v2.1.0 (2026-05-29)
 # - Target Environment: Production / Python 3.10+ & PyQt6
 # - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v2.1.0 (2026-05-29) - Antigravity: Added bisect-based append_historical_data() to support seamless historical resync sorting.
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular Subsystem class.
 # ======================================================================
 
@@ -121,6 +122,45 @@ class Subsystem:
                 buffer_list.append(0.0)
                 
             if len(buffer_list) > self.max_buffer_points:
+                buffer_list.pop(0)
+
+    def append_historical_data(self, relative_time, data_dict):
+        """
+        Inserts a single historical telemetry point at the correct sorted chronological index.
+        Uses binary search (bisect) to maintain O(log N) positioning and ensure graph order integrity.
+        """
+        # Discard if the buffer is full and the historical packet is older than the oldest point
+        if len(self.time_buffer) >= self.max_buffer_points and self.time_buffer and relative_time < self.time_buffer[0]:
+            return
+            
+        import bisect
+        idx = bisect.bisect_left(self.time_buffer, relative_time)
+        
+        # Check if the exact time already exists (prevent duplicate overlap glitches)
+        if idx < len(self.time_buffer) and abs(self.time_buffer[idx] - relative_time) < 1e-4:
+            # Overwrite existing slot instead of inserting a duplicate
+            for var_name, buffer_list in self.buffers.items():
+                val = data_dict.get(var_name, 0.0)
+                try:
+                    buffer_list[idx] = float(val)
+                except (ValueError, TypeError):
+                    buffer_list[idx] = 0.0
+            return
+
+        # Insert at the sorted position
+        self.time_buffer.insert(idx, relative_time)
+        
+        for var_name, buffer_list in self.buffers.items():
+            val = data_dict.get(var_name, 0.0)
+            try:
+                buffer_list.insert(idx, float(val))
+            except (ValueError, TypeError):
+                buffer_list.insert(idx, 0.0)
+                
+        # Enforce buffer capacity threshold
+        if len(self.time_buffer) > self.max_buffer_points:
+            self.time_buffer.pop(0)
+            for buffer_list in self.buffers.values():
                 buffer_list.pop(0)
 
     def check_safety_alarms(self):

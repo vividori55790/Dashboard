@@ -26,7 +26,9 @@ def get_bundle_dir():
     """
     if is_frozen():
         return Path(sys._MEIPASS)
-    return Path(os.path.dirname(os.path.abspath(__file__)))
+    # Since path_resolver.py is inside the 'src' directory,
+    # its parent directory is the root development directory.
+    return Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 def get_writable_app_dir():
     """

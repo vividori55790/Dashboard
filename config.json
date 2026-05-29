@@ -1,63 +1,560 @@
 {
     "ports": [
         {
-            "port": "COM6",
+            "port": "COM3",
+            "baudrate": 115200
+        },
+        {
+            "port": "COM4",
+            "baudrate": 115200
+        },
+        {
+            "port": "COM5",
             "baudrate": 115200
         }
     ],
     "subsystems": [
         {
-            "name": "ArduinoNode",
-            "display_name": "\ud83d\udd0c Arduino General Plotter",
+            "name": "DabNode",
+            "display_name": "\u26a1 DAB Converter Node",
             "variables": [
                 {
-                    "name": "val1",
-                    "display_name": "Sensor Value 1",
+                    "name": "vin",
+                    "display_name": "Input Voltage",
                     "column_index": "0",
                     "gain": 1.0,
                     "offset": 0.0,
-                    "unit": "",
+                    "unit": "V",
                     "is_numerical": true
                 },
                 {
-                    "name": "val2",
-                    "display_name": "Sensor Value 2",
+                    "name": "iin",
+                    "display_name": "Input Current",
                     "column_index": "1",
                     "gain": 1.0,
                     "offset": 0.0,
-                    "unit": "",
+                    "unit": "A",
                     "is_numerical": true
                 },
                 {
-                    "name": "val3",
-                    "display_name": "Sensor Value 3",
+                    "name": "vout",
+                    "display_name": "Output Voltage",
                     "column_index": "2",
                     "gain": 1.0,
                     "offset": 0.0,
-                    "unit": "",
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iout",
+                    "display_name": "Output Current",
+                    "column_index": "3",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_mos",
+                    "display_name": "MOSFET Temp",
+                    "column_index": "4",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_trans",
+                    "display_name": "Transformer Temp",
+                    "column_index": "5",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pin",
+                    "display_name": "Pin Computed",
+                    "column_index": "-1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pout",
+                    "display_name": "Pout Computed",
+                    "column_index": "-1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "eff",
+                    "display_name": "Efficiency",
+                    "column_index": "-1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "%",
+                    "is_numerical": true
+                }
+            ],
+            "thresholds": {
+                "ovp_var": "vin",
+                "ovp_val": 400.0,
+                "ocp_var": "iin",
+                "ocp_val": 15.0,
+                "otp_var": "t_mos",
+                "otp_val": 85.0,
+                "standby_var": "",
+                "standby_val": 1.0
+            },
+            "temp_mosfet_var": "t_mos",
+            "temp_transformer_var": "t_trans"
+        },
+        {
+            "name": "MySubsystemNode",
+            "display_name": "Test",
+            "systems": [
+                "COM3"
+            ],
+            "variables": [
+                {
+                    "name": "vin",
+                    "display_name": "Input Voltage",
+                    "column_index": "0",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iin",
+                    "display_name": "Input Current",
+                    "column_index": "1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "vout",
+                    "display_name": "Output Voltage",
+                    "column_index": "2",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iout",
+                    "display_name": "Output Current",
+                    "column_index": "3",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_mos",
+                    "display_name": "MOSFET Temp",
+                    "column_index": "4",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_trans",
+                    "display_name": "Transformer Temp",
+                    "column_index": "5",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pin",
+                    "display_name": "Pin Computed",
+                    "column_index": "6",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pout",
+                    "display_name": "Pout Computed",
+                    "column_index": "7",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "eff",
+                    "display_name": "Efficiency",
+                    "column_index": "8",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "%",
                     "is_numerical": true
                 }
             ],
             "thresholds": {
                 "ovp_var": "",
-                "ovp_val": 1000.0,
+                "ovp_val": 100.0,
                 "ocp_var": "",
-                "ocp_val": 1000.0,
+                "ocp_val": 50.0,
                 "otp_var": "",
-                "otp_val": 100.0,
-                "standby_var": "",
-                "standby_val": 1.0
+                "otp_val": 85.0
             },
             "temp_mosfet_var": "",
+            "temp_transformer_var": ""
+        },
+        {
+            "name": "AutoSub_COM4",
+            "display_name": "\ud83d\udd0c Auto Node COM4",
+            "variables": [
+                {
+                    "name": "temp",
+                    "display_name": "Core Temperature",
+                    "column_index": "0",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "voltage",
+                    "display_name": "Voltage Input",
+                    "column_index": "1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "current",
+                    "display_name": "Current Load",
+                    "column_index": "2",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                }
+            ],
+            "thresholds": {
+                "ovp_var": "voltage",
+                "ovp_val": 100.0,
+                "ocp_var": "current",
+                "ocp_val": 50.0,
+                "otp_var": "temp",
+                "otp_val": 85.0
+            },
+            "temp_mosfet_var": "temp",
+            "temp_transformer_var": ""
+        },
+        {
+            "name": "AutoSub_COM5",
+            "display_name": "\ud83d\udd0c Auto Node COM5",
+            "variables": [
+                {
+                    "name": "temp",
+                    "display_name": "Core Temperature",
+                    "column_index": "0",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "voltage",
+                    "display_name": "Voltage Input",
+                    "column_index": "1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "current",
+                    "display_name": "Current Load",
+                    "column_index": "2",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                }
+            ],
+            "thresholds": {
+                "ovp_var": "voltage",
+                "ovp_val": 100.0,
+                "ocp_var": "current",
+                "ocp_val": 50.0,
+                "otp_var": "temp",
+                "otp_val": 85.0
+            },
+            "temp_mosfet_var": "temp",
+            "temp_transformer_var": ""
+        },
+        {
+            "name": "MySubsystemNode1",
+            "display_name": "Hi",
+            "systems": [
+                "COM3",
+                "COM4",
+                "COM5"
+            ],
+            "variables": [
+                {
+                    "name": "vin",
+                    "display_name": "Input Voltage",
+                    "column_index": "0",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iin",
+                    "display_name": "Input Current",
+                    "column_index": "1",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "vout",
+                    "display_name": "Output Voltage",
+                    "column_index": "2",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iout",
+                    "display_name": "Output Current",
+                    "column_index": "3",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_mos",
+                    "display_name": "MOSFET Temp",
+                    "column_index": "4",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_trans",
+                    "display_name": "Transformer Temp",
+                    "column_index": "5",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pin",
+                    "display_name": "Pin Computed",
+                    "column_index": "6",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pout",
+                    "display_name": "Pout Computed",
+                    "column_index": "7",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "eff",
+                    "display_name": "Efficiency",
+                    "column_index": "8",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "%",
+                    "is_numerical": true
+                },
+                {
+                    "name": "vin",
+                    "display_name": "Input Voltage",
+                    "column_index": "9",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iin",
+                    "display_name": "Input Current",
+                    "column_index": "10",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "vout",
+                    "display_name": "Output Voltage",
+                    "column_index": "11",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "iout",
+                    "display_name": "Output Current",
+                    "column_index": "12",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_mos",
+                    "display_name": "MOSFET Temp",
+                    "column_index": "13",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "t_trans",
+                    "display_name": "Transformer Temp",
+                    "column_index": "14",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pin",
+                    "display_name": "Pin Computed",
+                    "column_index": "15",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "pout",
+                    "display_name": "Pout Computed",
+                    "column_index": "16",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "W",
+                    "is_numerical": true
+                },
+                {
+                    "name": "eff",
+                    "display_name": "Efficiency",
+                    "column_index": "17",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "%",
+                    "is_numerical": true
+                },
+                {
+                    "name": "temp",
+                    "display_name": "Core Temperature",
+                    "column_index": "18",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "voltage",
+                    "display_name": "Voltage Input",
+                    "column_index": "19",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "current",
+                    "display_name": "Current Load",
+                    "column_index": "20",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                },
+                {
+                    "name": "temp",
+                    "display_name": "Core Temperature",
+                    "column_index": "21",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "\u00b0C",
+                    "is_numerical": true
+                },
+                {
+                    "name": "voltage",
+                    "display_name": "Voltage Input",
+                    "column_index": "22",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "V",
+                    "is_numerical": true
+                },
+                {
+                    "name": "current",
+                    "display_name": "Current Load",
+                    "column_index": "23",
+                    "gain": 1.0,
+                    "offset": 0.0,
+                    "unit": "A",
+                    "is_numerical": true
+                }
+            ],
+            "thresholds": {
+                "ovp_var": "voltage",
+                "ovp_val": 100.0,
+                "ocp_var": "current",
+                "ocp_val": 50.0,
+                "otp_var": "temp",
+                "otp_val": 85.0
+            },
+            "temp_mosfet_var": "temp",
             "temp_transformer_var": ""
         }
     ],
     "routing_rules": [
         {
-            "port": "COM6",
+            "port": "COM3",
             "type": "PREFIX",
-            "pattern": "ARD",
-            "target": "ArduinoNode"
+            "pattern": "MYSUB",
+            "target": "MySubsystemNode1"
+        },
+        {
+            "port": "COM4",
+            "type": "PREFIX",
+            "pattern": "MYSUB",
+            "target": "MySubsystemNode1"
+        },
+        {
+            "port": "COM5",
+            "type": "PREFIX",
+            "pattern": "MYSUB",
+            "target": "MySubsystemNode1"
         }
     ],
     "linking_formulas": [],
@@ -70,10 +567,40 @@
         "topology_visualizer"
     ],
     "theme_config": {
-        "window_bg": "#110d0b",
-        "card_bg": "#1c1512",
-        "border": "#36251c",
-        "accent": "#f97316",
-        "text": "#fed7aa"
-    }
+        "window_bg": "#0e0f12",
+        "card_bg": "#13141a",
+        "border": "#272a38",
+        "accent": "#38bdf8",
+        "text": "#a0a5b5"
+    },
+    "subsystem_links": [
+        {
+            "source_sub": "DabNode",
+            "source_var": "vin",
+            "target_sub": "DabNode",
+            "target_var": "vin",
+            "label": "vin \u2794 vin"
+        },
+        {
+            "source_sub": "DabNode",
+            "source_var": "vin",
+            "target_sub": "AutoSub_COM4",
+            "target_var": "temp",
+            "label": "vin \u2794 temp"
+        },
+        {
+            "source_sub": "AutoSub_COM4",
+            "source_var": "temp",
+            "target_sub": "AutoSub_COM4",
+            "target_var": "temp",
+            "label": "temp \u2794 temp"
+        },
+        {
+            "source_sub": "AutoSub_COM4",
+            "source_var": "temp",
+            "target_sub": "AutoSub_COM5",
+            "target_var": "temp",
+            "label": "temp \u2794 temp"
+        }
+    ]
 }

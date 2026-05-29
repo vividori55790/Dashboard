@@ -20,96 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src
 def setup_simulation_mock():
     """
     Injects a high-fidelity virtual serial port loopback mock layer.
-    This simulates multiple microcontrollers transmitting CSV telemetry.
+    This simulates multiple microcontrollers transmitting CSV telemetry,
+    with advanced support for Protocol Analyzer ($HEX) and PC-led Resync ($HIST) recovery.
     """
-    import time
-    import math
-    import random
-
-    class MockSerialPort:
-        def __init__(self, port, baudrate, timeout=None, write_timeout=None):
-            self.port = port
-            self.baudrate = baudrate
-            self.is_open = True
-            self.last_read_time = time.time()
-            self.start_time = time.time()
-            print(f"[MOCK SYSTEM]: Virtual serial connection opened on {self.port} at {self.baudrate} baud.")
-            
-        def close(self):
-            self.is_open = False
-            print(f"[MOCK SYSTEM]: Virtual serial connection closed on {self.port}.")
-            
-        def write(self, data):
-            cmd = data.decode('utf-8', errors='ignore').strip()
-            print(f"[MOCK MCU {self.port} RX Command]: {cmd}")
-            
-        def flush(self):
-            pass
-            
-        def readline(self):
-            # Limit rate to 10Hz to emulate standard microcontroller transmission intervals
-            now = time.time()
-            elapsed = now - self.last_read_time
-            interval = 0.1
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
-            self.last_read_time = time.time()
-            
-            if not self.is_open:
-                return b""
-                
-            t = time.time() - self.start_time
-            
-            # COM3 simulates the Engine Subsystem (e.g. RPM, temperature, battery voltage)
-            if self.port == "COM3":
-                rpm = 3500.0 + 800.0 * math.sin(t * 0.5) + random.uniform(-15.0, 15.0)
-                temp = 72.0 + 8.0 * math.sin(t * 0.08) + random.uniform(-0.3, 0.3)
-                volt = 13.8 + 0.4 * math.sin(t * 0.15) + random.uniform(-0.08, 0.08)
-                line = f"ENG,{rpm:.2f},{temp:.2f},{volt:.2f}\n"
-                return line.encode('utf-8')
-                
-            # COM4 simulates the Battery Subsystem (e.g. Voltage, Current, Temperature, Safety Standby status)
-            elif self.port == "COM4":
-                vin = 398.5 + 2.5 * math.sin(t * 0.3) + random.uniform(-0.5, 0.5)
-                curr = 8.5 + 2.0 * math.sin(t * 0.6) + random.uniform(-0.1, 0.1)
-                temp_mos = 42.0 + 12.0 * (curr / 10.0)**2 + random.uniform(-0.15, 0.15)
-                temp_trans = 48.0 + 8.0 * (curr / 10.0) + random.uniform(-0.1, 0.1)
-                standby = 0.0 if curr > 0.1 else 1.0
-                line = f"BAT,{vin:.2f},{curr:.2f},{temp_mos:.2f},{temp_trans:.2f},{standby:.1f}\n"
-                return line.encode('utf-8')
-                
-            else:
-                v1 = 100.0 + 20.0 * math.sin(t)
-                v2 = 50.0 + 10.0 * math.cos(t)
-                line = f"{v1:.3f},{v2:.3f}\n"
-                return line.encode('utf-8')
-
-    class MockPortInfo:
-        def __init__(self, device, description):
-            self.device = device
-            self.description = description
-            self.manufacturer = "Mock Hardware Ltd."
-
-    def mock_comports():
-        return [
-            MockPortInfo("COM3", "Mock STM32 Engine controller"),
-            MockPortInfo("COM4", "Mock ESP32 Battery sensor node")
-        ]
-
-    class MockSerialLib:
-        Serial = MockSerialPort
-        SerialException = Exception
-        
-        class tools:
-            class list_ports:
-                @staticmethod
-                def comports():
-                    return mock_comports()
-
-    mock_lib = MockSerialLib()
-    sys.modules['serial'] = mock_lib
-    sys.modules['serial.tools'] = mock_lib.tools
-    sys.modules['serial.tools.list_ports'] = mock_lib.tools.list_ports
+    import simulation_mock
+    simulation_mock.setup_simulation_mock()
 
 def has_physical_com_ports():
     """
@@ -156,8 +71,20 @@ def main():
     from dashboard import DashboardWindow, QApplication
     from PyQt6.QtCore import QSharedMemory
     from PyQt6.QtWidgets import QMessageBox
+    from PyQt6.QtGui import QIcon
     
     app = QApplication(sys.argv)
+
+    # Set AppUserModelID to display custom taskbar icon correctly on Windows script launch
+    import ctypes
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("google.deepmind.embeddedtelemetrydashboard.v1")
+    except:
+        pass
+
+    # Load and set application wide icon
+    if os.path.exists("Logo_Gemini.png"):
+        app.setWindowIcon(QIcon("Logo_Gemini.png"))
 
     # Single-Instance Protection using QSharedMemory
     shared_memory_key = "EmbeddedTelemetryMonitor_SingleInstance_Key_v1.0.0"

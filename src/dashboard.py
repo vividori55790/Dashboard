@@ -1,10 +1,12 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v2.0.2 (2026-05-29)
 # - Target Environment: Production / Python 3.10+ & PyQt6
 # - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v2.0.2 (2026-05-29) - Antigravity: Added connection_status_changed slot & PC-led resync historical request logic.
+# * v2.0.1 (2026-05-29) - Antigravity: Injected main_window reference to DataRouter to support dual-track parsing plugin pipeline.
 # * v2.0.0 (2026-05-22) - Antigravity: Completed Phase 3 refactoring of Main GUI Frame to integrate plugin system, dynamic Serial manager, and Profile Setup Wizard.
 # ======================================================================
 
@@ -121,6 +123,7 @@ class WorkspaceSetupTab(QWidget):
         self.setup_formulas_tab()
         self.setup_plugins_tab()
         self.setup_theme_tab()
+        self.setup_dev_tools_tab()
         
         # 3. Actions Footer Panel
         btn_panel = QWidget()
@@ -209,6 +212,8 @@ class WorkspaceSetupTab(QWidget):
         self.tbl_ports.blockSignals(False)
         
         # 2. Subsystems Tab
+        selected_sub_name = self.list_subs.currentItem().text() if self.list_subs.currentItem() else ""
+        
         self.list_subs.blockSignals(True)
         self.list_subs.clear()
         for s in self.config_data.get("subsystems", []):
@@ -217,7 +222,11 @@ class WorkspaceSetupTab(QWidget):
         
         # Trigger selection reload for subsystems details
         if self.list_subs.count() > 0:
-            self.list_subs.setCurrentRow(0)
+            matched_items = self.list_subs.findItems(selected_sub_name, Qt.MatchFlag.MatchExactly)
+            if matched_items:
+                self.list_subs.setCurrentItem(matched_items[0])
+            else:
+                self.list_subs.setCurrentRow(self.list_subs.count() - 1)
             self.on_subsystem_selection_changed(self.list_subs.currentItem().text())
         else:
             self.rebuild_subsystem_details_panel("")
@@ -365,34 +374,7 @@ class WorkspaceSetupTab(QWidget):
         self.tabs.addTab(tab, "⚡ Subsystems & Variables")
 
     def add_new_subsystem(self):
-        from PyQt6.QtWidgets import QInputDialog
-        text, ok = QInputDialog.getText(self, "Add Subsystem", "Enter unique subsystem ID (e.g. EngineNode):")
-        if ok and text.strip():
-            sub_id = text.strip()
-            # Verify duplication
-            for idx in range(self.list_subs.count()):
-                if self.list_subs.item(idx).text() == sub_id:
-                    QMessageBox.warning(self, "Error", "Subsystem ID already exists!")
-                    return
-            
-            # Create a blank default skeleton structure
-            new_sub = {
-                "name": sub_id,
-                "display_name": sub_id + " Panel",
-                "variables": [
-                    {"name": "temp", "display_name": "Core Temperature", "column_index": "0", "gain": 1.0, "offset": 0.0, "unit": "°C", "is_numerical": True}
-                ],
-                "thresholds": {"ovp_var": "", "ovp_val": 100.0, "ocp_var": "", "ocp_val": 50.0, "otp_var": "temp", "otp_val": 85.0},
-                "temp_mosfet_var": "temp",
-                "temp_transformer_var": ""
-            }
-            self.config_data["subsystems"].append(new_sub)
-            self.list_subs.addItem(sub_id)
-            
-            # Select the newly added item
-            items = self.list_subs.findItems(sub_id, Qt.MatchFlag.MatchExact)
-            if items:
-                self.list_subs.setCurrentItem(items[0])
+        self.main_window.show_quick_subsystem_dialog()
 
     def remove_selected_subsystem(self):
         cur_item = self.list_subs.currentItem()
@@ -458,7 +440,7 @@ class WorkspaceSetupTab(QWidget):
         btn_add_v = QPushButton("➕ Add Variable")
         btn_add_v.clicked.connect(lambda: self.add_variable_row(sub))
         btn_del_v = QPushButton("➖ Delete Selected")
-        btn_del_v.clicked.connect(self.del_variable_row)
+        btn_del_v.clicked.connect(lambda: self.del_variable_row(sub))
         btn_v_lay.addWidget(btn_add_v)
         btn_v_lay.addWidget(btn_del_v)
         btn_v_lay.addStretch()
@@ -548,6 +530,7 @@ class WorkspaceSetupTab(QWidget):
         self.right_lay.addStretch()
 
     def add_variable_row(self, sub, var_data=None):
+        old_state = self.tbl_vars.blockSignals(True)
         row = self.tbl_vars.rowCount()
         self.tbl_vars.insertRow(row)
         
@@ -570,11 +553,18 @@ class WorkspaceSetupTab(QWidget):
         chk.setChecked(is_num)
         chk.stateChanged.connect(lambda: self.save_current_variables_to_state(sub))
         self.tbl_vars.setCellWidget(row, 6, chk)
+        
+        self.tbl_vars.blockSignals(old_state)
+        if not old_state:
+            self.save_current_variables_to_state(sub)
 
-    def del_variable_row(self):
+    def del_variable_row(self, sub):
         cur = self.tbl_vars.currentRow()
         if cur >= 0:
+            old_state = self.tbl_vars.blockSignals(True)
             self.tbl_vars.removeRow(cur)
+            self.tbl_vars.blockSignals(old_state)
+            self.save_current_variables_to_state(sub)
 
     def save_current_variables_to_state(self, sub):
         sub["variables"] = []
@@ -1095,6 +1085,130 @@ class WorkspaceSetupTab(QWidget):
         
         lay.addWidget(split)
         self.tabs.addTab(tab, "🎨 테마 설정")
+
+    def setup_dev_tools_tab(self):
+        tab = QWidget()
+        tab.setObjectName("tab_devtools")
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(25, 25, 25, 25)
+        lay.setSpacing(20)
+        
+        # Title/Description
+        title_lbl = QLabel("🛠️ 개발자 도구 (Developer Tools & Simulation Controls)")
+        title_lbl.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 16px; border: none; background: transparent;")
+        desc_lbl = QLabel("대시보드 기동 모드를 가상 시뮬레이터 모드와 실제 물리 하드웨어 시리얼 모드 간에 실시간으로 전환하고 제어할 수 있습니다.")
+        desc_lbl.setStyleSheet("color: #8e94a6; font-size: 12px; border: none; background: transparent;")
+        lay.addWidget(title_lbl)
+        lay.addWidget(desc_lbl)
+        
+        # Status Card Group
+        self.grp_sim_status = QGroupBox("📡 현재 시스템 드라이버 모드")
+        self.grp_sim_status.setStyleSheet("QGroupBox { font-size: 12px; }")
+        status_lay = QVBoxLayout(self.grp_sim_status)
+        status_lay.setContentsMargins(20, 25, 20, 20)
+        status_lay.setSpacing(15)
+        
+        self.lbl_sim_status_val = QLabel("")
+        self.lbl_sim_status_val.setStyleSheet("font-size: 14px; font-weight: bold;")
+        status_lay.addWidget(self.lbl_sim_status_val)
+        
+        self.lbl_sim_desc = QLabel("")
+        self.lbl_sim_desc.setStyleSheet("color: #a2a2b5; font-size: 11px;")
+        status_lay.addWidget(self.lbl_sim_desc)
+        
+        lay.addWidget(self.grp_sim_status)
+        
+        # Action Panel
+        grp_action = QGroupBox("⚙️ 백그라운드 드라이버 런타임 제어")
+        grp_action.setStyleSheet("QGroupBox { font-size: 12px; }")
+        action_lay = QVBoxLayout(grp_action)
+        action_lay.setContentsMargins(20, 25, 20, 20)
+        action_lay.setSpacing(15)
+        
+        self.btn_toggle_sim = QPushButton("")
+        self.btn_toggle_sim.setMinimumHeight(45)
+        self.btn_toggle_sim.clicked.connect(self.toggle_simulation_mode)
+        action_lay.addWidget(self.btn_toggle_sim)
+        
+        warning_lbl = QLabel("⚠️ 주의: 전환 시 기존의 모든 백그라운드 리드 스레드가 완전히 해제된 후, 새로운 드라이버 스펙(가상/물리)으로 실시간 재배치 및 자동 연결이 트리거됩니다.")
+        warning_lbl.setStyleSheet("color: #fca5a5; font-size: 11px; font-weight: bold;")
+        action_lay.addWidget(warning_lbl)
+        
+        lay.addWidget(grp_action)
+        lay.addStretch()
+        
+        self.tabs.addTab(tab, "🛠️ 개발자 도구")
+        
+        # Load active status in UI
+        self.update_sim_status_ui()
+
+    def is_simulation_active(self):
+        return self.main_window.is_simulation_active()
+
+    def update_sim_status_ui(self):
+        active = self.is_simulation_active()
+        if active:
+            self.lbl_sim_status_val.setText("🟢 가상 시뮬레이션 모드 활성화됨 (Virtual Emulation Driver Active)")
+            self.lbl_sim_status_val.setStyleSheet("font-size: 14px; font-weight: bold; color: #10b981;")
+            self.lbl_sim_desc.setText(
+                "현재 STM32/ESP32 가상 포트(COM3: Engine, COM4: Battery 등) 시뮬레이션 데이터 스트림이 백그라운드 스레드에서 구동되고 있습니다.\n"
+                "가상 장치 데이터 패킷이 CSV Prefix 형식으로 Router를 통과하여 실시간 차트 및 계측 카드를 갱신합니다."
+            )
+            self.btn_toggle_sim.setText("🔌 물리 하드웨어 시리얼 모드로 즉시 전환 (Switch to Physical Hardware Serial)")
+            self.btn_toggle_sim.setStyleSheet("""
+                QPushButton {
+                    background-color: #1e1b4b; border: 1px solid #6366f1; color: #a5b4fc; font-size: 12px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #312e81; border-color: #818cf8; color: #ffffff; }
+            """)
+        else:
+            self.lbl_sim_status_val.setText("🔵 물리 하드웨어 시리얼 모드 활성화됨 (Physical Hardware Serial Mode Active)")
+            self.lbl_sim_status_val.setStyleSheet("font-size: 14px; font-weight: bold; color: #38bdf8;")
+            self.lbl_sim_desc.setText(
+                "현재 PC에 실제로 연결되는 물리적인 COM VCP 직렬 장치(물리 센서, MCU) 드라이버(pyserial)가 로드된 상태입니다.\n"
+                "실제 MCU 장치를 연결하고 'Com Ports 설정' 탭에서 체크를 활성화하여 실시간 계측을 수행할 수 있습니다."
+            )
+            self.btn_toggle_sim.setText("⚡ 가상 시뮬레이션 모드로 즉시 전환 (Switch to Virtual Simulation)")
+            self.btn_toggle_sim.setStyleSheet("""
+                QPushButton {
+                    background-color: #064e3b; border: 1px solid #10b981; color: #6ee7b7; font-size: 12px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #065f46; border-color: #34d399; color: #ffffff; }
+            """)
+
+    def toggle_simulation_mode(self):
+        import simulation_mock
+        active = self.is_simulation_active()
+        
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            if active:
+                simulation_mock.restore_physical_serial()
+                self.main_window.log_to_diagnostic("SYSTEM: Switched to Physical pyserial Driver Mode.")
+            else:
+                simulation_mock.setup_simulation_mock()
+                self.main_window.log_to_diagnostic("SYSTEM: Switched to Virtual Simulation Emulation Mode.")
+            
+            # Restart listening thread handler cleanly inside dashboard main_window
+            self.main_window.restart_serial_handlers_from_profile()
+            
+            # Update UI in setup tab
+            self.update_sim_status_ui()
+            
+            # Re-scan physical ports to update COM Ports list checkbox in UI immediately
+            self.main_window.scan_physical_com_ports()
+            
+            QMessageBox.information(
+                self,
+                "드라이버 모드 전환 완료",
+                "성공적으로 시리얼 백그라운드 드라이버 모드가 전환되었습니다!\n\n"
+                f"현재 모드: {'물리 하드웨어 시리얼 모드' if active else '가상 시뮬레이션 모드'}"
+            )
+        except Exception as e:
+            self.main_window.log_to_diagnostic(f"ERROR: Failed to switch driver mode: {str(e)}")
+            QMessageBox.critical(self, "드라이버 전환 실패", f"드라이버 스왑 과정 중 에러가 발생했습니다:\n{str(e)}")
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def on_theme_preset_changed(self, index):
         preset_name = self.combo_theme_presets.currentText()
@@ -1895,6 +2009,900 @@ class PresetSelectionDialog(QDialog):
             )
 
 
+class WindowLayoutGuideDialog(QDialog):
+    """
+    A beautiful dark-themed help dialog explaining how PyQt6 QDockWidget docking, splitting, 
+    and floating works to maximize user flexibility and workflow layout control.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("📐 대시보드 윈도우 레이아웃 배치 가이드")
+        self.resize(500, 380)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                border-radius: 8px;
+            }
+            QLabel {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            }
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #222530;
+                border-color: #38bdf8;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        title_lbl = QLabel("📐 PyQt6 QDockWidget 배치 및 분리 요령")
+        title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #38bdf8;")
+        layout.addWidget(title_lbl)
+
+        # Divider
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("background-color: #272a38; max-height: 1px;")
+        layout.addWidget(line)
+
+        # Guide Content
+        guide_text = (
+            "<b>1. 윈도우 분리 (Float)</b><br/>"
+            "각 윈도우의 상단 타이틀 바를 더블 클릭하거나 마우스로 클릭하여 대시보드 밖으로 드래그하면, "
+            "자유롭게 분리하여 보조 모니터로 이동시킬 수 있는 플로팅 윈도우가 됩니다.<br/><br/>"
+            "<b>2. 도킹 및 중첩 (Tab Stack & Side-by-Side)</b><br/>"
+            "분리된 윈도우를 다시 대시보드 메인 화면 안으로 가져가 모서리 영역에 갖다 대면, "
+            "상/하/좌/우 원하는 그리드 영역으로 깔끔하게 도킹됩니다. "
+            "만약 다른 윈도우의 한가운데로 드래그하면 <b>탭 형태로 중첩(Tabbed Docking)</b>하여 공간을 획기적으로 절약할 수 있습니다.<br/><br/>"
+            "<b>3. 윈도우 닫기 및 재활성화</b><br/>"
+            "사용하지 않는 윈도우는 우측 상단의 'X'를 눌러 닫을 수 있으며, 홈 Ribbon의 "
+            "<b>'⚡ 퀵 위젯/윈도우 추가'</b> 그룹의 각 버튼을 누르면 언제든지 즉시 다시 화면에 도킹되어 활성화됩니다.<br/><br/>"
+            "<b>4. 레이아웃 리셋</b><br/>"
+            "도킹 레이아웃이 꼬였거나 초기 정돈된 상태로 돌아가고 싶다면 홈 리본의 <b>'🎛️ Standard Docks Layout reset'</b> 버튼을 눌러주세요."
+        )
+        content_lbl = QLabel(guide_text)
+        content_lbl.setWordWrap(True)
+        content_lbl.setStyleSheet("font-size: 11px; line-height: 1.6; color: #a0a5b5;")
+        layout.addWidget(content_lbl)
+
+        layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_ok = QPushButton("이해했습니다")
+        btn_ok.clicked.connect(self.accept)
+        btn_layout.addWidget(btn_ok)
+        layout.addLayout(btn_layout)
+
+
+class PluginFilterDialog(QDialog):
+    """
+    A premium dark-themed dialog for filtering which subsystems and variables/labels
+    are displayed in a specific dock widget.
+    """
+    def __init__(self, plugin, parent=None):
+        super().__init__(parent)
+        self.plugin = plugin
+        self.main_window = plugin.main_window
+        self.setWindowTitle(f"⚙️ {plugin.name} 표시 필터 설정")
+        self.resize(380, 480)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        
+        # Initialize default filter states if empty
+        router = self.main_window.data_router
+        if not hasattr(self.plugin, "visible_subsystems") or not self.plugin.visible_subsystems:
+            self.plugin.visible_subsystems = set(router.subsystems.keys())
+        if not hasattr(self.plugin, "visible_variables") or not self.plugin.visible_variables:
+            all_vars = set()
+            for sub in router.subsystems.values():
+                for v in sub.variables:
+                    all_vars.add(v["name"])
+            self.plugin.visible_variables = all_vars
+            
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                border-radius: 8px;
+            }
+            QLabel {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QCheckBox {
+                color: #a0a5b5;
+                font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+                font-size: 11px;
+                spacing: 8px;
+            }
+            QCheckBox:hover {
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #222530;
+                border-color: #38bdf8;
+            }
+            QPushButton#btn_primary {
+                background-color: #2563eb;
+                border-color: #3b82f6;
+                color: white;
+            }
+            QPushButton#btn_primary:hover {
+                background-color: #1d4ed8;
+                border-color: #2563eb;
+            }
+            QScrollArea {
+                background-color: #12131a;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        title_lbl = QLabel(f"🎯 표시 대상 시스템 및 라벨 선택")
+        title_lbl.setStyleSheet("font-size: 14px; color: #38bdf8;")
+        layout.addWidget(title_lbl)
+
+        # 1. Subsystems Checklist
+        layout.addWidget(QLabel("📂 표시할 서브시스템(시스템 포함) 선택:"))
+        self.sub_scroll = QScrollArea()
+        self.sub_scroll.setWidgetResizable(True)
+        sub_content = QWidget()
+        sub_content.setStyleSheet("background: transparent;")
+        sub_lay = QVBoxLayout(sub_content)
+        sub_lay.setContentsMargins(8, 8, 8, 8)
+        
+        self.sub_boxes = {}
+        router = self.main_window.data_router
+        for sub_name, sub in router.subsystems.items():
+            chk = QCheckBox(f"{sub.display_name} ({sub_name})")
+            is_checked = sub_name in self.plugin.visible_subsystems
+            chk.setChecked(is_checked)
+            sub_lay.addWidget(chk)
+            self.sub_boxes[sub_name] = chk
+        sub_lay.addStretch()
+        self.sub_scroll.setWidget(sub_content)
+        layout.addWidget(self.sub_scroll)
+
+        # 2. Variables / Labels Checklist
+        layout.addWidget(QLabel("🏷️ 표시할 데이터 라벨(변수) 선택:"))
+        self.var_scroll = QScrollArea()
+        self.var_scroll.setWidgetResizable(True)
+        var_content = QWidget()
+        var_content.setStyleSheet("background: transparent;")
+        var_lay = QVBoxLayout(var_content)
+        var_lay.setContentsMargins(8, 8, 8, 8)
+
+        self.var_boxes = {}
+        all_var_names = set()
+        for sub in router.subsystems.values():
+            for v in sub.variables:
+                all_var_names.add(v["name"])
+
+        for v_name in sorted(list(all_var_names)):
+            chk = QCheckBox(v_name)
+            is_checked = v_name in self.plugin.visible_variables
+            chk.setChecked(is_checked)
+            var_lay.addWidget(chk)
+            self.var_boxes[v_name] = chk
+        var_lay.addStretch()
+        self.var_scroll.setWidget(var_content)
+        layout.addWidget(self.var_scroll)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        btn_apply = QPushButton("적용")
+        btn_apply.setObjectName("btn_primary")
+        btn_apply.clicked.connect(self.apply_filter)
+        
+        btn_cancel = QPushButton("취소")
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(btn_apply)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+
+    def apply_filter(self):
+        # Update plugin filter sets
+        self.plugin.visible_subsystems = {name for name, chk in self.sub_boxes.items() if chk.isChecked()}
+        self.plugin.visible_variables = {name for name, chk in self.var_boxes.items() if chk.isChecked()}
+
+        # Trigger plugin UI rebuild
+        if hasattr(self.plugin, "rebuild_plots"):
+            self.plugin.rebuild_plots()
+        if hasattr(self.plugin, "rebuild_ui"):
+            self.plugin.rebuild_ui()
+            
+        self.accept()
+
+
+class QuickWindowCreateDialog(QDialog):
+    """
+    A premium dark-themed dialog for creating/enabling telemetry widget windows.
+    Consolidates multiple buttons into a single clean launcher with detailed dropdown controls.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.main_window = main_window
+        self.setWindowTitle("➕ 윈도우/위젯 생성 마법사")
+        self.resize(460, 360)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                border-radius: 8px;
+            }
+            QLabel {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+                font-size: 11px;
+            }
+            QComboBox {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+                padding: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                selection-background-color: #38bdf8;
+                selection-color: #0f1015;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                padding: 10px 18px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #222530;
+                border-color: #38bdf8;
+            }
+            QPushButton#btn_primary {
+                background-color: #2563eb;
+                border-color: #3b82f6;
+                color: white;
+            }
+            QPushButton#btn_primary:hover {
+                background-color: #1d4ed8;
+                border-color: #2563eb;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        # Header Title
+        title_lbl = QLabel("➕ 윈도우/위젯 생성 및 배치")
+        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #38bdf8;")
+        layout.addWidget(title_lbl)
+
+        # Divider
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("background-color: #272a38; max-height: 1px;")
+        layout.addWidget(line)
+
+        # Form Layout
+        form_lay = QGridLayout()
+        form_lay.setSpacing(10)
+
+        # 1. Widget Type Selection
+        form_lay.addWidget(QLabel("1. 위젯/윈도우 유형 (Widget Type):"), 0, 0)
+        self.combo_type = QComboBox()
+        self.combo_type.addItem("📊 실시간 파형 차트 스코프 (Trend Charts)", "trend_charts")
+        self.combo_type.addItem("📟 텍스트 수치 카드 (Telemetry Cards)", "telemetry_cards")
+        self.combo_type.addItem("🔌 프로토콜 패킷 분석기 (Protocol Analyzer)", "protocol_analyzer")
+        self.combo_type.addItem("⚡ 노드 토폴로지 맵 (Topology Visualizer)", "topology_visualizer")
+        self.combo_type.setView(QListView())
+        self.combo_type.currentIndexChanged.connect(self.update_description)
+        form_lay.addWidget(self.combo_type, 0, 1)
+
+        # 2. Target Subsystem Selection
+        form_lay.addWidget(QLabel("2. 연동할 서브시스템 (Target Subsystem):"), 1, 0)
+        self.combo_sub = QComboBox()
+        self.combo_sub.addItem("전체 서브시스템 (All Nodes)", "ALL")
+        for s in self.main_window.config_data.get("subsystems", []):
+            self.combo_sub.addItem(f"{s.get('display_name', s['name'])} ({s['name']})", s["name"])
+        self.combo_sub.setView(QListView())
+        form_lay.addWidget(self.combo_sub, 1, 1)
+
+        layout.addLayout(form_lay)
+
+        # Description / Details box
+        self.desc_box = QLabel()
+        self.desc_box.setWordWrap(True)
+        self.desc_box.setStyleSheet("background-color: #12131a; border: 1px solid #272a38; border-radius: 4px; padding: 12px; font-size: 11px; line-height: 1.5; color: #8e94a6;")
+        layout.addWidget(self.desc_box)
+        
+        layout.addStretch()
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        btn_layout.addStretch()
+
+        self.btn_create = QPushButton("🚀 윈도우 생성 및 도킹")
+        self.btn_create.setObjectName("btn_primary")
+        self.btn_create.clicked.connect(self.create_window)
+
+        self.btn_cancel = QPushButton("취소")
+        self.btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(self.btn_create)
+        btn_layout.addWidget(self.btn_cancel)
+        layout.addLayout(btn_layout)
+
+        self.update_description()
+
+    def update_description(self):
+        plugin_id = self.combo_type.currentData()
+        if plugin_id == "trend_charts":
+            self.desc_box.setText(
+                "<b>📊 실시간 파형 차트 스코프</b><br/>"
+                "PyqtGraph 기반의 대용량 고성능 멀티플 스코프 차트입니다. "
+                "선택한 서브시스템에서 유입되는 센서/제어기 변수들의 실시간 변동 파형을 시계열 플롯으로 실시간 추적합니다."
+            )
+        elif plugin_id == "telemetry_cards":
+            self.desc_box.setText(
+                "<b>📟 텍스트 수치 카드</b><br/>"
+                "가장 중요한 MOSFET 온도, VIN 전압, LOAD 전류 등 핵심 변수를 대형 글씨 카드 뷰로 나타냅니다. "
+                "임계 한계치(OVP/OCP/OTP) 돌파 시의 비주얼 긴급 경보 기능이 내장되어 있습니다."
+            )
+        elif plugin_id == "protocol_analyzer":
+            self.desc_box.setText(
+                "<b>🔌 프로토콜 패킷 분석기</b><br/>"
+                "시리얼 VCP 포트로 흘러 들어오는 로우 HEX 바이트 및 텍스트 프레임을 스니핑하여, "
+                "헤더, ID, 명령, 페이로드 바이트 단위로 네온 컬러스럽게 하이라이팅 분석해 줍니다."
+            )
+        elif plugin_id == "topology_visualizer":
+            self.desc_box.setText(
+                "<b>⚡ 노드 토폴로지 맵</b><br/>"
+                "전체 수집 서브시스템 노드들과 연산 수식 노드(Math Node), 조건 노드(Trigger Node) 간의 연결 관계를 "
+                "황금 점선 및 은빛 입자 흐름으로 유기적으로 렌더링하고 직관적으로 수식을 배치하게 해줍니다."
+            )
+
+    def create_window(self):
+        plugin_id = self.combo_type.currentData()
+        sub_id = self.combo_sub.currentData()
+
+        # Enable plugin dynamically and update persistent profile choice
+        success = self.main_window.plugin_manager.toggle_plugin(plugin_id, True)
+        if success:
+            # Sync checking in settings tab
+            self.main_window.sync_central_tabs()
+            
+            # If a specific subsystem focus was requested, try to apply it to the plugin if supported
+            p_inst = self.main_window.plugin_manager.active_plugins.get(plugin_id)
+            if p_inst and hasattr(p_inst, "focus_subsystem") and callable(p_inst.focus_subsystem):
+                p_inst.focus_subsystem(sub_id)
+
+            QMessageBox.information(
+                self,
+                "윈도우 생성 완료",
+                f"선택한 위젯 윈도우가 활성화되어 화면 하단에 안전하게 도킹 전개되었습니다!\n\n"
+                f"- 도킹 윈도우: '{self.combo_type.currentText().split('(')[0].strip()}'\n"
+                f"- 연동 모니터링 노드: '{self.combo_sub.currentText()}'\n\n"
+                f"윈도우 상단 타이틀바를 드래그하여 원하는 영역에 중첩 도킹하거나 독립 윈도우로 분리(Float)해 사용할 수 있습니다."
+            )
+            self.accept()
+        else:
+            QMessageBox.critical(self, "오류", f"윈도우 위젯 '{plugin_id}' 활성화에 실패했습니다.")
+
+
+class QuickSubsystemDialog(QDialog):
+    """
+    An all-in-one minimal dialog for adding a new logical subsystem, VCP mapping, and CSV routing,
+    incorporating a smart default variables template for EV converter telemetry nodes.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.main_window = main_window
+        self.setWindowTitle("⚡ 퀵 Subsystem 마법사")
+        self.resize(520, 640)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                border-radius: 8px;
+            }
+            QLabel {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+                font-size: 11px;
+            }
+            QLineEdit, QComboBox {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+                padding: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border-color: #38bdf8;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0f1015;
+                border: 1px solid #272a38;
+                selection-background-color: #38bdf8;
+                selection-color: #0f1015;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+                color: #38bdf8;
+                font-weight: bold;
+                padding: 8px 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #222530;
+                border-color: #38bdf8;
+            }
+            QPushButton#btn_primary {
+                background-color: #2563eb;
+                border-color: #3b82f6;
+                color: white;
+            }
+            QPushButton#btn_primary:hover {
+                background-color: #1d4ed8;
+                border-color: #2563eb;
+            }
+            QCheckBox {
+                color: #a2a2b5;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QCheckBox::indicator {
+                width: 13px;
+                height: 13px;
+                border: 1px solid #272a38;
+                background-color: #0b0b0d;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #38bdf8;
+                border-color: #38bdf8;
+            }
+            QScrollArea {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+            }
+            QScrollArea::viewport {
+                background-color: #1b1c24;
+            }
+            QWidget#sys_widget_container, QWidget#vars_widget_container {
+                background-color: #1b1c24;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        # Header Title
+        title_lbl = QLabel("🚀 퀵 Subsystem 마법사 (초스피드 노드 구성)")
+        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #38bdf8;")
+        layout.addWidget(title_lbl)
+
+        # Distinct System vs Subsystem Explanation
+        desc_box = QLabel(
+            "📢 <b>시스템(System) vs 서브시스템(Subsystem) 구분 안내</b><br/>"
+            "• <b>시스템(System)</b>: COM3, COM4 등 실제 데이터를 송출하는 물리/가상 하드웨어 포트입니다.<br/>"
+            "• <b>서브시스템(Subsystem)</b>: 시스템으로부터 수신한 개별 신호들을 논리적으로 조합하고 가공하여 대시보드(차트/카드)에 시각화하는 모니터링 노드입니다."
+        )
+        desc_box.setWordWrap(True)
+        desc_box.setStyleSheet("""
+            background-color: #11131e;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 10px;
+            line-height: 1.4;
+            color: #93c5fd;
+        """)
+        layout.addWidget(desc_box)
+
+        # Divider
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("background-color: #272a38; max-height: 1px;")
+        layout.addWidget(line)
+
+        # Form Layout
+        form_lay = QGridLayout()
+        form_lay.setSpacing(8)
+
+        form_lay.addWidget(QLabel("1. 서브시스템 ID (영문 고유식별명):"), 0, 0)
+        self.txt_sub_id = QLineEdit("MySubsystemNode")
+        form_lay.addWidget(self.txt_sub_id, 0, 1)
+
+        form_lay.addWidget(QLabel("2. 화면 표시 명칭 (Display Label):"), 1, 0)
+        self.txt_display_name = QLineEdit("⚡ My Subsystem Node")
+        form_lay.addWidget(self.txt_display_name, 1, 1)
+
+        # Port / VCP System Selection
+        form_lay.addWidget(QLabel("3. 연동할 대상 시스템(COM 포트) 선택:"), 2, 0)
+        self.systems_area = QScrollArea()
+        self.systems_area.setFixedHeight(75)
+        self.systems_area.setWidgetResizable(True)
+        self.systems_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+            }
+            QScrollArea::viewport {
+                background-color: #1b1c24;
+            }
+        """)
+        sys_widget = QWidget()
+        sys_widget.setObjectName("sys_widget_container")
+        sys_widget.setStyleSheet("background-color: #1b1c24;")
+        self.sys_lay = QVBoxLayout(sys_widget)
+        self.sys_lay.setContentsMargins(8, 8, 8, 8)
+        
+        # Scan active COM ports
+        import serial.tools.list_ports
+        comports_list = serial.tools.list_ports.comports()
+        self.sys_checkboxes = []
+        
+        ports = [p.device for p in comports_list]
+        ports_desc = {p.device: f"{p.device}: {p.description}" for p in comports_list}
+        
+        if not ports:
+            ports = ["COM3", "COM4", "COM5"]
+            ports_desc = {
+                "COM3": "COM3: Mock STM32 Engine controller",
+                "COM4": "COM4: Mock ESP32 Battery sensor node",
+                "COM5": "COM5: Mock Auxiliary sensor stream"
+            }
+            
+        for port in ports:
+            chk = QCheckBox(ports_desc.get(port, port))
+            chk.setProperty("port_name", port)
+            chk.setStyleSheet("color: #e2e8f0; font-weight: bold; background: transparent;")
+            if len(self.sys_checkboxes) == 0:
+                chk.setChecked(True)
+            # When target port is toggled, update visible variables checklist dynamically!
+            chk.stateChanged.connect(lambda state: self.update_variables_list())
+            self.sys_lay.addWidget(chk)
+            self.sys_checkboxes.append(chk)
+            
+        self.sys_lay.addStretch()
+        self.systems_area.setWidget(sys_widget)
+        form_lay.addWidget(self.systems_area, 2, 1)
+
+        # Variables Selection Scroll Area
+        form_lay.addWidget(QLabel("4. 가져올 시스템 신호(변수) 선택:"), 3, 0)
+        self.vars_area = QScrollArea()
+        self.vars_area.setFixedHeight(120)
+        self.vars_area.setWidgetResizable(True)
+        self.vars_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 6px;
+            }
+            QScrollArea::viewport {
+                background-color: #1b1c24;
+            }
+        """)
+        vars_widget = QWidget()
+        vars_widget.setObjectName("vars_widget_container")
+        vars_widget.setStyleSheet("background-color: #1b1c24;")
+        self.vars_lay = QVBoxLayout(vars_widget)
+        self.vars_lay.setContentsMargins(8, 8, 8, 8)
+        self.vars_area.setWidget(vars_widget)
+        form_lay.addWidget(self.vars_area, 3, 1)
+
+        # Variables Selection Helper Buttons
+        var_btns_lay = QHBoxLayout()
+        btn_sel_all = QPushButton("전체 선택")
+        btn_sel_all.setStyleSheet("padding: 2px 6px; font-size: 10px; background-color: #1e1e2d;")
+        btn_sel_all.clicked.connect(self.select_all_vars)
+        btn_clear_all = QPushButton("전체 해제")
+        btn_clear_all.setStyleSheet("padding: 2px 6px; font-size: 10px; background-color: #1e1e2d;")
+        btn_clear_all.clicked.connect(self.clear_all_vars)
+        var_btns_lay.addWidget(btn_sel_all)
+        var_btns_lay.addWidget(btn_clear_all)
+        var_btns_lay.addStretch()
+        form_lay.addLayout(var_btns_lay, 4, 1)
+
+        form_lay.addWidget(QLabel("5. 라우팅 패킷 시그니처 (Prefix):"), 5, 0)
+        self.txt_prefix = QLineEdit("MYSUB")
+        form_lay.addWidget(self.txt_prefix, 5, 1)
+
+        layout.addLayout(form_lay)
+
+        # Guide/Hint Box
+        hint_lbl = QLabel(
+            "💡 <b>스마트 패킷 데이터 바인딩</b><br/>"
+            "선택한 시스템의 신호들은 딥 카피를 거쳐 새 서브시스템의 독자적 계측 신호로 등록됩니다. "
+            "신호들의 컬럼 인덱스(column_index)는 수신 정합성을 위해 0부터 순차 중복 없이 자동 재부여됩니다."
+        )
+        hint_lbl.setWordWrap(True)
+        hint_lbl.setStyleSheet("background-color: #12131a; border: 1px solid #272a38; border-radius: 4px; padding: 10px; font-size: 10px; line-height: 1.5; color: #8e94a6;")
+        layout.addWidget(hint_lbl)
+
+        layout.addStretch()
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        btn_layout.addStretch()
+
+        self.btn_create = QPushButton("🚀 만들고 즉시 화면에 띄우기")
+        self.btn_create.setObjectName("btn_primary")
+        self.btn_create.clicked.connect(self.create_and_apply)
+
+        self.btn_cancel = QPushButton("취소")
+        self.btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(self.btn_create)
+        btn_layout.addWidget(self.btn_cancel)
+        layout.addLayout(btn_layout)
+
+        # Initial available signals and checkbox updates
+        self.all_available_signals = self.get_available_signals()
+        self.update_variables_list()
+
+    def get_available_signals(self):
+        signals = []
+        routing_rules = self.main_window.config_data.get("routing_rules", [])
+        subsystems = self.main_window.config_data.get("subsystems", [])
+        
+        for sub in subsystems:
+            sub_name = sub["name"]
+            sub_disp = sub.get("display_name", sub_name)
+            
+            # 1. Look up ports mapped in routing rules
+            mapped_ports = [rule["port"] for rule in routing_rules if rule.get("target") == sub_name]
+            
+            # 2. Look up systems directly listed in the subsystem
+            for p in sub.get("systems", []):
+                if p not in mapped_ports:
+                    mapped_ports.append(p)
+                    
+            # 3. Infer from subsystem ID / name (e.g. AutoSub_COM3 -> COM3)
+            import re
+            for p in re.findall(r'COM\d+', sub_name):
+                if p not in mapped_ports:
+                    mapped_ports.append(p)
+                    
+            # 4. Infer from subsystem display name (e.g. Auto Node COM3 -> COM3)
+            for p in re.findall(r'COM\d+', sub_disp):
+                if p not in mapped_ports:
+                    mapped_ports.append(p)
+                    
+            # 5. Default fallback for ArduinoNode to COM6
+            if not mapped_ports and sub_name == "ArduinoNode":
+                mapped_ports = ["COM6"]
+                
+            port_str = ", ".join(mapped_ports) if mapped_ports else "Unmapped"
+            source_label = f"System {port_str} ({sub_disp})"
+            
+            for var in sub.get("variables", []):
+                signals.append({
+                    "source_label": source_label,
+                    "ports": mapped_ports,
+                    "var": var
+                })
+                
+        if not signals:
+            templates = [
+                {"name": "temp", "display_name": "Core Temperature", "unit": "°C", "gain": 1.0, "offset": 0.0, "is_numerical": True, "column_index": "0"},
+                {"name": "voltage", "display_name": "Voltage Input", "unit": "V", "gain": 1.0, "offset": 0.0, "is_numerical": True, "column_index": "1"},
+                {"name": "current", "display_name": "Current Load", "unit": "A", "gain": 1.0, "offset": 0.0, "is_numerical": True, "column_index": "2"},
+                {"name": "rpm", "display_name": "Engine RPM", "unit": "RPM", "gain": 1.0, "offset": 0.0, "is_numerical": True, "column_index": "0"},
+                {"name": "efficiency", "display_name": "System Efficiency", "unit": "%", "gain": 1.0, "offset": 0.0, "is_numerical": True, "column_index": "1"}
+            ]
+            for t in templates:
+                signals.append({
+                    "source_label": "Default Template",
+                    "ports": [],
+                    "var": t
+                })
+        return signals
+
+    def update_variables_list(self):
+        # Clear old variable checkboxes
+        while self.vars_lay.count():
+            item = self.vars_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+                
+        self.vars_checkboxes = []
+        
+        # Retrieve checked COM ports/systems
+        selected_ports = [chk.property("port_name") for chk in self.sys_checkboxes if chk.isChecked()]
+        
+        # Filter and add signals
+        for sig in self.all_available_signals:
+            var_info = sig["var"]
+            source = sig["source_label"]
+            sig_ports = sig.get("ports", [])
+            
+            # Show if:
+            # 1. No ports associated with the signal (default template)
+            # 2. Or there is an overlap between sig_ports and selected_ports
+            if not sig_ports or any(p in selected_ports for p in sig_ports):
+                lbl_txt = f"[{source}] {var_info['name']} ({var_info.get('display_name', '')}) {var_info.get('unit', '')}"
+                chk = QCheckBox(lbl_txt)
+                chk.setProperty("var_dict", var_info)
+                chk.setChecked(True)
+                chk.setStyleSheet("color: #e2e8f0; font-weight: bold; background: transparent;")
+                self.vars_lay.addWidget(chk)
+                self.vars_checkboxes.append(chk)
+                
+        self.vars_lay.addStretch()
+
+    def select_all_vars(self):
+        for chk in self.vars_checkboxes:
+            chk.setChecked(True)
+            
+    def clear_all_vars(self):
+        for chk in self.vars_checkboxes:
+            chk.setChecked(False)
+
+    def create_and_apply(self):
+        sub_id = self.txt_sub_id.text().strip()
+        disp_name = self.txt_display_name.text().strip()
+        prefix = self.txt_prefix.text().strip()
+
+        selected_ports = [chk.property("port_name") for chk in self.sys_checkboxes if chk.isChecked()]
+
+        # Retrieve checked variables
+        selected_variables = []
+        for chk in self.vars_checkboxes:
+            if chk.isChecked():
+                orig_var = chk.property("var_dict")
+                new_var = {
+                    "name": orig_var["name"],
+                    "display_name": orig_var.get("display_name", orig_var["name"]),
+                    "column_index": str(len(selected_variables)), # Sequence from 0
+                    "gain": orig_var.get("gain", 1.0),
+                    "offset": orig_var.get("offset", 0.0),
+                    "unit": orig_var.get("unit", ""),
+                    "is_numerical": orig_var.get("is_numerical", True)
+                }
+                selected_variables.append(new_var)
+
+        if not sub_id or not disp_name or not selected_ports or not prefix:
+            QMessageBox.warning(self, "입력 오류", "모든 항목을 올바르게 기재하고 연동할 시스템을 하나 이상 선택해야 합니다.")
+            return
+
+        if not selected_variables:
+            QMessageBox.warning(self, "입력 오류", "서브시스템에 포함할 시스템 신호(변수)를 하나 이상 선택해야 합니다.")
+            return
+
+        # Check duplication
+        for s in self.main_window.config_data.get("subsystems", []):
+            if s["name"] == sub_id:
+                QMessageBox.warning(self, "중복 오류", f"서브시스템 ID '{sub_id}'는 이미 존재합니다!")
+                return
+
+        # Identify safety thresholds automatically
+        temp_var = next((v["name"] for v in selected_variables if "temp" in v["name"].lower()), "")
+        volt_var = next((v["name"] for v in selected_variables if "volt" in v["name"].lower()), "")
+        curr_var = next((v["name"] for v in selected_variables if "curr" in v["name"].lower()), "")
+
+        # Create subsystem structure
+        new_sub = {
+            "name": sub_id,
+            "display_name": disp_name,
+            "systems": selected_ports,
+            "variables": selected_variables,
+            "thresholds": {
+                "ovp_var": volt_var,
+                "ovp_val": 100.0,
+                "ocp_var": curr_var,
+                "ocp_val": 50.0,
+                "otp_var": temp_var,
+                "otp_val": 85.0
+            },
+            "temp_mosfet_var": temp_var,
+            "temp_transformer_var": ""
+        }
+        self.main_window.config_data.setdefault("subsystems", []).append(new_sub)
+
+        # Loop and register rules for each checked system port
+        for port in selected_ports:
+            port_exists = False
+            for p in self.main_window.config_data.get("ports", []):
+                if p["port"] == port:
+                    port_exists = True
+                    break
+            if not port_exists:
+                self.main_window.config_data.setdefault("ports", []).append({
+                    "port": port,
+                    "baudrate": 115200
+                })
+
+            self.main_window.config_data.setdefault("routing_rules", []).append({
+                "port": port,
+                "type": "PREFIX",
+                "pattern": prefix,
+                "target": sub_id
+            })
+
+        # Save config and apply
+        self.main_window.apply_new_workspace_configuration(self.main_window.config_data)
+
+        # Open charts and cards plugins automatically
+        self.main_window.plugin_manager.enable_plugin("trend_charts")
+        self.main_window.plugin_manager.enable_plugin("telemetry_cards")
+
+        QMessageBox.information(
+            self, 
+            "성공", 
+            f"서브시스템 '{disp_name}'가 성공적으로 생성 및 저장되었습니다!\n"
+            f"선택한 시스템 [{', '.join(selected_ports)}] 및 패킷 헤더 [{prefix}]와 자동 연동되었습니다.\n"
+            f"선택 신호 {len(selected_variables)}개가 순차 컬럼 매핑으로 딥 카피되었습니다."
+        )
+        self.accept()
+
+
+
 class DashboardWindow(QMainWindow):
     """
     Succinct Main GUI Frame for the Universal MCU Monitoring system.
@@ -1906,6 +2914,9 @@ class DashboardWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("📦 Universal General-Purpose MCU Telemetry Monitor Console")
         self.resize(1600, 950)
+        from PyQt6.QtGui import QIcon
+        if os.path.exists("Logo_Gemini.png"):
+            self.setWindowIcon(QIcon("Logo_Gemini.png"))
         self.setDockNestingEnabled(True)
         
         # GUI Global state flags
@@ -1916,7 +2927,9 @@ class DashboardWindow(QMainWindow):
         self.config_manager = ConfigManager()
         self.serial_manager = MultiPortSerialManager()
         self.data_router = DataRouter()
+        self.data_router.main_window = self
         self.plugin_manager = PluginManager(self)
+        self.serial_last_states = {}
         
         # Load local persistently saved profile
         self.config_data = self.config_manager.load_config()
@@ -1943,6 +2956,7 @@ class DashboardWindow(QMainWindow):
         # Hook infrastructure slots
         self.data_router.error_logged.connect(self.log_to_diagnostic)
         self.serial_manager.raw_packet_received.connect(self.data_router.route_packet)
+        self.serial_manager.connection_status_changed.connect(self.on_serial_connection_changed)
         
         # Dynamically discover plugins and load
         self.plugin_manager.discover_plugins()
@@ -1954,6 +2968,14 @@ class DashboardWindow(QMainWindow):
         # Diagnostic print
         self.log_to_diagnostic("INFO: Dashboard System initialisation completed successfully.")
         
+        # Initialize Plug & Play processed ports set
+        self.pnp_processed_ports = set()
+        
+        # Setup 2-second background timer for Plug & Play physical VCP ports auto-sensing
+        self.pnp_timer = QTimer(self)
+        self.pnp_timer.timeout.connect(self.scan_pnp_ports)
+        self.pnp_timer.start(2000)
+
         # Blank state prompt
         if not self.config_data.get("subsystems", []):
             QTimer.singleShot(500, self.prompt_workspace_wizard)
@@ -2021,6 +3043,11 @@ class DashboardWindow(QMainWindow):
         btn_save_profile.clicked.connect(self.save_profile_as)
         lay_spec.addWidget(btn_save_profile, 0, 1)
         
+        btn_quick_preset = QPushButton("📋 프리셋 로드")
+        btn_quick_preset.setStyleSheet("color: #f59e0b; font-weight: bold;")
+        btn_quick_preset.clicked.connect(lambda: self.setup_tab.open_preset_dialog() if hasattr(self, "setup_tab") else None)
+        lay_spec.addWidget(btn_quick_preset, 1, 0)
+        
         btn_load_profile = QPushButton("📂 Load Profile...")
         btn_load_profile.clicked.connect(self.load_profile)
         lay_spec.addWidget(btn_load_profile, 1, 1)
@@ -2041,6 +3068,31 @@ class DashboardWindow(QMainWindow):
         self.btn_scale.clicked.connect(self.toggle_plots_auto_scale)
         lay_scop.addWidget(self.btn_scale, 1, 0)
         tab_home_layout.addWidget(frm_scop)
+        
+        # Group D: ⚡ 퀵 위젯/윈도우 추가 (Quick Add Docks)
+        frm_quick_add, lay_quick_add = create_ribbon_group("⚡ 퀵 위젯/윈도우 추가")
+        
+        btn_quick_create = QPushButton("➕ 윈도우 생성/추가")
+        btn_quick_create.setStyleSheet("color: #38bdf8; font-weight: bold; padding: 10px;")
+        btn_quick_create.clicked.connect(self.show_quick_window_dialog)
+        lay_quick_add.addWidget(btn_quick_create, 0, 0, 2, 1) # span 2 rows
+        
+        btn_layout_help = QPushButton("📐 도움말")
+        btn_layout_help.setStyleSheet("color: #a0a5b5; font-weight: bold; padding: 10px;")
+        btn_layout_help.clicked.connect(self.show_layout_guide)
+        lay_quick_add.addWidget(btn_layout_help, 0, 1, 2, 1) # span 2 rows
+        
+        tab_home_layout.addWidget(frm_quick_add)
+        
+        # Group E: 🚀 퀵 Subsystem 마법사 (Quick Subsystem Wizard)
+        frm_quick_sub, lay_quick_sub = create_ribbon_group("🚀 퀵 Subsystem 마법사")
+        
+        btn_quick_sub_add = QPushButton("➕ Subsystem 퀵 추가")
+        btn_quick_sub_add.setStyleSheet("color: #34d399; font-weight: bold; padding: 10px;")
+        btn_quick_sub_add.clicked.connect(self.show_quick_subsystem_dialog)
+        lay_quick_sub.addWidget(btn_quick_sub_add, 0, 0, 2, 1)
+        
+        tab_home_layout.addWidget(frm_quick_sub)
         
         tab_home_layout.addStretch()
         self.ribbon_bar.addTab(tab_home, "🏠 홈")
@@ -2139,6 +3191,106 @@ class DashboardWindow(QMainWindow):
         self.plugin_manager.toggle_plugin(plugin_id, checked)
         self.sync_central_tabs()
 
+    def scan_pnp_ports(self):
+        """
+        Background scanning method running every 2 seconds to auto-detect new
+        hardware or mock VCP COM ports. If an unregistered port is discovered, prompts
+        the user to automatically set up the workspace for that port.
+        """
+        import serial.tools.list_ports
+        # 1. Fetch system ports with descriptions
+        comports_list = serial.tools.list_ports.comports()
+        ports_info = {p.device: f"{p.device}: {p.description}" for p in comports_list}
+        ports = [p.device for p in comports_list]
+        
+        # 2. Fetch configured ports from config
+        configured_ports = {p["port"] for p in self.config_data.get("ports", [])}
+        
+        # Find unregistered physical/mock ports
+        new_ports = [p for p in ports if p not in configured_ports]
+        
+        # Clean up processed ports that are no longer physically connected,
+        # so unplugging and plugging them back in will trigger PnP again
+        for p in list(self.pnp_processed_ports):
+            if p not in ports:
+                self.pnp_processed_ports.remove(p)
+                
+        for port in new_ports:
+            # Avoid duplicate prompts
+            if port in self.pnp_processed_ports:
+                continue
+                
+            self.pnp_processed_ports.add(port)
+            display_text = ports_info.get(port, port)
+            self.log_to_diagnostic(f"PnP: Detected unregistered serial port: {display_text}")
+            
+            # Show a premium dark notification dialog to the user
+            reply = QMessageBox.question(
+                self,
+                "🔌 플러그 앤 플레이 (Plug & Play) 감지",
+                f"새로운 VCP 시리얼 장치 <b>[{display_text}]</b>가 연결된 것을 감지했습니다!\n\n"
+                f"이 장치를 모니터링 대시보드에 즉시 등록하고,\n"
+                f"기본 계측 화면 및 라우팅 룰을 자동으로 셋업하시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.auto_setup_new_port(port)
+
+    def auto_setup_new_port(self, port):
+        """
+        Automatically adds the serial port, registers a logical subsystem skeleton,
+        configures a prefix-based data routing rule, and enables default plugins.
+        """
+        # Add port configuration
+        self.config_data.setdefault("ports", []).append({
+            "port": port,
+            "baudrate": 115200
+        })
+        
+        # Subsystem Name
+        sub_id = f"AutoSub_{port}"
+        
+        # Create default subsystem structure
+        new_sub = {
+            "name": sub_id,
+            "display_name": f"🔌 Auto Node {port}",
+            "variables": [
+                {"name": "temp", "display_name": "Core Temperature", "column_index": "0", "gain": 1.0, "offset": 0.0, "unit": "°C", "is_numerical": True},
+                {"name": "voltage", "display_name": "Voltage Input", "column_index": "1", "gain": 1.0, "offset": 0.0, "unit": "V", "is_numerical": True},
+                {"name": "current", "display_name": "Current Load", "column_index": "2", "gain": 1.0, "offset": 0.0, "unit": "A", "is_numerical": True}
+            ],
+            "thresholds": {"ovp_var": "voltage", "ovp_val": 100.0, "ocp_var": "current", "ocp_val": 50.0, "otp_var": "temp", "otp_val": 85.0},
+            "temp_mosfet_var": "temp",
+            "temp_transformer_var": ""
+        }
+        self.config_data.setdefault("subsystems", []).append(new_sub)
+        
+        # Add Prefix routing rule matching 'AUTO'
+        self.config_data.setdefault("routing_rules", []).append({
+            "port": port,
+            "type": "PREFIX",
+            "pattern": "AUTO",
+            "target": sub_id
+        })
+        
+        # Save config and apply
+        self.apply_new_workspace_configuration(self.config_data)
+        
+        # Enable default plugins to populate screen with charts and numerical card docks
+        self.plugin_manager.enable_plugin("trend_charts")
+        self.plugin_manager.enable_plugin("telemetry_cards")
+        
+        QMessageBox.information(
+            self,
+            "오토 셋업 완료",
+            f"장치 <b>[{port}]</b>의 오토 셋업이 성공적으로 마쳤습니다!\n\n"
+            f"- 서브시스템 등록: '{sub_id}'\n"
+            f"- 패킷 CSV 라우팅 Prefix: 'AUTO' (AUTO,temp,volt,curr... 형태로 송출 가능)\n"
+            f"- 자동 계측 화면이 화면에 바로 구성되었습니다."
+        )
+
     def scan_physical_com_ports(self):
         """
         Scans all physical system VCP COM serial ports and draws checkable choices dynamically.
@@ -2149,9 +3301,11 @@ class DashboardWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
                 
-        # Fetch physical ports
+        # Fetch physical ports info with descriptions
         import serial.tools.list_ports
-        ports = [p.device for p in serial.tools.list_ports.comports()]
+        comports_list = serial.tools.list_ports.comports()
+        ports_info = {p.device: f"{p.device}: {p.description}" for p in comports_list}
+        ports = [p.device for p in comports_list]
         
         # Fetch configured ports from config
         configured_ports = [p["port"] for p in self.config_data.get("ports", [])]
@@ -2166,7 +3320,8 @@ class DashboardWindow(QMainWindow):
             return
             
         for port in all_ports:
-            chk = QCheckBox(port)
+            display_text = ports_info.get(port, f"{port}: Offline/Configured Port")
+            chk = QCheckBox(display_text)
             is_active = port in self.serial_manager.active_threads
             chk.setChecked(is_active)
             chk.stateChanged.connect(lambda state, p=port: self.toggle_port_listening_state(p, state == 2))
@@ -2208,6 +3363,43 @@ class DashboardWindow(QMainWindow):
             
         # Scan system to align GUI checkboxes
         self.scan_physical_com_ports()
+
+    @pyqtSlot(str, bool, str)
+    def on_serial_connection_changed(self, port_name, connected, message):
+        """
+        Receives notifications of port connection state transitions from MultiPortSerialManager.
+        Logs to diagnostic console and intercepts reconnections to trigger seamless historical data sync requests.
+        """
+        self.log_to_diagnostic(f"SERIAL [{port_name}]: {message}")
+        
+        # 1. Capture last known state and detect transition from Disconnected (False) to Connected (True)
+        prev_state = self.serial_last_states.get(port_name)
+        
+        if connected and prev_state is False:
+            self.log_to_diagnostic(f"INFO: Reconnection detected on {port_name}! Scanning for target subsystems to request resync...")
+            
+            router = self.data_router
+            target_subs = []
+            for rule in router.routing_rules:
+                if rule["port"] == port_name:
+                    target_sub_name = rule.get("target")
+                    if target_sub_name in router.subsystems:
+                        target_subs.append(router.subsystems[target_sub_name])
+                        
+            # Trigger resync request for each matched subsystem using its last recorded timestamp
+            for sub in target_subs:
+                last_time = 0.0
+                if sub.time_buffer:
+                    last_time = sub.time_buffer[-1]
+                
+                # Emit PC-led resync command string over COM port
+                # Protocol specification: $CMD,REQ_RESYNC,[last_timestamp]\n
+                sync_cmd = f"$CMD,REQ_RESYNC,{last_time:.3f}"
+                self.serial_manager.send_command(port_name, sync_cmd)
+                self.log_to_diagnostic(f"INFO: Dispatched resync request to {port_name} for subsystem '{sub.name}' from timestamp {last_time:.3f}s")
+                
+        # 2. Update tracking state
+        self.serial_last_states[port_name] = connected
 
     def open_profile_wizard(self):
         """
@@ -2437,6 +3629,85 @@ class DashboardWindow(QMainWindow):
         for p in self.plugin_manager.active_plugins.values():
             if hasattr(p, "apply_plot_scaling"):
                 p.apply_plot_scaling()
+
+    def is_simulation_active(self):
+        import sys
+        import simulation_mock
+        serial_module = sys.modules.get('serial')
+        if serial_module is None:
+            return False
+        return getattr(serial_module, 'Serial', None) == simulation_mock.MockSerialPort
+
+    def toggle_simulation_mode(self):
+        import simulation_mock
+        active = self.is_simulation_active()
+        
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            if active:
+                simulation_mock.restore_physical_serial()
+                self.log_to_diagnostic("SYSTEM: Switched to Physical pyserial Driver Mode.")
+            else:
+                simulation_mock.setup_simulation_mock()
+                self.log_to_diagnostic("SYSTEM: Switched to Virtual Simulation Emulation Mode.")
+            
+            # Restart listening thread handler cleanly
+            self.restart_serial_handlers_from_profile()
+            
+            # Update UI in setup tab if loaded
+            if hasattr(self, "setup_tab") and hasattr(self.setup_tab, "update_sim_status_ui"):
+                self.setup_tab.update_sim_status_ui()
+            
+            # Update ribbon button text if needed
+            self.update_ribbon_sim_button_style()
+            
+            # Re-scan physical ports to update COM Ports list checkbox in UI immediately
+            self.scan_physical_com_ports()
+            
+            QMessageBox.information(
+                self,
+                "드라이버 모드 전환 완료",
+                "성공적으로 시리얼 백그라운드 드라이버 모드가 전환되었습니다!\n\n"
+                f"현재 모드: {'물리 하드웨어 시리얼 모드' if active else '가상 시뮬레이션 모드'}"
+            )
+        except Exception as e:
+            self.log_to_diagnostic(f"ERROR: Failed to switch driver mode: {str(e)}")
+            QMessageBox.critical(self, "드라이버 전환 실패", f"드라이버 스왑 과정 중 에러가 발생했습니다:\n{str(e)}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def update_ribbon_sim_button_style(self):
+        if not hasattr(self, "btn_ribbon_sim_toggle"):
+            return
+        active = self.is_simulation_active()
+        if active:
+            self.btn_ribbon_sim_toggle.setText("🟢 에뮬레이터 ON")
+            self.btn_ribbon_sim_toggle.setStyleSheet("""
+                QPushButton {
+                    background-color: #064e3b; border: 1px solid #10b981; color: #34d399; font-weight: bold; padding: 10px;
+                }
+                QPushButton:hover { background-color: #065f46; border-color: #6ee7b7; color: #ffffff; }
+            """)
+        else:
+            self.btn_ribbon_sim_toggle.setText("🔵 에뮬레이터 OFF")
+            self.btn_ribbon_sim_toggle.setStyleSheet("""
+                QPushButton {
+                    background-color: #1e1b4b; border: 1px solid #6366f1; color: #a5b4fc; font-weight: bold; padding: 10px;
+                }
+                QPushButton:hover { background-color: #312e81; border-color: #818cf8; color: #ffffff; }
+            """)
+
+    def show_layout_guide(self):
+        dlg = WindowLayoutGuideDialog(self)
+        dlg.exec()
+
+    def show_quick_subsystem_dialog(self):
+        dlg = QuickSubsystemDialog(self)
+        dlg.exec()
+
+    def show_quick_window_dialog(self):
+        dlg = QuickWindowCreateDialog(self)
+        dlg.exec()
 
     def reset_dock_layout(self):
         """

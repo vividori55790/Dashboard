@@ -7,6 +7,11 @@
   * @note           : This example uses standard STM32 HAL libraries.
   *                   It is designed to be integrated into main.c or a dedicated
   *                   telemetry task (e.g., in FreeRTOS).
+  * 
+  * [CHANGELOG]
+  * - v1.1.0 (2026-05-29) : Added historical ring buffer storage and $CMD,REQ_RESYNC
+  *                         handler for seamless PC-led resync reconnection recovery.
+  * - v1.0.0 (2026-05-22) : Initial creation of high-fidelity converter CDC firmware sample.
   ******************************************************************************
   */
 
@@ -47,6 +52,37 @@ DAB_Telemetry_t g_telemetry = {
     .phase_shift = 0.0f,
     .status_flags = 0x0008 /* Start in Standby */
 };
+
+/* -------------------------------------------------------------------------
+ * 1.5. Seamless Resync Historical Ring Buffer Storage (MCU -> PC)
+ *      Buffer size of 200 points stores last 4 seconds of data at 50Hz.
+ *      Allows re-transmitting missing timeline segments after reconnections.
+ * ------------------------------------------------------------------------- */
+#define HIST_BUFFER_SIZE 200
+
+typedef struct {
+    float relative_time;
+    DAB_Telemetry_t data;
+} DAB_History_t;
+
+DAB_History_t g_history_buffer[HIST_BUFFER_SIZE];
+uint16_t g_hist_head = 0;
+uint16_t g_hist_tail = 0;
+uint16_t g_hist_count = 0;
+
+void DAB_StoreHistory(float current_time) {
+    g_history_buffer[g_hist_head].relative_time = current_time;
+    g_history_buffer[g_hist_head].data = g_telemetry;
+    
+    g_hist_head = (g_hist_head + 1) % HIST_BUFFER_SIZE;
+    
+    if (g_hist_count < HIST_BUFFER_SIZE) {
+        g_hist_count++;
+    } else {
+        /* Buffer full, overwrite oldest data. Advance tail to maintain order. */
+        g_hist_tail = (g_hist_tail + 1) % HIST_BUFFER_SIZE;
+    }
+}
 
 /* Volatile controls regulated by control loops or commands */
 volatile bool g_converter_running = false;
@@ -147,6 +183,42 @@ void DAB_ProcessCommand(const char* cmd_str) {
                 }
             }
         }
+    } else if (strcmp(token, "REQ_RESYNC") == 0) {
+        token = strtok(NULL, ",\r\n"); /* Get last PC timestamp */
+        if (token != NULL) {
+            float requested_time = 0.0f;
+            if (sscanf(token, "%f", &requested_time) == 1) {
+                /* Traverse ring buffer to find historical telemetry stored AFTER requested_time */
+                uint16_t current_idx = g_hist_tail;
+                uint16_t processed = 0;
+                
+                while (processed < g_hist_count) {
+                    DAB_History_t* hist = &g_history_buffer[current_idx];
+                    
+                    if (hist->relative_time > requested_time) {
+                        /* Transmit historical data segment encapsulated with $HIST 접두사 */
+                        char hist_packet[192];
+                        int hist_len = sprintf(hist_packet, "$HIST,%.3f,DAB,%.2f,%.3f,%.3f,%.2f,%.1f,%.1f,%.2f,%u\r\n",
+                                               hist->relative_time,
+                                               hist->data.vin,
+                                               hist->data.iin,
+                                               hist->data.vout,
+                                               hist->data.iout,
+                                               hist->data.temp_mos,
+                                               hist->data.temp_tx,
+                                               hist->data.phase_shift,
+                                               hist->data.status_flags);
+                                               
+                        #ifdef USBD_CDC_IF_H_
+                        CDC_Transmit_FS((uint8_t*)hist_packet, (uint16_t)hist_len);
+                        HAL_Delay(5); /* Short delay to avoid USB VCP endpoint congestion */
+                        #endif
+                    }
+                    current_idx = (current_idx + 1) % HIST_BUFFER_SIZE;
+                    processed++;
+                }
+            }
+        }
     }
 }
 
@@ -222,6 +294,14 @@ void Telemetry_Task_Loop_100Hz(void) {
         // Disable PWM immediately!
     }
     
+    /* Fetch system uptime clock relative time (or FreeRTOS tick converted to seconds) */
+    static uint32_t elapsed_ticks = 0;
+    elapsed_ticks++;
+    float current_uptime = (float)elapsed_ticks * 0.01f; /* 100Hz = 10ms ticks */
+
+    /* Store current telemetry into historical ring buffer */
+    DAB_StoreHistory(current_uptime);
+
     /* Send telemetry packet to USB Host at a standard 50Hz update rate */
     static uint32_t tick_count = 0;
     tick_count++;

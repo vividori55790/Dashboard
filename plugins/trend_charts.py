@@ -8,7 +8,7 @@
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular Trend Waveforms plugin.
 # ======================================================================
 
-from PyQt6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QTabWidget
+from PyQt6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QTabWidget, QHBoxLayout, QPushButton, QLabel
 from PyQt6.QtCore import pyqtSlot
 import pyqtgraph as pg
 from plugins.base_plugin import BasePlugin
@@ -27,11 +27,42 @@ class TrendChartsPlugin(BasePlugin):
         self.plots = {}         # category -> PlotWidget
         self.curves = {}        # (sub_name, var_name) -> pyqtgraph PlotDataItem
         self.categories = ["Voltages", "Currents", "Power/Efficiency", "Control Parameters"]
+        
+        self.visible_subsystems = set()
+        self.visible_variables = set()
 
     def on_enable(self):
         self.container = QWidget()
         self.layout = QVBoxLayout(self.container)
         self.layout.setContentsMargins(6, 6, 6, 6)
+        
+        # Premium Filter Toolbar
+        filter_lay = QHBoxLayout()
+        title_lbl = QLabel(f"📈 {self.name}")
+        title_lbl.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 11px;")
+        
+        btn_filter = QPushButton("⚙️ 필터 설정")
+        btn_filter.setStyleSheet("""
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+                color: #a0a5b5;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                color: #38bdf8;
+                border-color: #38bdf8;
+                background-color: #222530;
+            }
+        """)
+        btn_filter.clicked.connect(self.show_filter_dialog)
+        
+        filter_lay.addWidget(title_lbl)
+        filter_lay.addStretch()
+        filter_lay.addWidget(btn_filter)
+        self.layout.addLayout(filter_lay)
         
         self.tabs = QTabWidget()
         self.layout.addWidget(self.tabs)
@@ -40,6 +71,11 @@ class TrendChartsPlugin(BasePlugin):
         
         # Connect to data updates
         self.main_window.data_router.telemetry_routed.connect(self.on_telemetry_routed)
+
+    def show_filter_dialog(self):
+        from dashboard import PluginFilterDialog
+        dlg = PluginFilterDialog(self, self.main_window)
+        dlg.exec()
 
     def on_disable(self):
         try:
@@ -94,12 +130,28 @@ class TrendChartsPlugin(BasePlugin):
         neon_colors = ["#00d2ff", "#00ff66", "#ba68c8", "#ff9100", "#ffea00", "#e040fb", "#ff3366", "#00e5ff"]
         color_idx = 0
 
+        # Initialize default filter states if empty
+        if not self.visible_subsystems:
+            self.visible_subsystems = set(router.subsystems.keys())
+        if not self.visible_variables:
+            all_vars = set()
+            for sub in router.subsystems.values():
+                for v in sub.variables:
+                    all_vars.add(v["name"])
+            self.visible_variables = all_vars
+
         for sub_name, sub in router.subsystems.items():
+            if sub_name not in self.visible_subsystems:
+                continue
+                
             for var in sub.variables:
                 if not var["is_numerical"]:
                     continue
                     
                 var_name = var["name"]
+                if var_name not in self.visible_variables:
+                    continue
+                    
                 unit = var["unit"].upper()
                 d_name = var["display_name"].lower()
                 

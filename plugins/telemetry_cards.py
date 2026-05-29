@@ -8,7 +8,7 @@
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular Telemetry Cards plugin.
 # ======================================================================
 
-from PyQt6.QtWidgets import QDockWidget, QWidget, QHBoxLayout, QGroupBox, QGridLayout, QLabel
+from PyQt6.QtWidgets import QDockWidget, QWidget, QHBoxLayout, QGroupBox, QGridLayout, QLabel, QVBoxLayout, QPushButton
 from PyQt6.QtCore import Qt, pyqtSlot
 from plugins.base_plugin import BasePlugin
 
@@ -25,17 +25,60 @@ class TelemetryCardsPlugin(BasePlugin):
         
         self.card_widgets = {} # (sub_name, var_name) -> QLabel(value_readout)
         self.group_boxes = {}  # sub_name -> QGroupBox
+        
+        self.visible_subsystems = set()
+        self.visible_variables = set()
 
     def on_enable(self):
         self.container = QWidget()
-        self.layout = QHBoxLayout(self.container)
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.main_layout = QVBoxLayout(self.container)
+        self.main_layout.setContentsMargins(6, 6, 6, 6)
+        self.main_layout.setSpacing(4)
+        
+        # Premium Filter Toolbar
+        filter_lay = QHBoxLayout()
+        title_lbl = QLabel(f"📟 {self.name}")
+        title_lbl.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 11px;")
+        
+        btn_filter = QPushButton("⚙️ 필터 설정")
+        btn_filter.setStyleSheet("""
+            QPushButton {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+                color: #a0a5b5;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                color: #38bdf8;
+                border-color: #38bdf8;
+                background-color: #222530;
+            }
+        """)
+        btn_filter.clicked.connect(self.show_filter_dialog)
+        
+        filter_lay.addWidget(title_lbl)
+        filter_lay.addStretch()
+        filter_lay.addWidget(btn_filter)
+        self.main_layout.addLayout(filter_lay)
+        
+        # Subsystems content layout
+        self.cards_content_widget = QWidget()
+        self.layout = QHBoxLayout(self.cards_content_widget)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(8)
+        self.main_layout.addWidget(self.cards_content_widget)
         
         self.rebuild_ui()
         
         # Connect data receiver
         self.main_window.data_router.telemetry_routed.connect(self.on_telemetry_routed)
+
+    def show_filter_dialog(self):
+        from dashboard import PluginFilterDialog
+        dlg = PluginFilterDialog(self, self.main_window)
+        dlg.exec()
 
     def on_disable(self):
         try:
@@ -69,10 +112,28 @@ class TelemetryCardsPlugin(BasePlugin):
             self.layout.addWidget(lbl)
             return
 
+        # Initialize default filter states if empty
+        if not self.visible_subsystems:
+            self.visible_subsystems = set(router.subsystems.keys())
+        if not self.visible_variables:
+            all_vars = set()
+            for sub in router.subsystems.values():
+                for v in sub.variables:
+                    all_vars.add(v["name"])
+            self.visible_variables = all_vars
+
         # Choose a curated premium color list for subsystems
         colors = ["#00d2ff", "#ba68c8", "#ff9100", "#00ff66", "#e040fb", "#ffea00"]
         
         for idx, (sub_name, sub) in enumerate(router.subsystems.items()):
+            if sub_name not in self.visible_subsystems:
+                continue
+                
+            # Filter variables belonging to this subsystem
+            sub_vars = [v for v in sub.variables if v["name"] in self.visible_variables]
+            if not sub_vars:
+                continue # Skip rendering this subsystem group if no variables are checked!
+                
             color = colors[idx % len(colors)]
             
             group = QGroupBox(f"⚡ {sub.display_name}")
@@ -85,7 +146,7 @@ class TelemetryCardsPlugin(BasePlugin):
             # Draw variable panels in 2-row layout dynamically
             col = 0
             row = 0
-            for var in sub.variables:
+            for var in sub_vars:
                 var_name = var["name"]
                 
                 # Card Container

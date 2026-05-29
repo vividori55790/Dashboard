@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v2.1.0 (2026-05-29)
 # - Target Environment: Production / Python 3.10+ & PyQt6
 # - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v2.1.0 (2026-05-29) - Antigravity: Added dual-track routing (custom plugin parser & high-speed fallback parser).
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular DataRouter with formula engine.
 # ======================================================================
 
@@ -88,6 +89,9 @@ class DataRouter(QObject):
         """
         Entry slot for MultiPortSerialManager. Parses the line and distributes
         calibrated fields to target subsystems, running data links right after.
+        Supports performance-optimized dual-track parsing: custom plugin parser first,
+        falling back to default high-speed parser on fail or bypass.
+        Supports historical packet sync ($HIST,[time],[data]) for seamless resync.
         """
         if not raw_line:
             return
@@ -95,61 +99,122 @@ class DataRouter(QObject):
         t_elapsed = time.time() - self.start_time
         updated_subsystems = set()
 
-        # Find rules matching the source port
-        matching_rules = [r for r in self.routing_rules if r["port"] == port_name]
-        
-        # If no rules match the port, treat as default raw columns for the first subsystem
-        if not matching_rules:
-            if self.subsystems:
-                first_sub_name = list(self.subsystems.keys())[0]
-                self._parse_raw_csv(raw_line, self.subsystems[first_sub_name])
-                updated_subsystems.add(first_sub_name)
-        else:
-            for rule in matching_rules:
-                rule_type = rule.get("type", "COLUMNS")
-                pattern = rule.get("pattern", "")
-                target_name = rule.get("target")
-                
-                if target_name not in self.subsystems:
-                    continue
+        # ----------------------------------------------------
+        # [역사적 데이터 패킷 ($HIST 접두사) 전처리]
+        # ----------------------------------------------------
+        is_historical = False
+        historical_time = 0.0
+        if raw_line.startswith("$HIST,"):
+            try:
+                parts = raw_line.split(',', 2)
+                historical_time = float(parts[1])
+                raw_line = parts[2]
+                is_historical = True
+            except:
+                pass
+
+        # ----------------------------------------------------
+        # [플러그인 트랙 (이원화 라우팅 최적화)]
+        # 활성화된 플러그인 중 custom parse_data()를 제공하는 플러그인에 우선 기회 부여
+        # ----------------------------------------------------
+        plugin_parsed = False
+        if hasattr(self, "main_window") and self.main_window and hasattr(self.main_window, "plugin_manager"):
+            active_plugins = getattr(self.main_window.plugin_manager, "active_plugins", {})
+            for p_id, p_inst in active_plugins.items():
+                if hasattr(p_inst, "parse_data") and callable(p_inst.parse_data):
+                    try:
+                        # parse_data()가 유효한 dict를 반환하면 파싱 성공으로 판단
+                        parsed_dict = p_inst.parse_data(raw_line)
+                        if parsed_dict and isinstance(parsed_dict, dict):
+                            # 형식 A: {"subsystem": "BatteryNode", "data": {"volt": 12.3}}
+                            if "subsystem" in parsed_dict and "data" in parsed_dict:
+                                target_sub_name = parsed_dict["subsystem"]
+                                data_map = parsed_dict["data"]
+                                if target_sub_name in self.subsystems and isinstance(data_map, dict):
+                                    sub = self.subsystems[target_sub_name]
+                                    for k, v in data_map.items():
+                                        sub.update_calibrated_value(k, v)
+                                    updated_subsystems.add(target_sub_name)
+                                    plugin_parsed = True
+                            # 형식 B: flat dict {"volt": 12.3} ➔ 해당 포트 룰의 target 서브시스템 매핑
+                            else:
+                                # 이 포트와 연관된 룰의 target subsystem 탐색
+                                for rule in self.routing_rules:
+                                    if rule["port"] == port_name:
+                                        target_sub_name = rule.get("target")
+                                        if target_sub_name in self.subsystems:
+                                            sub = self.subsystems[target_sub_name]
+                                            for k, v in parsed_dict.items():
+                                                sub.update_calibrated_value(k, v)
+                                            updated_subsystems.add(target_sub_name)
+                                            plugin_parsed = True
+                            
+                            # 하나의 플러그인이 성공적으로 파싱을 완료했다면 중단
+                            if plugin_parsed:
+                                break
+                    except Exception as e:
+                        self.error_logged.emit(f"Plugin Parser Exception in '{p_id}' on {port_name}: {str(e)}")
+
+        # ----------------------------------------------------
+        # [초고속 트랙 (기본 파서)]
+        # 플러그인에 의해 파싱되지 않은 패킷에 한하여 기존 방식대로 고속 파싱 진행
+        # ----------------------------------------------------
+        if not plugin_parsed:
+            # Find rules matching the source port
+            matching_rules = [r for r in self.routing_rules if r["port"] == port_name]
+            
+            # If no rules match the port, treat as default raw columns for the first subsystem
+            if not matching_rules:
+                if self.subsystems:
+                    first_sub_name = list(self.subsystems.keys())[0]
+                    self._parse_raw_csv(raw_line, self.subsystems[first_sub_name])
+                    updated_subsystems.add(first_sub_name)
+            else:
+                for rule in matching_rules:
+                    rule_type = rule.get("type", "COLUMNS")
+                    pattern = rule.get("pattern", "")
+                    target_name = rule.get("target")
                     
-                sub = self.subsystems[target_name]
-                
-                # 1. PREFIX ROUTING (e.g., CSV prefixed by $DAB,)
-                if rule_type == "PREFIX":
-                    if raw_line.startswith(pattern):
-                        # Strip prefix, then parse
-                        cleaned_line = raw_line[len(pattern):].lstrip(',')
-                        if self._parse_raw_csv(cleaned_line, sub):
-                            updated_subsystems.add(target_name)
+                    if target_name not in self.subsystems:
+                        continue
+                        
+                    sub = self.subsystems[target_name]
+                    
+                    # 1. PREFIX ROUTING (e.g., CSV prefixed by $DAB,)
+                    if rule_type == "PREFIX":
+                        if raw_line.startswith(pattern):
+                            # Strip prefix, then parse
+                            cleaned_line = raw_line[len(pattern):].lstrip(',')
+                            if self._parse_raw_csv(cleaned_line, sub):
+                                updated_subsystems.add(target_name)
 
-                # 2. JSON KEY ROUTING (e.g., JSON packet checks "device": "PSFB")
-                elif rule_type == "JSON":
-                    if raw_line.startswith("{") or "{" in raw_line:
-                        try:
-                            # Strip any prefix before brackets if exists
-                            json_str = raw_line[raw_line.find("{"):]
-                            data = json.loads(json_str)
-                            
-                            # Validate signature pattern check (e.g., "device": "PSFB")
-                            if ":" in pattern:
-                                chk_k, chk_v = pattern.split(":", 1)
-                                if str(data.get(chk_k.strip())) != chk_v.strip():
-                                    continue
-                            
-                            # Parse variables from JSON
-                            for var in sub.variables:
-                                key = var["column_index"] # For JSON, index holds the string key name
-                                if key in data:
-                                    sub.update_calibrated_value(var["name"], data[key])
-                            updated_subsystems.add(target_name)
-                        except Exception as e:
-                            self.error_logged.emit(f"JSON Parse Exception on {port_name}: {str(e)}")
+                    # 2. JSON KEY ROUTING (e.g., JSON packet checks "device": "PSFB")
+                    elif rule_type == "JSON":
+                        if raw_line.startswith("{") or "{" in raw_line:
+                            try:
+                                # Strip any prefix before brackets if exists
+                                json_str = raw_line[raw_line.find("{"):]
+                                data = json.loads(json_str)
+                                
+                                # Validate signature pattern check (e.g., "device": "PSFB")
+                                if ":" in pattern:
+                                    chk_k, chk_v = pattern.split(":", 1)
+                                    if str(data.get(chk_k.strip())) != chk_v.strip():
+                                        continue
+                                
+                                # Parse variables from JSON
+                                for var in sub.variables:
+                                    key = var["column_index"] # For JSON, index holds the string key name
+                                    if key in data:
+                                        sub.update_calibrated_value(var["name"], data[key])
+                                updated_subsystems.add(target_name)
+                            except Exception as e:
+                                self.error_logged.emit(f"JSON Parse Exception on {port_name}: {str(e)}")
 
-                # 3. DIRECT RAW COLUMNS ROUTING (no tags, matches index slices)
-                elif rule_type == "COLUMNS":
-                    if self._parse_raw_csv(raw_line, sub):
-                        updated_subsystems.add(target_name)
+                    # 3. DIRECT RAW COLUMNS ROUTING (no tags, matches index slices)
+                    elif rule_type == "COLUMNS":
+                        if self._parse_raw_csv(raw_line, sub):
+                            updated_subsystems.add(target_name)
 
         if not updated_subsystems:
             return
@@ -161,7 +226,10 @@ class DataRouter(QObject):
         for name in updated_subsystems:
             sub = self.subsystems[name]
             sub.check_safety_alarms()
-            sub.append_buffer(t_elapsed)
+            if is_historical:
+                sub.append_historical_data(historical_time, sub.latest_values)
+            else:
+                sub.append_buffer(t_elapsed)
             self.telemetry_routed.emit(name, sub.latest_values)
 
         # Trigger update signals for subsystems targetted ONLY by formulas
@@ -170,7 +238,10 @@ class DataRouter(QObject):
             if name in self.subsystems and name not in updated_subsystems:
                 sub = self.subsystems[name]
                 sub.check_safety_alarms()
-                sub.append_buffer(t_elapsed)
+                if is_historical:
+                    sub.append_historical_data(historical_time, sub.latest_values)
+                else:
+                    sub.append_buffer(t_elapsed)
                 self.telemetry_routed.emit(name, sub.latest_values)
 
     def _parse_raw_csv(self, line_str, subsystem):

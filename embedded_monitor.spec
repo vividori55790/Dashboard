@@ -14,7 +14,8 @@ block_cipher = None
 # Collect all dynamic plugins and stream_client.html
 added_files = [
     ('stream_client.html', '.'),
-    ('plugins', 'plugins')
+    ('plugins', 'plugins'),
+    ('Logo_Gemini.png', '.')
 ]
 
 a = Analysis(
@@ -75,5 +76,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None # Place a custom .ico path here if available
+    icon='Logo_Gemini.ico' # Place a custom .ico path here if available
 )
