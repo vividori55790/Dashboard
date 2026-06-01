@@ -1,12 +1,12 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-29)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
+# - Integrity Check: Refactored to support multi-instance custom widgets.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
-# * v2.0.0 (2026-05-29) - Antigravity: Completed Phase 3 with Pure Canvas Drag & Drop, JSON coordinate serialization, and Virtual Math Nodes Neon Flow.
-# * v1.0.0 (2026-05-25) - Antigravity: Initial creation of Subsystem Interconnection Topology Visualizer.
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable TopologyVisualizerWidget to support dynamic multi-window diagram canvases.
+# * v2.0.0 (2026-05-29) - Antigravity: Completed Phase 3 with Pure Canvas Drag & Drop and Virtual Math Nodes.
 # ======================================================================
 
 import time
@@ -24,14 +24,12 @@ from plugins.base_plugin import BasePlugin
 class TopologyPaintWidget(QFrame):
     """
     Renders live dynamic subsystems as node blocks and draws Bezier
-    interconnection links with animated flowing neon particles representing
-    physical quantity transfers.
-    Supports Pure Canvas Drag & Drop and Virtual Math Nodes neon flows.
+    interconnection links with animated flowing neon particles.
     """
-    def __init__(self, main_window, plugin):
+    def __init__(self, main_window, parent_widget):
         super().__init__()
         self.main_window = main_window
-        self.plugin = plugin
+        self.parent_widget = parent_widget
         self.setStyleSheet("background-color: #06070a; border: 1px solid #1e293b; border-radius: 8px;")
         self.setMinimumSize(450, 400)
         self.setMouseTracking(True)
@@ -56,10 +54,8 @@ class TopologyPaintWidget(QFrame):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.position()
-            # 1. Check if clicked on any node block (160x90)
             for name, npos in self.node_positions.items():
                 nx, ny = npos
-                # Math Nodes are rendered smaller as hexagons/circles (80x80)
                 is_math = name.startswith("MATH_")
                 w, h = (120, 70) if is_math else (160, 90)
                 if nx <= pos.x() <= nx + w and ny <= pos.y() <= ny + h:
@@ -74,7 +70,6 @@ class TopologyPaintWidget(QFrame):
             nx = pos.x() - self.drag_offset.x()
             ny = pos.y() - self.drag_offset.y()
             
-            # Boundary containment
             is_math = self.dragged_node.startswith("MATH_")
             w, h = (120, 70) if is_math else (160, 90)
             nx = max(10, min(nx, self.width() - w - 10))
@@ -82,7 +77,6 @@ class TopologyPaintWidget(QFrame):
             
             self.node_positions[self.dragged_node] = (int(nx), int(ny))
             
-            # Serialize coordinate to config data
             saved_positions = self.main_window.config_data.setdefault("topology_node_positions", {})
             saved_positions[self.dragged_node] = (int(nx), int(ny))
             
@@ -106,27 +100,22 @@ class TopologyPaintWidget(QFrame):
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "모니터링할 서브시스템 노드가 존재하지 않습니다.\n설정에서 노드를 먼저 추가해 주세요.")
             return
 
-        # ----------------------------------------------------
-        # 1. Establish Layout Coordinates (Subsystems + Virtual Math Nodes)
-        # ----------------------------------------------------
+        # 1. Establish Layout Coordinates
         saved_positions = self.main_window.config_data.get("topology_node_positions", {})
         sub_names = sorted(list(router.subsystems.keys()))
         width = self.width()
         height = self.height()
         
-        # Resolve physical subsystems coordinates
         for i, name in enumerate(sub_names):
             if name in saved_positions:
                 self.node_positions[name] = saved_positions[name]
             elif name not in self.node_positions:
-                # Fallback to automatic grid placement
                 col = i % 2
                 row = i // 2
                 x = 50 + col * (width - 220) if len(sub_names) > 1 else (width - 160) // 2
                 y = 40 + row * 150
                 self.node_positions[name] = (x, y)
 
-        # Resolve Virtual Math Nodes coordinates based on formulas
         formulas = router.linking_formulas
         for i, f in enumerate(formulas):
             target_sub = f.get("target_sub")
@@ -136,14 +125,11 @@ class TopologyPaintWidget(QFrame):
             if formula_name in saved_positions:
                 self.node_positions[formula_name] = saved_positions[formula_name]
             elif formula_name not in self.node_positions:
-                # Place virtual math nodes neatly centered in between columns
                 x = (width - 120) // 2
                 y = 80 + i * 120
                 self.node_positions[formula_name] = (x, y)
 
-        # ----------------------------------------------------
-        # 2. Draw Virtual Math Nodes Neon Flows (linking_formulas)
-        # ----------------------------------------------------
+        # 2. Draw Virtual Math Nodes Neon Flows
         for f in formulas:
             target_sub = f.get("target_sub")
             target_var = f.get("target_var")
@@ -153,15 +139,12 @@ class TopologyPaintWidget(QFrame):
             if formula_name not in self.node_positions:
                 continue
                 
-            # Scan variables inside math formula [Subsystem].Variable
             refs = re.findall(r'\[([^\]]+)\]\.([a-zA-Z0-9_]+)', formula)
             for ref_sub, ref_var in refs:
-                # Draw flow link from ref_sub node to MATH node
                 if ref_sub in self.node_positions:
                     p_src = self.node_positions[ref_sub]
                     p_tgt = self.node_positions[formula_name]
                     
-                    # Compute endpoints
                     p1 = (p_src[0] + 160, p_src[1] + 45)
                     p2 = (p_tgt[0], p_tgt[1] + 35)
                     
@@ -173,13 +156,11 @@ class TopologyPaintWidget(QFrame):
                     cy2 = p2[1]
                     path.cubicTo(cx1, cy1, cx2, cy2, p2[0], p2[1])
                     
-                    # Draw elegant gold dotted linking line
-                    pen = QPen(QColor("#d97706"), 1.2, Qt.PenStyle.DashLine) # Golden dotted line
+                    pen = QPen(QColor("#d97706"), 1.2, Qt.PenStyle.DashLine)
                     painter.setPen(pen)
                     painter.setBrush(Qt.BrushStyle.NoBrush)
                     painter.drawPath(path)
                     
-                    # Animated golden flowing particles
                     painter.setPen(Qt.PenStyle.NoPen)
                     for offset in [0.0, 0.5]:
                         percent = (self.animation_step / 100.0 + offset) % 1.0
@@ -187,7 +168,6 @@ class TopologyPaintWidget(QFrame):
                         painter.setBrush(QBrush(QColor(217, 119, 6, 200)))
                         painter.drawEllipse(QPointF(pt.x(), pt.y()), 3.5, 3.5)
 
-            # Draw output link from MATH node to target_sub node
             if target_sub in self.node_positions:
                 p_src = self.node_positions[formula_name]
                 p_tgt = self.node_positions[target_sub]
@@ -203,12 +183,11 @@ class TopologyPaintWidget(QFrame):
                 cy2 = p2[1]
                 path.cubicTo(cx1, cy1, cx2, cy2, p2[0], p2[1])
                 
-                pen = QPen(QColor("#38bdf8"), 1.5, Qt.PenStyle.SolidLine) # Skyblue solid flow line
+                pen = QPen(QColor("#38bdf8"), 1.5, Qt.PenStyle.SolidLine)
                 painter.setPen(pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(path)
                 
-                # skyblue glowing flowing particles
                 painter.setPen(Qt.PenStyle.NoPen)
                 for offset in [0.0, 0.33, 0.66]:
                     percent = (self.animation_step / 100.0 + offset) % 1.0
@@ -216,9 +195,7 @@ class TopologyPaintWidget(QFrame):
                     painter.setBrush(QBrush(QColor(56, 189, 248, 180)))
                     painter.drawEllipse(QPointF(pt.x(), pt.y()), 4.0, 4.0)
 
-        # ----------------------------------------------------
-        # 3. Draw Manual Subsystem Connection Links
-        # ----------------------------------------------------
+        # 3. Draw Manual Connection Links
         links = self.main_window.config_data.get("subsystem_links", [])
         for link in links:
             src_sub = link.get("source_sub")
@@ -236,7 +213,6 @@ class TopologyPaintWidget(QFrame):
             sx, sy = p_src[0], p_src[1]
             tx, ty = p_tgt[0], p_tgt[1]
             
-            # Neat endpoints calculations
             if sx + 180 < tx:
                 p1 = (sx + 160, sy + 45)
                 p2 = (tx, ty + 45)
@@ -276,13 +252,11 @@ class TopologyPaintWidget(QFrame):
                 
             flow_color = QColor("#10b981") if is_flowing else QColor("#334155")
             
-            # Draw curve line
             pen = QPen(flow_color, 2, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
             
-            # Neon active particles
             if is_flowing:
                 painter.setPen(Qt.PenStyle.NoPen)
                 for offset in [0.0, 0.25, 0.5, 0.75]:
@@ -293,7 +267,6 @@ class TopologyPaintWidget(QFrame):
                     painter.setBrush(QBrush(QColor("#34d399")))
                     painter.drawEllipse(QPointF(pt.x(), pt.y()), 2.5, 2.5)
 
-            # Central pill info box
             mid_pt = path.pointAtPercent(0.5)
             val_text = f"{live_val} {unit}" if isinstance(live_val, str) else f"{live_val:.2f} {unit}"
             pill_text = f"{label}: {val_text}"
@@ -316,10 +289,7 @@ class TopologyPaintWidget(QFrame):
             painter.setPen(QColor("#f1f5f9") if is_flowing else QColor("#64748b"))
             painter.drawText(int(px + 8), int(py + text_height + 1), pill_text)
 
-        # ----------------------------------------------------
         # 4. Draw Subsystem Node Blocks
-        # ----------------------------------------------------
-        now = time.time()
         for name, sub in router.subsystems.items():
             if name not in self.node_positions:
                 continue
@@ -354,9 +324,7 @@ class TopologyPaintWidget(QFrame):
                 painter.setBrush(QBrush(QColor("#38bdf8")))
                 painter.drawEllipse(x + 145, y + 15, 6, 6)
 
-        # ----------------------------------------------------
-        # 5. Draw Virtual Math Node Hexagons (linking_formulas)
-        # ----------------------------------------------------
+        # 5. Draw Virtual Math Node Hexagons
         for f in formulas:
             target_sub = f.get("target_sub")
             target_var = f.get("target_var")
@@ -367,7 +335,6 @@ class TopologyPaintWidget(QFrame):
                 
             x, y = self.node_positions[formula_name]
             
-            # Golden high-tech hex gradient
             grad = QLinearGradient(QPointF(x, y), QPointF(x, y + 70))
             grad.setColorAt(0, QColor("#78350f"))
             grad.setColorAt(1, QColor("#1c1917"))
@@ -375,7 +342,6 @@ class TopologyPaintWidget(QFrame):
             painter.setPen(QPen(QColor("#fbbf24"), 1.5))
             painter.setBrush(QBrush(grad))
             
-            # Draw beautiful Hexagonal Math Node block (120x70)
             points = [
                 QPointF(x + 20, y),
                 QPointF(x + 100, y),
@@ -386,12 +352,10 @@ class TopologyPaintWidget(QFrame):
             ]
             painter.drawPolygon(points)
             
-            # Print function title label
             painter.setPen(QColor("#fbbf24"))
             painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             painter.drawText(x + 15, y + 25, "🧮 MATH NODE")
             
-            # Print resulting dynamic value
             sub = router.subsystems.get(target_sub)
             val = sub.latest_values.get(target_var, 0.0) if sub else 0.0
             val_str = f"{val:.1f}%" if "eff" in target_var.lower() else f"{val:.2f}"
@@ -405,13 +369,10 @@ class TopologyPaintWidget(QFrame):
 
 
 class LinkConfigPanel(QWidget):
-    """
-    Control configuration form panel to add and delete subsystem links.
-    """
-    def __init__(self, main_window, plugin):
+    def __init__(self, main_window, parent_widget):
         super().__init__()
         self.main_window = main_window
-        self.plugin = plugin
+        self.parent_widget = parent_widget
         self.setStyleSheet("""
             QWidget { background-color: #0b0c10; color: #e2e8f0; }
             QLabel { font-size: 11px; font-weight: bold; color: #94a3b8; }
@@ -564,7 +525,6 @@ class LinkConfigPanel(QWidget):
             
         links = self.main_window.config_data.setdefault("subsystem_links", [])
         
-        # Prevent duplication
         for l in links:
             if l["source_sub"] == src_sub and l["source_var"] == src_var and l["target_sub"] == tgt_sub and l["target_var"] == tgt_var:
                 return
@@ -580,7 +540,7 @@ class LinkConfigPanel(QWidget):
         self.main_window.config_manager.save_config()
         self.refresh_links_list()
         self.edit_label.clear()
-        self.plugin.paint_widget.update()
+        self.parent_widget.paint_widget.update()
 
     def delete_connection_link(self):
         selected_item = self.list_links.currentItem()
@@ -594,29 +554,21 @@ class LinkConfigPanel(QWidget):
             links.pop(idx)
             self.main_window.config_manager.save_config()
             self.refresh_links_list()
-            self.plugin.paint_widget.update()
+            self.parent_widget.paint_widget.update()
 
 
-class TopologyVisualizerPlugin(BasePlugin):
+class TopologyVisualizerWidget(QWidget):
     """
-    Custom modular plugin presenting the physical interconnection flow layout
-    between separate subsystems. Supports Drag & Drop and virtual Math Nodes flow.
+    Reusable Widget presenting the physical connection canvas.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "topology_visualizer"
-        self.name = "Topology Flow Interconnector"
-        self.description = "Displays the physical block diagram layout and animates power/energy flow lines connecting separate systems."
-        
-    def on_enable(self):
-        self.dock_widget = QDockWidget("⚡ 서브시스템 연결 토폴로지", self.main_window)
-        self.dock_widget.setObjectName("TopologyVisualizerDock")
-        self.dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        
-        container = QWidget()
-        container.setStyleSheet("background-color: #08090d;")
-        main_layout = QHBoxLayout(container)
-        main_layout.setContentsMargins(6, 6, 6, 6)
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setStyleSheet("QSplitter::handle { background-color: #1e293b; width: 4px; }")
@@ -628,20 +580,9 @@ class TopologyVisualizerPlugin(BasePlugin):
         splitter.addWidget(self.config_panel)
         
         splitter.setSizes([500, 220])
-        main_layout.addWidget(splitter)
-        
-        self.dock_widget.setWidget(container)
-        self.main_window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.dock_widget)
-        self.dock_widget.setVisible(True)
+        layout.addWidget(splitter)
         
         self.main_window.data_router.telemetry_routed.connect(self.on_telemetry_routed)
-
-    def on_disable(self):
-        try:
-            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
-        except:
-            pass
-        super().on_disable()
 
     def rebuild_ui(self):
         if hasattr(self, "config_panel") and self.config_panel:
@@ -655,3 +596,36 @@ class TopologyVisualizerPlugin(BasePlugin):
         if hasattr(self, "paint_widget") and self.paint_widget:
             self.paint_widget.log_telemetry_event(subsystem_name)
             self.paint_widget.update()
+
+    def closeEvent(self, event):
+        try:
+            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
+        except:
+            pass
+        super().closeEvent(event)
+
+
+class TopologyVisualizerPlugin(BasePlugin):
+    """
+    Wrapper for dynamic plugin discovery compatibility.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "topology_visualizer"
+        self.name = "Topology Flow Interconnector"
+        self.description = "Displays the physical block diagram layout and animates flow lines."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("⚡ 서브시스템 연결 토폴로지", self.main_window)
+        self.dock_widget.setObjectName("TopologyVisualizerDock")
+        self.dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        
+        self.container = TopologyVisualizerWidget(self.main_window)
+        self.dock_widget.setWidget(self.container)
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()

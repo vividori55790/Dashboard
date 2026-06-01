@@ -1,44 +1,46 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
+# - Integrity Check: Refactored to support multi-instance custom widgets.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable TrendChartsWidget to support dynamic multi-window scopes.
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular Trend Waveforms plugin.
 # ======================================================================
 
-from PyQt6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QTabWidget, QHBoxLayout, QPushButton, QLabel
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QHBoxLayout, QPushButton, QLabel, QDockWidget
+from PyQt6.QtCore import pyqtSlot, Qt
 import pyqtgraph as pg
 from plugins.base_plugin import BasePlugin
 
-class TrendChartsPlugin(BasePlugin):
+class TrendChartsWidget(QWidget):
     """
-    Renders dynamic real-time scrolling charts (Voltages, Currents, Power, Control)
-    using high-performance PyQtGraph. Auto-detects variable mapping categories based on labels.
+    Reusable Widget that renders dynamic real-time scrolling charts
+    using high-performance PyQtGraph.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "trend_charts"
-        self.name = "Trend Waveforms"
-        self.description = "Plots real-time rolling telemetry trends in separate specialized scopes."
+    def __init__(self, main_window, parent=None, subsystem_id="ALL", visible_variables=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.subsystem_id = subsystem_id
+        
+        self.visible_subsystems = {subsystem_id} if subsystem_id != "ALL" else set()
+        self.visible_variables = visible_variables or set()
         
         self.plots = {}         # category -> PlotWidget
         self.curves = {}        # (sub_name, var_name) -> pyqtgraph PlotDataItem
         self.categories = ["Voltages", "Currents", "Power/Efficiency", "Control Parameters"]
         
-        self.visible_subsystems = set()
-        self.visible_variables = set()
+        self.init_ui()
 
-    def on_enable(self):
-        self.container = QWidget()
-        self.layout = QVBoxLayout(self.container)
+    def init_ui(self):
+        self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(6, 6, 6, 6)
         
         # Premium Filter Toolbar
         filter_lay = QHBoxLayout()
-        title_lbl = QLabel(f"📈 {self.name}")
+        disp_sub = self.subsystem_id if self.subsystem_id != "ALL" else "All Subsystems"
+        title_lbl = QLabel(f"📈 Waveform Scope [{disp_sub}]")
         title_lbl.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 11px;")
         
         btn_filter = QPushButton("⚙️ 필터 설정")
@@ -77,19 +79,9 @@ class TrendChartsPlugin(BasePlugin):
         dlg = PluginFilterDialog(self, self.main_window)
         dlg.exec()
 
-    def on_disable(self):
-        try:
-            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
-        except:
-            pass
-        if hasattr(self, "container") and self.container:
-            self.container.deleteLater()
-            self.container = None
-        super().on_disable()
-
     def rebuild_plots(self):
         """
-        Scans all dynamic variables, categorizes them, creates PlotWidgets, and adds curves.
+        Scans dynamic variables, categorizes them, creates PlotWidgets, and adds curves.
         """
         self.curves.clear()
         self.plots.clear()
@@ -146,8 +138,8 @@ class TrendChartsPlugin(BasePlugin):
                 
             for var in sub.variables:
                 if not var["is_numerical"]:
-                    continue
-                    
+                     continue
+                     
                 var_name = var["name"]
                 if var_name not in self.visible_variables:
                     continue
@@ -176,7 +168,7 @@ class TrendChartsPlugin(BasePlugin):
                 )
                 self.curves[(sub_name, var_name)] = curve
 
-        # Apply initial scale limits based on main window config
+        # Apply initial scale limits
         self.apply_plot_scaling()
 
     def apply_plot_scaling(self):
@@ -187,7 +179,7 @@ class TrendChartsPlugin(BasePlugin):
             if auto_scale:
                 p_widget.enableAutoRange(y=True)
             else:
-                p_widget.enableAutoRange(y=True) # Fallback to auto-scaling generally for dynamic variables
+                p_widget.enableAutoRange(y=True)
 
     @pyqtSlot(str, dict)
     def on_telemetry_routed(self, subsystem_name, data):
@@ -212,3 +204,37 @@ class TrendChartsPlugin(BasePlugin):
                 v_buf = sub.buffers[var_name]
                 if len(t_buf) == len(v_buf):
                     self.curves[key].setData(t_buf, v_buf)
+
+    def closeEvent(self, event):
+        try:
+            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
+        except:
+            pass
+        super().closeEvent(event)
+
+
+class TrendChartsPlugin(BasePlugin):
+    """
+    Wrapper for dynamic plugin discovery compatibility.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "trend_charts"
+        self.name = "Trend Waveforms"
+        self.description = "Plots real-time rolling telemetry trends in separate specialized scopes."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("📈 실시간 파형 차트 스코프", self.main_window)
+        self.dock_widget.setObjectName("TrendChartsDock")
+        self.dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        
+        # Instantiate reusable widget
+        self.container = TrendChartsWidget(self.main_window, visible_variables=self.main_window.config_data.get("active_variables", None))
+        self.dock_widget.setWidget(self.container)
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()

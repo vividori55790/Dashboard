@@ -28,7 +28,9 @@ class ConfigManager:
             "ports": [],          # e.g., [{"port": "COM3", "baudrate": 115200}]
             "subsystems": [],     # List of subsystem definition dicts
             "routing_rules": [],  # Slicing/splitting/prefix rules
-            "linking_formulas": [] # Cross-system linking formulas
+            "linking_formulas": [], # Cross-system linking formulas
+            "user_presets": {},   # Custom presets: {preset_name: preset_data}
+            "theme_accent": "default" # Theme accent color (default, cobalt, cyberpunk, emerald, sunset)
         }
 
     def load_config(self):
@@ -43,6 +45,14 @@ class ConfigManager:
         try:
             with open(self.config_filepath, 'r', encoding='utf-8') as f:
                 self.config_data = json.load(f)
+            
+            # Proactively set default keys for backwards compatibility
+            self.config_data.setdefault("ports", [])
+            self.config_data.setdefault("subsystems", [])
+            self.config_data.setdefault("routing_rules", [])
+            self.config_data.setdefault("linking_formulas", [])
+            self.config_data.setdefault("user_presets", {})
+            self.config_data.setdefault("theme_accent", "default")
         except Exception as e:
             print(f"Error loading configuration file: {str(e)}")
             

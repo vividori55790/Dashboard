@@ -602,5 +602,8 @@
             "target_var": "temp",
             "label": "temp \u2794 temp"
         }
-    ]
+    ],
+    "custom_docks": [],
+    "user_presets": {},
+    "theme_accent": "default"
 }

@@ -1,13 +1,15 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.1.0 (2026-05-22)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: Consolidated Parameter Calibration & Safety Limits Plugin
+# - Integrity Check: Consolidated Parameter Calibration & Reusable Widget
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable ParameterManagerWidget to support dynamic multi-window diagram canvases.
 # * v2.1.0 (2026-05-22) - Antigravity: Consolidated calibrator.py and safety_alarms.py into a single high-density instrument panel.
 # ======================================================================
 
+import time
 from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QGroupBox, QComboBox, QListView, QTableWidget, QTableWidgetItem,
@@ -17,17 +19,14 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from plugins.base_plugin import BasePlugin
 
-class ParameterManagerPlugin(BasePlugin):
+class ParameterManagerWidget(QWidget):
     """
-    High-density industrial control panel that integrates linear calibration mapping
-    (y = ax + b) and safety alarms/threshold sliders inside a single cohesive console.
+    High-density industrial control panel widget that integrates linear calibration mapping
+    (y = ax + b) and safety alarms/threshold sliders.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "parameter_manager"
-        self.name = "Parameter Manager"
-        self.description = "Consolidated parameter calibration and dynamic safety thresholds manager."
-        
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
         self.active_subsystem = ""
         self.led_widgets = {}          # alarm_type -> QLabel
         self.temp_widgets = {}         # temp_type -> QLabel
@@ -36,13 +35,11 @@ class ParameterManagerPlugin(BasePlugin):
         
         self.alarm_blink_state = False
         self.blink_timer = None
-
-    def on_enable(self):
-        self.dock_widget = QDockWidget("🔧 Parameter Calibration & Limits", self.main_window)
-        self.dock_widget.setObjectName("dock_parameter_manager")
         
-        main_container = QWidget()
-        main_lay = QVBoxLayout(main_container)
+        self.init_ui()
+
+    def init_ui(self):
+        main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(8, 8, 8, 8)
         main_lay.setSpacing(6)
         
@@ -158,30 +155,14 @@ class ParameterManagerPlugin(BasePlugin):
         split_layout.addWidget(self.cal_group, 3)
         main_lay.addLayout(split_layout)
         
-        self.container = main_container
-        self.dock_widget.setWidget(main_container)
-        
         # Hook communication signals
         self.main_window.data_router.telemetry_routed.connect(self.on_telemetry_routed)
         self.refresh_subsystems()
         
         # LEDs warnings blinking timer
-        self.blink_timer = QTimer(self.dock_widget)
+        self.blink_timer = QTimer(self)
         self.blink_timer.timeout.connect(self.update_blinking_leds)
         self.blink_timer.start(200)
-
-    def on_disable(self):
-        try:
-            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
-        except:
-            pass
-        if self.blink_timer:
-            self.blink_timer.stop()
-            self.blink_timer = None
-        if hasattr(self, "container") and self.container:
-            self.container.deleteLater()
-            self.container = None
-        super().on_disable()
 
     def refresh_subsystems(self):
         """
@@ -388,5 +369,38 @@ class ParameterManagerPlugin(BasePlugin):
         """
         self.refresh_subsystems()
 
-    def rebuild_plots(self):
-        pass
+    def closeEvent(self, event):
+        try:
+            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
+        except:
+            pass
+        if self.blink_timer:
+            self.blink_timer.stop()
+            self.blink_timer = None
+        super().closeEvent(event)
+
+
+class ParameterManagerPlugin(BasePlugin):
+    """
+    High-density industrial control panel that integrates linear calibration mapping
+    (y = ax + b) and safety alarms/threshold sliders inside a single cohesive console.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "parameter_manager"
+        self.name = "Parameter Manager"
+        self.description = "Consolidated parameter calibration and dynamic safety thresholds manager."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("🔧 Parameter Calibration & Limits", self.main_window)
+        self.dock_widget.setObjectName("dock_parameter_manager")
+        
+        self.container = ParameterManagerWidget(self.main_window)
+        self.dock_widget.setWidget(self.container)
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()

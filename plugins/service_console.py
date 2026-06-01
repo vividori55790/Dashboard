@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.1.0 (2026-05-22)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: Consolidated CSV Logger & Web Streamer Plugin
+# - Integrity Check: Consolidated CSV Logger & Web Streamer Widget
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable ServiceConsoleWidget to support dynamic multi-window diagram canvases.
 # * v2.1.0 (2026-05-22) - Antigravity: Consolidated matlab_logger.py and web_streamer.py into a single high-density console.
 # ======================================================================
 
@@ -32,9 +33,9 @@ from plugins.base_plugin import BasePlugin
 # ======================================================================
 class TelemetryStreamServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
-    def __init__(self, server_address, RequestHandlerClass, plugin):
+    def __init__(self, server_address, RequestHandlerClass, service_widget):
         super().__init__(server_address, RequestHandlerClass)
-        self.plugin = plugin
+        self.plugin = service_widget # Map to widget for backwards compatibility
         self.clients = []
         self.lock = threading.Lock()
     
@@ -53,7 +54,7 @@ class TelemetryStreamServer(socketserver.ThreadingTCPServer):
 
 class TelemetryStreamHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        pass # Suppress command line console noise
+        pass # Suppress command line noise
         
     def send_event(self, data):
         try:
@@ -123,19 +124,15 @@ class TelemetryStreamHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(404, "File Not Found")
 
-# ======================================================================
-# [CONSOLIDATED PLUGIN MODULE]
-# ======================================================================
-class ServiceConsolePlugin(BasePlugin):
+
+class ServiceConsoleWidget(QWidget):
     """
-    Consolidated utilities hub coordinating both MATLAB-compatible CSV recording
+    Consolidated utilities widget coordinating both MATLAB-compatible CSV recording
     and local HTTP server real-time Web Streaming.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "service_console"
-        self.name = "Services Console"
-        self.description = "Consolidated telemetry CSV logger and HTTP Web Streaming server."
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
         
         # 1. Logger variables
         self.log_file = None
@@ -158,13 +155,11 @@ class ServiceConsolePlugin(BasePlugin):
         # UI Timers
         self.ui_timer = None
         self.blink_state = False
-
-    def on_enable(self):
-        self.dock_widget = QDockWidget("⚙️ Services Hub (Logging & Streaming)", self.main_window)
-        self.dock_widget.setObjectName("dock_services_hub")
         
-        main_container = QWidget()
-        main_lay = QHBoxLayout(main_container)
+        self.init_ui()
+
+    def init_ui(self):
+        main_lay = QHBoxLayout(self)
         main_lay.setContentsMargins(8, 8, 8, 8)
         main_lay.setSpacing(10)
         
@@ -232,34 +227,16 @@ class ServiceConsolePlugin(BasePlugin):
         
         main_lay.addWidget(stream_group, 6)
         
-        self.container = main_container
-        self.dock_widget.setWidget(main_container)
-        
         # Connect router signals
         self.main_window.data_router.telemetry_routed.connect(self.on_telemetry_routed)
         
         # GUI status blinker timer
-        self.ui_timer = QTimer(self.dock_widget)
+        self.ui_timer = QTimer(self)
         self.ui_timer.timeout.connect(self.on_ui_timer_tick)
         self.ui_timer.start(500)
         
         # Autostart web streaming server if default
         self.start_web_server()
-
-    def on_disable(self):
-        self.stop_csv_logging()
-        self.stop_web_server()
-        try:
-            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
-        except:
-            pass
-        if self.ui_timer:
-            self.ui_timer.stop()
-            self.ui_timer = None
-        if hasattr(self, "container") and self.container:
-            self.container.deleteLater()
-            self.container = None
-        super().on_disable()
 
     # ======================================================================
     # LOGGER LOGIC
@@ -393,10 +370,6 @@ class ServiceConsolePlugin(BasePlugin):
                 self.main_window.log_to_diagnostic(f"ERROR: Web stream server startup failed: {str(e)}")
 
     def _sse_broadcast_loop(self):
-        """
-        Background loop consuming telemetry packets from queue and broadcasting them,
-        mitigating thread explosion under high telemetry transmission rates.
-        """
         while self.is_streaming:
             try:
                 # Use a timeout to regularly check is_streaming state
@@ -452,10 +425,6 @@ class ServiceConsolePlugin(BasePlugin):
 
     @pyqtSlot(str, dict)
     def on_telemetry_routed(self, subsystem_name, data):
-        """
-        Receives calibrated telemetry packets to route them to the active CSV logger
-        and broadcasts them dynamically to connected Web clients.
-        """
         # 1. Write to CSV Log
         if self.is_recording and self.log_writer:
             t_curr = time.time() - self.start_time
@@ -495,18 +464,48 @@ class ServiceConsolePlugin(BasePlugin):
                 if sub.alarm_states.get("otp"): flags |= 4
                 if sub.alarm_states.get("standby"): flags |= 8
 
-            # Unpack dictionary data variables directly in the top-level keys for web client parsing
             packet = {
                 "device": subsystem_name,
                 "timestamp": time.time() - self.main_window.data_router.start_time,
                 "status_flags": flags,
                 **data
             }
-            # Put the packet in the thread-safe Queue instead of starting a new thread
             self.outgoing_queue.put(packet)
 
-    def rebuild_ui(self):
-        pass
+    def closeEvent(self, event):
+        self.stop_csv_logging()
+        self.stop_web_server()
+        try:
+            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
+        except:
+            pass
+        if self.ui_timer:
+            self.ui_timer.stop()
+            self.ui_timer = None
+        super().closeEvent(event)
 
-    def rebuild_plots(self):
-        pass
+
+class ServiceConsolePlugin(BasePlugin):
+    """
+    Consolidated utilities hub coordinating both MATLAB-compatible CSV recording
+    and local HTTP server real-time Web Streaming.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "service_console"
+        self.name = "Services Console"
+        self.description = "Consolidated telemetry CSV logger and HTTP Web Streaming server."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("⚙️ Services Hub (Logging & Streaming)", self.main_window)
+        self.dock_widget.setObjectName("dock_services_hub")
+        
+        self.container = ServiceConsoleWidget(self.main_window)
+        self.dock_widget.setWidget(self.container)
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()

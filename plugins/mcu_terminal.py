@@ -1,10 +1,11 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
+# - Integrity Check: Consolidated MCU VCP Terminal & Reusable Widget
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable McuTerminalWidget to support dynamic multi-window diagram canvases.
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular MCU Terminal plugin.
 # ======================================================================
 
@@ -14,23 +15,18 @@ from PyQt6.QtCore import pyqtSlot, Qt
 from PyQt6.QtGui import QFont
 from plugins.base_plugin import BasePlugin
 
-class McuTerminalPlugin(BasePlugin):
+class McuTerminalWidget(QWidget):
     """
-    Implements a multi-port serial packet logger and manual command injector.
+    Implements a multi-port serial packet logger and manual command injector widget.
     Provides diagnostic logs and raw feeds.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "mcu_terminal"
-        self.name = "MCU Terminal"
-        self.description = "Manages VCP serial console monitoring and direct packet injection."
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.init_ui()
 
-    def on_enable(self):
-        self.dock_widget = QDockWidget("📺 Hardware VCP Terminal & Diagnostics", self.main_window)
-        self.dock_widget.setObjectName("dock_terminal_logs")
-        
-        container = QWidget()
-        main_lay = QVBoxLayout(container)
+    def init_ui(self):
+        main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(6, 6, 6, 6)
         main_lay.setSpacing(4)
         
@@ -85,8 +81,6 @@ class McuTerminalPlugin(BasePlugin):
         input_bar_lay.addWidget(self.btn_send_cmd)
         
         main_lay.addWidget(input_bar)
-        self.container = container
-        self.dock_widget.setWidget(container)
         
         # Connect Manager Signals
         sm = self.main_window.serial_manager
@@ -95,20 +89,7 @@ class McuTerminalPlugin(BasePlugin):
         sm.connection_status_changed.connect(self.on_connection_status_changed)
         
         self.refresh_ports_dropdown()
-        self.log_to_diagnostic("MCU Debug Terminal Plugin initialized successfully.")
-
-    def on_disable(self):
-        try:
-            sm = self.main_window.serial_manager
-            sm.raw_packet_received.disconnect(self.on_raw_packet_received)
-            sm.error_occurred.disconnect(self.on_error_occurred)
-            sm.connection_status_changed.disconnect(self.on_connection_status_changed)
-        except:
-            pass
-        if hasattr(self, "container") and self.container:
-            self.container.deleteLater()
-            self.container = None
-        super().on_disable()
+        self.log_to_diagnostic("MCU Debug Terminal Console initialized successfully.")
 
     def log_to_diagnostic(self, text):
         self.console_err.append(f"[{time.strftime('%H:%M:%S')}] {text}")
@@ -171,3 +152,44 @@ class McuTerminalPlugin(BasePlugin):
             self.log_to_diagnostic(f"Sent command to {target}: {cmd.strip()}")
             
         self.txt_manual_cmd.clear()
+
+    def closeEvent(self, event):
+        try:
+            sm = self.main_window.serial_manager
+            sm.raw_packet_received.disconnect(self.on_raw_packet_received)
+            sm.error_occurred.disconnect(self.on_error_occurred)
+            sm.connection_status_changed.disconnect(self.on_connection_status_changed)
+        except:
+            pass
+        super().closeEvent(event)
+
+
+class McuTerminalPlugin(BasePlugin):
+    """
+    Implements a multi-port serial packet logger and manual command injector.
+    Provides diagnostic logs and raw feeds.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "mcu_terminal"
+        self.name = "MCU Terminal"
+        self.description = "Manages VCP serial console monitoring and direct packet injection."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("📺 Hardware VCP Terminal & Diagnostics", self.main_window)
+        self.dock_widget.setObjectName("dock_terminal_logs")
+        
+        self.container = McuTerminalWidget(self.main_window)
+        self.dock_widget.setWidget(self.container)
+        self.main_window.log_to_diagnostic("MCU Debug Terminal Plugin initialized successfully.")
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()
+
+    def log_to_diagnostic(self, text):
+        if hasattr(self, "container") and self.container:
+            self.container.log_to_diagnostic(text)

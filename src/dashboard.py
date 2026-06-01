@@ -92,6 +92,8 @@ class WorkspaceSetupTab(QWidget):
         self.init_ui()
         self.load_configuration_into_ui()
 
+
+
     def init_ui(self):
         main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(12, 12, 12, 12)
@@ -161,33 +163,37 @@ class WorkspaceSetupTab(QWidget):
         main_lay.addWidget(btn_panel)
 
     def open_preset_dialog(self):
-        dialog = PresetSelectionDialog(self)
+        dialog = CustomPresetManagerDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             preset_type = dialog.combo_presets.currentData()
             combine = dialog.radio_combine.isChecked()
             
             preset_dict = None
-            if preset_type == "DAB":
-                preset_dict = DAB_CONVERTER_PRESET
-            elif preset_type == "BMS":
-                preset_dict = EV_BMS_PRESET
-            elif preset_type == "ARDUINO":
-                preset_dict = ARDUINO_PLOTTER_PRESET
-            elif preset_type == "ESS":
-                from path_resolver import get_bundle_dir
-                import os
-                import json
-                example_path = os.path.join(get_bundle_dir(), "example_profile.json")
-                if os.path.exists(example_path):
-                    try:
-                        with open(example_path, 'r', encoding='utf-8') as f:
-                            preset_dict = json.load(f)
-                    except Exception as e:
-                        QMessageBox.critical(self, "에러", f"예제 프로필을 불러오지 못했습니다:\n{str(e)}")
+            if preset_type is not None:
+                if preset_type.startswith("USER_"):
+                    preset_name = preset_type.replace("USER_", "")
+                    preset_dict = self.main_window.config_data.get("user_presets", {}).get(preset_name, None)
+                elif preset_type == "DAB":
+                    preset_dict = DAB_CONVERTER_PRESET
+                elif preset_type == "BMS":
+                    preset_dict = EV_BMS_PRESET
+                elif preset_type == "ARDUINO":
+                    preset_dict = ARDUINO_PLOTTER_PRESET
+                elif preset_type == "ESS":
+                    from path_resolver import get_bundle_dir
+                    import os
+                    import json
+                    example_path = os.path.join(get_bundle_dir(), "example_profile.json")
+                    if os.path.exists(example_path):
+                        try:
+                            with open(example_path, 'r', encoding='utf-8') as f:
+                                preset_dict = json.load(f)
+                        except Exception as e:
+                            QMessageBox.critical(self, "에러", f"예제 프로필을 불러오지 못했습니다:\n{str(e)}")
+                            return
+                    else:
+                        QMessageBox.warning(self, "경고", f"예제 프로필 파일을 찾을 수 없습니다:\n{example_path}")
                         return
-                else:
-                    QMessageBox.warning(self, "경고", f"예제 프로필 파일을 찾을 수 없습니다:\n{example_path}")
-                    return
 
             if preset_dict:
                 self.main_window.apply_preset(preset_dict, combine=combine)
@@ -1842,15 +1848,20 @@ class FirstTimeWelcomeDialog(QDialog):
         self.accept()
 
 
-class PresetSelectionDialog(QDialog):
+class CustomPresetManagerDialog(QDialog):
     """
-    A premium dark-themed dialog for selecting and loading telemetry presets.
+    A premium dark-themed dialog for selecting, loading, saving, and managing presets.
+    Stores user custom presets internally inside config.json so they survive updates.
     Supports overwriting or appending/combining presets.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("📋 기초 프리셋 템플릿 로드/조합")
-        self.resize(500, 320)
+        self.main_window = parent if hasattr(parent, "main_window") else parent
+        if hasattr(self.main_window, "main_window"):
+            self.main_window = self.main_window.main_window # Resolve true MainWindow reference
+        
+        self.setWindowTitle("📋 프리셋 템플릿 & 레이아웃 관리자")
+        self.resize(550, 420)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         self.init_ui()
 
@@ -1896,6 +1907,14 @@ class PresetSelectionDialog(QDialog):
                 background-color: #38bdf8;
                 border-color: #38bdf8;
             }
+            QLineEdit {
+                background-color: #1b1c24;
+                border: 1px solid #272a38;
+                border-radius: 4px;
+                color: white;
+                padding: 6px;
+                font-size: 11px;
+            }
             QPushButton {
                 background-color: #1b1c24;
                 border: 1px solid #272a38;
@@ -1903,6 +1922,7 @@ class PresetSelectionDialog(QDialog):
                 color: #38bdf8;
                 font-weight: bold;
                 padding: 8px 16px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #222530;
@@ -1917,25 +1937,33 @@ class PresetSelectionDialog(QDialog):
                 background-color: #047857;
                 border-color: #059669;
             }
+            QPushButton#btn_danger {
+                background-color: #1e1b24;
+                border-color: #ef4444;
+                color: #ef4444;
+            }
+            QPushButton#btn_danger:hover {
+                background-color: #ef4444;
+                color: white;
+            }
         """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        title_lbl = QLabel("📋 텔레메트리 프리셋 로드/조합")
+        title_lbl = QLabel("📋 프리셋 템플릿 & 레이아웃 관리자")
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #38bdf8;")
         layout.addWidget(title_lbl)
 
         # Combo selection
-        layout.addWidget(QLabel("기초 프리셋 템플릿 선택:"))
+        layout.addWidget(QLabel("기초 및 저장된 커스텀 프리셋 선택:"))
         self.combo_presets = QComboBox()
-        self.combo_presets.addItem("⚡ DAB Converter (듀얼 액티브 브릿지 컨버터)", "DAB")
-        self.combo_presets.addItem("🔋 EV Battery BMS (전기차 배터리 제어)", "BMS")
-        self.combo_presets.addItem("🔌 Arduino General Plotter (간단한 센서 플로터)", "ARDUINO")
-        self.combo_presets.addItem("🏠 기본 ESS 에너지 저장 장치 (예제 프로필)", "ESS")
         self.combo_presets.setView(QListView())
         self.combo_presets.currentIndexChanged.connect(self.update_summary)
+        
+        # Populate combobox
+        self.populate_presets_combo()
         layout.addWidget(self.combo_presets)
 
         # Summary box
@@ -2418,14 +2446,9 @@ class QuickWindowCreateDialog(QDialog):
         # Enable plugin dynamically and update persistent profile choice
         success = self.main_window.plugin_manager.toggle_plugin(plugin_id, True)
         if success:
-            # Sync checking in settings tab
-            self.main_window.sync_central_tabs()
+            # Spawn dynamic customizable telemetry dock in dashboard
+            self.main_window.spawn_custom_dock(plugin_id, sub_id)
             
-            # If a specific subsystem focus was requested, try to apply it to the plugin if supported
-            p_inst = self.main_window.plugin_manager.active_plugins.get(plugin_id)
-            if p_inst and hasattr(p_inst, "focus_subsystem") and callable(p_inst.focus_subsystem):
-                p_inst.focus_subsystem(sub_id)
-
             QMessageBox.information(
                 self,
                 "윈도우 생성 완료",
@@ -2888,9 +2911,30 @@ class QuickSubsystemDialog(QDialog):
         # Save config and apply
         self.main_window.apply_new_workspace_configuration(self.main_window.config_data)
 
-        # Open charts and cards plugins automatically
-        self.main_window.plugin_manager.enable_plugin("trend_charts")
-        self.main_window.plugin_manager.enable_plugin("telemetry_cards")
+        # Spawn custom configurable docks instead of singleton plugins
+        from configurable_dock import ConfigurableTelemetryDock
+        
+        dock_charts = ConfigurableTelemetryDock(self.main_window)
+        dock_charts.widget_type = "trend_charts"
+        dock_charts.subsystem_id = sub_id
+        dock_charts.apply_configuration()
+        self.main_window.custom_docks[dock_charts.dock_id] = dock_charts
+        self.main_window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_charts)
+        dock_charts.setVisible(True)
+        
+        dock_cards = ConfigurableTelemetryDock(self.main_window)
+        dock_cards.widget_type = "telemetry_cards"
+        dock_cards.subsystem_id = sub_id
+        dock_cards.apply_configuration()
+        self.main_window.custom_docks[dock_cards.dock_id] = dock_cards
+        self.main_window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_cards)
+        dock_cards.setVisible(True)
+        
+        # Enforce size scaling (25% height limits)
+        h_limit = int(self.main_window.height() * 0.25)
+        self.main_window.resizeDocks([dock_charts, dock_cards], [h_limit, h_limit], Qt.Orientation.Vertical)
+        
+        self.main_window.save_custom_docks_layout()
 
         QMessageBox.information(
             self, 
@@ -2900,6 +2944,228 @@ class QuickSubsystemDialog(QDialog):
             f"선택 신호 {len(selected_variables)}개가 순차 컬럼 매핑으로 딥 카피되었습니다."
         )
         self.accept()
+
+
+class WelcomeDashboardHub(QWidget):
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #0c0d12;
+            }
+            QLabel#title {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                font-size: 24px;
+                font-weight: bold;
+                color: #38bdf8;
+            }
+            QLabel#desc {
+                font-size: 12px;
+                color: #8e94a6;
+                line-height: 1.6;
+            }
+            QFrame#card {
+                background-color: #13141f;
+                border: 1px solid #272a38;
+                border-radius: 12px;
+                padding: 20px;
+                min-width: 260px;
+            }
+            QPushButton#action_btn {
+                background-color: #1b1c28;
+                border: 1px solid #38bdf8;
+                border-radius: 6px;
+                color: #38bdf8;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 10px 20px;
+            }
+            QPushButton#action_btn:hover {
+                background-color: #38bdf8;
+                color: #0c0d12;
+            }
+            QPushButton#action_btn_green {
+                background-color: #1b1c28;
+                border: 1px solid #34d399;
+                border-radius: 6px;
+                color: #34d399;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 10px 20px;
+            }
+            QPushButton#action_btn_green:hover {
+                background-color: #34d399;
+                color: #0c0d12;
+            }
+            QPushButton#action_btn_blue {
+                background-color: #1b1c28;
+                border: 1px solid #3b82f6;
+                border-radius: 6px;
+                color: #3b82f6;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 10px 20px;
+            }
+            QPushButton#action_btn_blue:hover {
+                background-color: #3b82f6;
+                color: #0c0d12;
+            }
+            QPushButton#action_btn_purple {
+                background-color: #1b1c28;
+                border: 1px solid #a855f7;
+                border-radius: 6px;
+                color: #a855f7;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 10px 20px;
+            }
+            QPushButton#action_btn_purple:hover {
+                background-color: #a855f7;
+                color: #0c0d12;
+            }
+        """)
+        
+        title_lbl = QLabel("📦 UNIVERSAL TELEMETRY SYSTEM WORKSPACE")
+        title_lbl.setObjectName("title")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_lbl)
+        
+        desc_lbl = QLabel(
+            "Welcome to the premium dynamic telemetry workspace. The layout starts as a clean slate.\n"
+            "Create separate independent monitoring windows using the quick creation wizard below,\n"
+            "or navigate straight to default telemetry metrics and background system controls!"
+        )
+        desc_lbl.setObjectName("desc")
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc_lbl)
+        
+        from PyQt6.QtWidgets import QGridLayout
+        cards_lay = QGridLayout()
+        cards_lay.setSpacing(25)
+        
+        # Row 0, Col 0: Card 1 (모니터링 윈도우 생성)
+        card1 = QFrame()
+        card1.setObjectName("card")
+        c1_lay = QVBoxLayout(card1)
+        c1_lay.setSpacing(10)
+        c1_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        c1_icon = QLabel("📊")
+        c1_icon.setStyleSheet("font-size: 32px; background: transparent;")
+        c1_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c1_lay.addWidget(c1_icon)
+        
+        c1_title = QLabel("모니터링 윈도우 생성")
+        c1_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; background: transparent;")
+        c1_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c1_lay.addWidget(c1_title)
+        
+        c1_desc = QLabel("파형 차트, 수치 카드, 패킷 분석기 등\n원하는 기능의 독립 도크 윈도우 생성")
+        c1_desc.setStyleSheet("font-size: 10px; color: #8e94a6; text-align: center; background: transparent;")
+        c1_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c1_lay.addWidget(c1_desc)
+        
+        btn_c1 = QPushButton("➕ 윈도우 생성/추가")
+        btn_c1.setObjectName("action_btn")
+        btn_c1.clicked.connect(self.main_window.show_quick_window_dialog)
+        c1_lay.addWidget(btn_c1)
+        cards_lay.addWidget(card1, 0, 0)
+        
+        # Row 0, Col 1: Card 2 (Subsystem 퀵 추가)
+        card2 = QFrame()
+        card2.setObjectName("card")
+        c2_lay = QVBoxLayout(card2)
+        c2_lay.setSpacing(10)
+        c2_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        c2_icon = QLabel("🔌")
+        c2_icon.setStyleSheet("font-size: 32px; background: transparent;")
+        c2_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c2_lay.addWidget(c2_icon)
+        
+        c2_title = QLabel("Subsystem 퀵 추가")
+        c2_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; background: transparent;")
+        c2_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c2_lay.addWidget(c2_title)
+        
+        c2_desc = QLabel("CSV 패킷 수신 및 변수 정합성\n스피디 라우팅 노드 즉시 바인딩")
+        c2_desc.setStyleSheet("font-size: 10px; color: #8e94a6; text-align: center; background: transparent;")
+        c2_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c2_lay.addWidget(c2_desc)
+        
+        btn_c2 = QPushButton("🔌 Subsystem 추가")
+        btn_c2.setObjectName("action_btn_green")
+        btn_c2.clicked.connect(self.main_window.show_quick_subsystem_dialog)
+        c2_lay.addWidget(btn_c2)
+        cards_lay.addWidget(card2, 0, 1)
+        
+        # Row 1, Col 0: Card 3 (기본 계측 모니터 바로가기)
+        card3 = QFrame()
+        card3.setObjectName("card")
+        c3_lay = QVBoxLayout(card3)
+        c3_lay.setSpacing(10)
+        c3_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        c3_icon = QLabel("📈")
+        c3_icon.setStyleSheet("font-size: 32px; background: transparent;")
+        c3_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c3_lay.addWidget(c3_icon)
+        
+        c3_title = QLabel("기본 계측 모니터")
+        c3_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; background: transparent;")
+        c3_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c3_lay.addWidget(c3_title)
+        
+        c3_desc = QLabel("파형 차트 및 실시간 그리드 일괄 뷰어\n기본 데이터의 즉각적인 모니터링")
+        c3_desc.setStyleSheet("font-size: 10px; color: #8e94a6; text-align: center; background: transparent;")
+        c3_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c3_lay.addWidget(c3_desc)
+        
+        btn_c3 = QPushButton("📊 계측 화면으로 이동")
+        btn_c3.setObjectName("action_btn_blue")
+        btn_c3.clicked.connect(lambda: self.main_window.central_tab_widget.setCurrentWidget(self.main_window.default_monitor_tabs))
+        c3_lay.addWidget(btn_c3)
+        cards_lay.addWidget(card3, 1, 0)
+        
+        # Row 1, Col 1: Card 4 (시스템 관리 바로가기)
+        card4 = QFrame()
+        card4.setObjectName("card")
+        c4_lay = QVBoxLayout(card4)
+        c4_lay.setSpacing(10)
+        c4_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        c4_icon = QLabel("⚙️")
+        c4_icon.setStyleSheet("font-size: 32px; background: transparent;")
+        c4_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c4_lay.addWidget(c4_icon)
+        
+        c4_title = QLabel("시스템 관리 & 제어")
+        c4_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; background: transparent;")
+        c4_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c4_lay.addWidget(c4_title)
+        
+        c4_desc = QLabel("제한치 슬라이더 및 캘리브레이션 튜닝\n로깅 서비스 및 하드웨어 VCP 터미널")
+        c4_desc.setStyleSheet("font-size: 10px; color: #8e94a6; text-align: center; background: transparent;")
+        c4_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c4_lay.addWidget(c4_desc)
+        
+        btn_c4 = QPushButton("⚙️ 시스템 관리로 이동")
+        btn_c4.setObjectName("action_btn_purple")
+        btn_c4.clicked.connect(lambda: self.main_window.central_tab_widget.setCurrentWidget(self.main_window.system_management_tabs))
+        c4_lay.addWidget(btn_c4)
+        cards_lay.addWidget(card4, 1, 1)
+        
+        layout.addLayout(cards_lay)
+        layout.addStretch()
 
 
 
@@ -2935,17 +3201,39 @@ class DashboardWindow(QMainWindow):
         self.config_data = self.config_manager.load_config()
         self.data_router.set_config(self.config_data)
         
-        # Central Main Stacked Widget
+        # Initialize Stacked Widget as Main Central Canvas
         from PyQt6.QtWidgets import QStackedWidget
         self.main_stack = QStackedWidget()
         self.setCentralWidget(self.main_stack)
         
-        # Stack 0: Central Tab Widget containing Waveforms and Grid Overview
+        # Stack 0: Central Tab Widget containing Home, Default Monitors, and System Management
         self.central_tab_widget = QTabWidget()
         self.central_tab_widget.setObjectName("central_tab_widget")
         self.main_stack.addWidget(self.central_tab_widget)
         
-        # Stack 1: Full-Screen Workspace Setup Tab Widget
+        self.custom_docks = {}
+        
+        # Create nested subtab widgets first so they are available to WelcomeDashboardHub!
+        self.default_monitor_tabs = QTabWidget()
+        self.default_monitor_tabs.setObjectName("default_monitor_tabs")
+        
+        self.system_management_tabs = QTabWidget()
+        self.system_management_tabs.setObjectName("system_management_tabs")
+        
+        # Instantiate and add the beautiful premium Welcome Dashboard Hub wrapped inside QScrollArea!
+        self.welcome_hub = WelcomeDashboardHub(self)
+        
+        from PyQt6.QtWidgets import QScrollArea
+        self.welcome_hub_scroll = QScrollArea()
+        self.welcome_hub_scroll.setWidgetResizable(True)
+        self.welcome_hub_scroll.setWidget(self.welcome_hub)
+        self.welcome_hub_scroll.setStyleSheet("QScrollArea { border: none; background-color: #0c0d12; }")
+        
+        self.central_tab_widget.addTab(self.welcome_hub_scroll, "🏠 홈 대시보드")
+        self.central_tab_widget.addTab(self.default_monitor_tabs, "📊 기본 계측 화면 (Default Monitors)")
+        self.central_tab_widget.addTab(self.system_management_tabs, "⚙️ 시스템 관리 (System Management)")
+        
+        # Stack 1: Full-Screen Workspace Setup Tab Widget directly (Responsive layout!)
         self.setup_tab = WorkspaceSetupTab(self)
         self.main_stack.addWidget(self.setup_tab)
         
@@ -2957,6 +3245,7 @@ class DashboardWindow(QMainWindow):
         self.data_router.error_logged.connect(self.log_to_diagnostic)
         self.serial_manager.raw_packet_received.connect(self.data_router.route_packet)
         self.serial_manager.connection_status_changed.connect(self.on_serial_connection_changed)
+        self.central_tab_widget.currentChanged.connect(self.on_central_tab_changed)
         
         # Dynamically discover plugins and load
         self.plugin_manager.discover_plugins()
@@ -2979,6 +3268,13 @@ class DashboardWindow(QMainWindow):
         # Blank state prompt
         if not self.config_data.get("subsystems", []):
             QTimer.singleShot(500, self.prompt_workspace_wizard)
+
+        # Setup enterprise shortcuts and system tray
+        self.setup_shortcuts()
+        self.setup_system_tray()
+        
+        # Trigger asynchronous GitHub update checking on startup!
+        QTimer.singleShot(1500, self.check_for_updates)
 
     def init_ui(self):
         # 1. Premium Ribbon controls bar at the top of the QMainWindow
@@ -3158,9 +3454,16 @@ class DashboardWindow(QMainWindow):
             
         layout.addStretch()
         
+        # Do not autoload downloadable/custom visual plugins as singletons
+        exclude_startup = ["protocol_analyzer", "topology_visualizer"]
+        filtered_list = [p for p in enabled_list if p not in exclude_startup]
+        
         # Load states persistently inside manager
-        self.plugin_manager.load_active_plugins_from_config(enabled_list)
+        self.plugin_manager.load_active_plugins_from_config(filtered_list)
         self.sync_central_tabs()
+        
+        # Load custom dynamic configurable docks
+        self.load_custom_docks_from_profile()
 
     def install_custom_plugin(self):
         """
@@ -3278,9 +3581,34 @@ class DashboardWindow(QMainWindow):
         # Save config and apply
         self.apply_new_workspace_configuration(self.config_data)
         
-        # Enable default plugins to populate screen with charts and numerical card docks
+        # Enable default plugins as singletons (for backwards compatibility/tab sync)
         self.plugin_manager.enable_plugin("trend_charts")
         self.plugin_manager.enable_plugin("telemetry_cards")
+        
+        # Dynamically spawn premium configurable docks for the new PnP port automatically!
+        from configurable_dock import ConfigurableTelemetryDock
+        
+        dock_charts = ConfigurableTelemetryDock(self)
+        dock_charts.widget_type = "trend_charts"
+        dock_charts.subsystem_id = sub_id
+        dock_charts.apply_configuration()
+        self.custom_docks[dock_charts.dock_id] = dock_charts
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_charts)
+        dock_charts.setVisible(True)
+        
+        dock_cards = ConfigurableTelemetryDock(self)
+        dock_cards.widget_type = "telemetry_cards"
+        dock_cards.subsystem_id = sub_id
+        dock_cards.apply_configuration()
+        self.custom_docks[dock_cards.dock_id] = dock_cards
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_cards)
+        dock_cards.setVisible(True)
+        
+        # Enforce size scaling (25% height limits) to prevent overwhelming the screen
+        h_limit = int(self.height() * 0.25)
+        self.resizeDocks([dock_charts, dock_cards], [h_limit, h_limit], Qt.Orientation.Vertical)
+        
+        self.save_custom_docks_layout()
         
         QMessageBox.information(
             self,
@@ -3288,7 +3616,7 @@ class DashboardWindow(QMainWindow):
             f"장치 <b>[{port}]</b>의 오토 셋업이 성공적으로 마쳤습니다!\n\n"
             f"- 서브시스템 등록: '{sub_id}'\n"
             f"- 패킷 CSV 라우팅 Prefix: 'AUTO' (AUTO,temp,volt,curr... 형태로 송출 가능)\n"
-            f"- 자동 계측 화면이 화면에 바로 구성되었습니다."
+            f"- 자동 실시간 파형 차트 & 계측 수치 카드 윈도우가 화면에 도킹 마운트되었습니다!"
         )
 
     def scan_physical_com_ports(self):
@@ -3407,17 +3735,198 @@ class DashboardWindow(QMainWindow):
         """
         self.ribbon_bar.setCurrentIndex(1)
 
+    def animate_fade_in(self, widget, duration=250):
+        """
+        Applies a premium smooth fade-in micro-animation with deceleration easing (OutCubic).
+        Binds animation lifetimes to the QMainWindow dynamically to prevent premature Python GC.
+        """
+        if not widget:
+            return
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+        
+        # 1. Instantiate graphics opacity effect
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        
+        # 2. Setup property animation targeting the effect's opacity
+        anim = QPropertyAnimation(effect, b"opacity")
+        anim.setDuration(duration)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 3. Handle asynchronous cleanup on completion to clear graphics pipeline
+        def cleanup_animation():
+            try:
+                widget.setGraphicsEffect(None)
+            except:
+                pass
+            if hasattr(self, "_active_fade_anims") and (anim, effect) in self._active_fade_anims:
+                try:
+                    self._active_fade_anims.remove((anim, effect))
+                except:
+                    pass
+                    
+        anim.finished.connect(cleanup_animation)
+        
+        # 4. Store active animation in window memory pool to prevent immediate garbage collection
+        if not hasattr(self, "_active_fade_anims"):
+            self._active_fade_anims = []
+        self._active_fade_anims.append((anim, effect))
+        
+        anim.start()
+
+    def on_central_tab_changed(self, index):
+        """
+        Smoothly fades in the newly selected subtab of the Central Tab Widget.
+        """
+        active_widget = self.central_tab_widget.widget(index)
+        self.animate_fade_in(active_widget, 200)
+
     def on_ribbon_tab_changed(self, index):
         """
         Toggles between central dashboard plots and the full-screen Workspace Setup Tab
-        based on active top-level Ribbon Tab choices (Home vs Settings).
+        based on active top-level Ribbon Tab choices, animating the entry transition.
         """
         if index == 1: # Settings Ribbon Tab
             self.main_stack.setCurrentIndex(1)
+            self.animate_fade_in(self.setup_tab, 250)
             # Fetch and synchronize active profile data right before entering editing state
             self.setup_tab.load_configuration_into_ui()
         else: # Home tab
             self.main_stack.setCurrentIndex(0)
+            self.animate_fade_in(self.central_tab_widget, 250)
+
+    def check_for_updates(self):
+        """
+        Triggers an asynchronous background update check on repository.
+        """
+        try:
+            from updater import GitHubUpdateThread
+            self.update_thread = GitHubUpdateThread(current_version="1.2.0")
+            self.update_thread.check_finished.connect(self.on_update_checked)
+            self.update_thread.start()
+        except Exception as e:
+            self.log_to_diagnostic(f"WARNING: Updater setup failed: {e}")
+
+    def on_update_checked(self, has_update, update_data):
+        if has_update:
+            self.log_to_diagnostic(f"UPDATER: Found new update version {update_data.get('version', 'unknown')}")
+            from updater import UpdatePromptDialog
+            dialog = UpdatePromptDialog(self, update_data, current_version="1.2.0")
+            dialog.exec()
+        else:
+            self.log_to_diagnostic("UPDATER: System is up to date (Version 1.2.0).")
+
+    def setup_shortcuts(self):
+        """
+        Binds high-productivity keyboard shortcuts to accelerate console workflows.
+        """
+        from PyQt6.QtGui import QKeySequence, QShortcut
+        
+        # 1. Ctrl+N: Create new custom dock window
+        self.sc_new = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.sc_new.activated.connect(self.show_quick_window_dialog)
+        
+        # 2. Ctrl+T: Toggle scrolling plots pause state
+        self.sc_toggle_pause = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.sc_toggle_pause.activated.connect(self.toggle_plots_pausing)
+        
+        # 3. Ctrl+S: Save current profile
+        self.sc_save = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.sc_save.activated.connect(self.save_profile_as)
+        
+        # 4. F11: Fullscreen toggle
+        self.sc_fullscreen = QShortcut(QKeySequence("F11"), self)
+        self.sc_fullscreen.activated.connect(self.toggle_fullscreen)
+        
+        # 5. Ctrl+H: Go to Home Dashboard Tab
+        self.sc_home = QShortcut(QKeySequence("Ctrl+H"), self)
+        self.sc_home.activated.connect(lambda: self.central_tab_widget.setCurrentIndex(0))
+        
+        self.log_to_diagnostic("INFO: High-productivity keyboard shortcuts bound successfully (Ctrl+N, Ctrl+T, Ctrl+S, F11, Ctrl+H).")
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def setup_system_tray(self):
+        """
+        Sets up the enterprise QSystemTrayIcon to allow background execution when minimized.
+        """
+        from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
+        from PyQt6.QtGui import QIcon
+        
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # Load app icon or fallback
+        if os.path.exists("Logo_Gemini.png"):
+            self.tray_icon.setIcon(QIcon("Logo_Gemini.png"))
+        else:
+            # Fallback to system warning icon
+            self.tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+            
+        # Create Tray Context Menu
+        self.tray_menu = QMenu(self)
+        
+        act_restore = self.tray_menu.addAction("📊 대시보드 열기 (Open Console)")
+        act_restore.triggered.connect(self.restore_from_tray)
+        
+        act_pause = self.tray_menu.addAction("⏸️ 계측 파형 일시정지 (Pause Waveforms)")
+        act_pause.triggered.connect(self.toggle_plots_pausing)
+        
+        self.tray_menu.addSeparator()
+        
+        act_exit = self.tray_menu.addAction("✕ 종료 (Exit Console)")
+        # Cleanly quit without raising single instance locks
+        act_exit.triggered.connect(self.exit_application_cleanly)
+        
+        self.tray_icon.setContextMenu(self.tray_menu)
+        
+        # Connect double click trigger
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        
+        self.tray_icon.show()
+        self.log_to_diagnostic("INFO: System Tray background manager initialized successfully.")
+
+    def on_tray_icon_activated(self, reason):
+        from PyQt6.QtWidgets import QSystemTrayIcon
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.restore_from_tray()
+
+    def restore_from_tray(self):
+        self.show()
+        self.showNormal()
+        self.activateWindow()
+
+    def exit_application_cleanly(self):
+        # Detach shared memory block before quit to prevent instance locks on restart
+        if hasattr(QApplication.instance(), "shared_memory"):
+            QApplication.instance().shared_memory.detach()
+        QApplication.quit()
+        sys.exit(0)
+
+    def changeEvent(self, event):
+        """
+        Intercepts window minimization states to hide main frame into the system tray.
+        """
+        from PyQt6.QtCore import QEvent
+        from PyQt6.QtWidgets import QSystemTrayIcon
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                self.hide()
+                self.tray_icon.showMessage(
+                    "Embedded Monitor running in background",
+                    "대시보드가 시스템 트레이로 최소화되었습니다. 백그라운드에서 실시간 포트 데이터 수집 및 웹 서버 스트리밍이 유지됩니다.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    2500
+                )
+                event.accept()
+                return
+        super().changeEvent(event)
 
     def save_profile_as(self):
         """
@@ -3521,11 +4030,22 @@ class DashboardWindow(QMainWindow):
         Loads a preset into self.config_data.
         If combine is True, appends subsystems, ports, routing rules, and linking formulas.
         Otherwise, overwrites self.config_data entirely.
+        Preserves user_presets and theme_accent configuration properties from self.config_data.
         """
         import copy
+        
+        # Guard: preserve local user-specific presets, theme accents, and custom docks
+        preserved_presets = self.config_data.get("user_presets", {})
+        preserved_accent = self.config_data.get("theme_accent", "default")
+        preserved_docks = self.config_data.get("custom_docks", [])
+        
         if not combine:
             # Overwrite
             self.config_data = copy.deepcopy(preset_dict)
+            
+            # If the preset itself contains custom docks, load them. Otherwise keep preserved ones.
+            if "custom_docks" not in self.config_data:
+                self.config_data["custom_docks"] = preserved_docks
         else:
             # Combine/Append
             # Merge ports safely (no duplicates)
@@ -3552,6 +4072,10 @@ class DashboardWindow(QMainWindow):
                 if (f["target_sub"], f["target_var"]) not in existing_formulas:
                     self.config_data.setdefault("linking_formulas", []).append(copy.deepcopy(f))
                     
+        # Apply the preserved fields
+        self.config_data["user_presets"] = preserved_presets
+        self.config_data["theme_accent"] = preserved_accent
+        
         # Apply the merged/overwritten config
         self.apply_new_workspace_configuration(self.config_data)
 
@@ -3706,8 +4230,19 @@ class DashboardWindow(QMainWindow):
         dlg.exec()
 
     def show_quick_window_dialog(self):
-        dlg = QuickWindowCreateDialog(self)
-        dlg.exec()
+        from configurable_dock import ConfigurableTelemetryDock
+        dock = ConfigurableTelemetryDock(self)
+        self.custom_docks[dock.dock_id] = dock
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        
+        # Enforce size scaling (25% height limits)
+        h_limit = int(self.height() * 0.25)
+        self.resizeDocks([dock], [h_limit], Qt.Orientation.Vertical)
+        
+        dock.setVisible(True)
+        dock.raise_()
+        
+        self.save_custom_docks_layout()
 
     def reset_dock_layout(self):
         """
@@ -3749,38 +4284,134 @@ class DashboardWindow(QMainWindow):
 
     def sync_central_tabs(self):
         """
-        Synchronizes central tabs based on active plugin states for Trend Waveforms,
-        Live Grid Overview, Parameter Calibration, Hardware Terminal, and Service Console.
+        Synchronizes central tabs inside both nested default_monitor_tabs and system_management_tabs widgets.
         """
-        plugins_config = [
+        # Always ensure the Home Welcome tab remains persistently visible
+        self.central_tab_widget.setTabVisible(0, True)
+
+        # B. Sync Default Telemetry Monitor tabs
+        default_monitors_config = [
             ("trend_charts", "📈 Telemetry Waveforms"),
-            ("telemetry_cards", "📊 Live Grid Overview"),
-            ("parameter_manager", "🔧 Parameter Calibration"),
-            ("mcu_terminal", "📺 Hardware Terminal"),
-            ("service_console", "🌐 Service Console")
+            ("telemetry_cards", "📊 Live Grid Overview")
         ]
-        
-        # Track existing tab indices by looking at widget references or titles
-        existing_widgets = []
-        for idx in range(self.central_tab_widget.count()):
-            existing_widgets.append(self.central_tab_widget.widget(idx))
+        existing_monitors = []
+        for idx in range(self.default_monitor_tabs.count()):
+            existing_monitors.append(self.default_monitor_tabs.widget(idx))
             
-        for plugin_id, tab_title in plugins_config:
+        for plugin_id, tab_title in default_monitors_config:
             plugin = self.plugin_manager.active_plugins.get(plugin_id)
             if plugin and hasattr(plugin, "container") and plugin.container:
                 container = plugin.container
-                if container not in existing_widgets:
-                    self.central_tab_widget.addTab(container, tab_title)
+                if container not in existing_monitors:
+                    self.default_monitor_tabs.addTab(container, tab_title)
                 # Hide its dock widget if it exists to avoid duplication
                 dock = plugin.get_dock_widget()
                 if dock:
                     dock.setVisible(False)
             else:
                 # Remove tab if it exists
-                for idx in range(self.central_tab_widget.count()):
-                    if self.central_tab_widget.tabText(idx) == tab_title:
-                        self.central_tab_widget.removeTab(idx)
+                for idx in range(self.default_monitor_tabs.count()):
+                    if self.default_monitor_tabs.tabText(idx) == tab_title:
+                        self.default_monitor_tabs.removeTab(idx)
                         break
+
+        # C. Sync System Management tabs
+        system_mgr_config = [
+            ("parameter_manager", "🔧 Parameter Calibration"),
+            ("service_console", "🌐 Service Console"),
+            ("mcu_terminal", "📺 Hardware Terminal")
+        ]
+        existing_system = []
+        for idx in range(self.system_management_tabs.count()):
+            existing_system.append(self.system_management_tabs.widget(idx))
+            
+        for plugin_id, tab_title in system_mgr_config:
+            plugin = self.plugin_manager.active_plugins.get(plugin_id)
+            if plugin and hasattr(plugin, "container") and plugin.container:
+                container = plugin.container
+                if container not in existing_system:
+                    self.system_management_tabs.addTab(container, tab_title)
+                # Hide its dock widget if it exists to avoid duplication
+                dock = plugin.get_dock_widget()
+                if dock:
+                    dock.setVisible(False)
+            else:
+                # Remove tab if it exists
+                for idx in range(self.system_management_tabs.count()):
+                    if self.system_management_tabs.tabText(idx) == tab_title:
+                        self.system_management_tabs.removeTab(idx)
+                        break
+
+    def spawn_custom_dock(self, widget_type, subsystem_id=None):
+        """
+        Dynamically instantiates and mounts a configurable telemetry dock
+        configured with the chosen widget type.
+        """
+        subsystems = self.config_data.get("subsystems", [])
+        if widget_type in ["trend_charts", "telemetry_cards", "parameter_manager"] and not subsystems:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self, 
+                "서브시스템 노드 등록 필요", 
+                "선택하신 모니터링/제어 기능을 시작하려면 연동할 서브시스템 노드가 최소 1개 이상 존재해야 합니다.\n\n"
+                "대시보드 홈 화면 우측 하단의 '🔌 Subsystem 추가' 마법사 카드를 먼저 클릭하여 노드 설정을 완료해 주세요!"
+            )
+            return
+            
+        default_sub = subsystem_id if subsystem_id else (subsystems[0]["name"] if subsystems else "ALL")
+        
+        from configurable_dock import ConfigurableTelemetryDock
+        dock = ConfigurableTelemetryDock(self)
+        dock.widget_type = widget_type
+        dock.subsystem_id = default_sub
+        dock.apply_configuration()
+        self.custom_docks[dock.dock_id] = dock
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        dock.setVisible(True)
+        self.save_custom_docks_layout()
+        
+        # Enforce size scaling (25% height limits)
+        h_limit = int(self.height() * 0.25)
+        self.resizeDocks([dock], [h_limit], Qt.Orientation.Vertical)
+        
+        self.log_to_diagnostic(f"SUCCESS: Dynamic modular window [{widget_type}] spawned successfully.")
+
+    def save_custom_docks_layout(self):
+        custom_docks_list = []
+        for dock in self.custom_docks.values():
+            custom_docks_list.append(dock.get_serialization_state())
+            
+        self.config_data["custom_docks"] = custom_docks_list
+        self.config_manager.save_config()
+        self.sync_central_tabs()
+
+    def load_custom_docks_from_profile(self):
+        # Clean existing custom docks
+        for dock in list(self.custom_docks.values()):
+            try:
+                if hasattr(dock, "active_view") and dock.active_view:
+                    from PyQt6.QtGui import QCloseEvent
+                    dock.active_view.closeEvent(QCloseEvent())
+                dock.close()
+            except:
+                pass
+        self.custom_docks.clear()
+        
+        custom_docks_list = self.config_data.get("custom_docks", [])
+        from configurable_dock import ConfigurableTelemetryDock
+        for state in custom_docks_list:
+            try:
+                dock = ConfigurableTelemetryDock(self, saved_state=state)
+                self.custom_docks[dock.dock_id] = dock
+                self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+                
+                # Enforce size scaling (25% height limits)
+                h_limit = int(self.height() * 0.25)
+                self.resizeDocks([dock], [h_limit], Qt.Orientation.Vertical)
+                
+                dock.setVisible(True)
+            except Exception as e:
+                print(f"Error loading custom dock state: {e}")
 
     def apply_premium_dark_styling(self):
         theme_cfg = self.config_data.get("theme_config", {
@@ -3949,6 +4580,16 @@ class DashboardWindow(QMainWindow):
         # Keep config setup tab style sheet updated synchronously as well if it exists
         if hasattr(self, "setup_tab"):
             self.setup_tab.apply_setup_tab_theme()
+        if hasattr(self, "setup_tab_scroll") and self.setup_tab_scroll:
+            self.setup_tab_scroll.setStyleSheet(f"QScrollArea {{ border: none; background-color: {win_bg}; }}")
+            
+        # Dynamically propagate the active theme coloring across all custom configurable docks!
+        if hasattr(self, "custom_docks") and self.custom_docks:
+            for dock in self.custom_docks.values():
+                try:
+                    dock.apply_theme_styling()
+                except Exception as e:
+                    print(f"Error propagating theme to custom dock: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

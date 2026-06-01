@@ -1,43 +1,44 @@
 # ======================================================================
 # [FILE METADATA & VERSION TRACKING]
-# - Current Version: v2.0.0 (2026-05-22)
+# - Current Version: v3.0.0 (2026-06-01)
 # - Target Environment: Production / Python 3.10+ & PyQt6
-# - Integrity Check: DO NOT delete any existing functions unless explicitly requested.
+# - Integrity Check: Refactored to support multi-instance custom widgets.
 # ======================================================================
 # [CHANGELOG - NEVER DELETE THIS HISTORY]
+# * v3.0.0 (2026-06-01) - Antigravity: Extracted reusable TelemetryCardsWidget to support dynamic multi-window numerical telemetry cards.
 # * v2.0.0 (2026-05-22) - Antigravity: Initial creation of specialized modular Telemetry Cards plugin.
 # ======================================================================
 
-from PyQt6.QtWidgets import QDockWidget, QWidget, QHBoxLayout, QGroupBox, QGridLayout, QLabel, QVBoxLayout, QPushButton
+from PyQt6.QtWidgets import QDockWidget, QWidget, QHBoxLayout, QGroupBox, QGridLayout, QLabel, QVBoxLayout, QPushButton, QTabWidget
 from PyQt6.QtCore import Qt, pyqtSlot
 from plugins.base_plugin import BasePlugin
 
-class TelemetryCardsPlugin(BasePlugin):
+class TelemetryCardsWidget(QWidget):
     """
-    Renders beautiful, dynamic visual visualizer cards for all numerical telemetry fields
-    defined across the active subsystems. Fits side-by-side inside a QDockWidget.
+    Reusable Widget that renders beautiful, dynamic visual visualizer cards for all numerical telemetry fields.
     """
-    def __init__(self, main_window):
-        super().__init__(main_window)
-        self.plugin_id = "telemetry_cards"
-        self.name = "Telemetry Cards"
-        self.description = "Displays real-time numerical readings in highly stylized card widgets."
+    def __init__(self, main_window, parent=None, subsystem_id="ALL", visible_variables=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.subsystem_id = subsystem_id
+        
+        self.visible_subsystems = {subsystem_id} if subsystem_id != "ALL" else set()
+        self.visible_variables = visible_variables or set()
         
         self.card_widgets = {} # (sub_name, var_name) -> QLabel(value_readout)
         self.group_boxes = {}  # sub_name -> QGroupBox
         
-        self.visible_subsystems = set()
-        self.visible_variables = set()
+        self.init_ui()
 
-    def on_enable(self):
-        self.container = QWidget()
-        self.main_layout = QVBoxLayout(self.container)
+    def init_ui(self):
+        self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(6, 6, 6, 6)
         self.main_layout.setSpacing(4)
         
         # Premium Filter Toolbar
         filter_lay = QHBoxLayout()
-        title_lbl = QLabel(f"📟 {self.name}")
+        disp_sub = self.subsystem_id if self.subsystem_id != "ALL" else "All Subsystems"
+        title_lbl = QLabel(f"📟 Numerical Readings [{disp_sub}]")
         title_lbl.setStyleSheet("font-weight: bold; color: #38bdf8; font-size: 11px;")
         
         btn_filter = QPushButton("⚙️ 필터 설정")
@@ -63,12 +64,10 @@ class TelemetryCardsPlugin(BasePlugin):
         filter_lay.addWidget(btn_filter)
         self.main_layout.addLayout(filter_lay)
         
-        # Subsystems content layout
-        self.cards_content_widget = QWidget()
-        self.layout = QHBoxLayout(self.cards_content_widget)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(8)
-        self.main_layout.addWidget(self.cards_content_widget)
+        # Subsystems content layout wrapped inside QTabWidget
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("TelemetryCardsSubtabs")
+        self.main_layout.addWidget(self.tabs)
         
         self.rebuild_ui()
         
@@ -80,36 +79,23 @@ class TelemetryCardsPlugin(BasePlugin):
         dlg = PluginFilterDialog(self, self.main_window)
         dlg.exec()
 
-    def on_disable(self):
-        try:
-            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
-        except:
-            pass
-        if hasattr(self, "container") and self.container:
-            self.container.deleteLater()
-            self.container = None
-        super().on_disable()
-
     def rebuild_ui(self):
         """
         Dynamically builds the visual card panels based on the active subsystems configuration.
         """
-        # Clear existing
         self.card_widgets.clear()
         self.group_boxes.clear()
         
-        while self.layout.count():
-            item = self.layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
+        while self.tabs.count():
+            self.tabs.removeTab(0)
+        
         router = self.main_window.data_router
         if not router.subsystems:
             # Placeholder if no subsystems configured
             lbl = QLabel("No active subsystems configured. Open Subsystem Config Editor to get started!")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setStyleSheet("font-size: 13px; color: #75758a;")
-            self.layout.addWidget(lbl)
+            self.tabs.addTab(lbl, "No Subsystems")
             return
 
         # Initialize default filter states if empty
@@ -135,6 +121,11 @@ class TelemetryCardsPlugin(BasePlugin):
                 continue # Skip rendering this subsystem group if no variables are checked!
                 
             color = colors[idx % len(colors)]
+            
+            # Create a separate tab page QWidget with a QVBoxLayout
+            tab_page = QWidget()
+            tab_lay = QVBoxLayout(tab_page)
+            tab_lay.setContentsMargins(6, 6, 6, 6)
             
             group = QGroupBox(f"⚡ {sub.display_name}")
             group_lay = QGridLayout(group)
@@ -181,7 +172,8 @@ class TelemetryCardsPlugin(BasePlugin):
                     col = 0
                     row += 1
                     
-            self.layout.addWidget(group)
+            tab_lay.addWidget(group)
+            self.tabs.addTab(tab_page, f"⚡ {sub.display_name}")
 
     @pyqtSlot(str, dict)
     def on_telemetry_routed(self, subsystem_name, data):
@@ -198,3 +190,37 @@ class TelemetryCardsPlugin(BasePlugin):
                     lbl.setText(f"{val:.2f}")
                 else:
                     lbl.setText(str(val))
+
+    def closeEvent(self, event):
+        try:
+            self.main_window.data_router.telemetry_routed.disconnect(self.on_telemetry_routed)
+        except:
+            pass
+        super().closeEvent(event)
+
+
+class TelemetryCardsPlugin(BasePlugin):
+    """
+    Wrapper for dynamic plugin discovery compatibility.
+    """
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.plugin_id = "telemetry_cards"
+        self.name = "Telemetry Cards"
+        self.description = "Displays real-time numerical readings in highly stylized card widgets."
+
+    def on_enable(self):
+        self.dock_widget = QDockWidget("📟 텍스트 수치 카드", self.main_window)
+        self.dock_widget.setObjectName("TelemetryCardsDock")
+        self.dock_widget.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        
+        # Instantiate reusable widget
+        self.container = TelemetryCardsWidget(self.main_window)
+        self.dock_widget.setWidget(self.container)
+
+    def on_disable(self):
+        if self.dock_widget:
+            self.main_window.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
+            self.dock_widget = None
+        super().on_disable()
