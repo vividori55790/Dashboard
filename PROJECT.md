@@ -75,7 +75,29 @@ The rule now lives in `ArchitectureRuleTests.Wiring.cs` with a ratchet baseline 
 
 `ArchitectureRuleTests.NoNewProductionTypeIsUnreachable` now fails on any *new* unreachable type, and `EveryUnwiredTypeInTheBaselineIsStillUnwired` forces an entry off the baseline the moment it gains a reference, so the list can only shrink. Treat the baseline as the outstanding work it is.
 
-Current suite: **0 errors, 0 warnings**; see the badge line in the milestone table for the count at the last full run.
+Current suite: **708 passing, 0 failing, 0 warnings** — 640 in the portable project, 68 in the desktop one.
+
+### Standalone packages
+
+`build_standalone.ps1` refuses to publish from a red tree, then produces self-contained
+single-file builds that need no .NET installed:
+
+| Package | Size | Verified |
+|---|---|---|
+| `host-win-x64` | 114 MB | Runs. Reports its own bundled runtime (.NET 8.0.28, not the machine's .NET 10), loads the sample plugin, serves `/stream` and `/api/status`. |
+| `host-linux-x64` | 110 MB | Valid ELF64 x86-64. **Not executed** — see below. |
+| `host-osx-arm64` | 120 MB | Valid Mach-O ARM64. **Not executed.** |
+| `desktop-win-x64` | 220 MB | WPF console, Windows only by construction. |
+
+Trimming is deliberately off. Jint, IronPython and the collectible `AssemblyLoadContext` that loads
+plugins all resolve types by reflection, which the trimmer cannot see. A trimmed build would be
+smaller, publish cleanly, and fail the first time an operator loaded a plugin. The published
+Windows host printing `[plugin:sample.plugin] SampleTelemetryPlugin initialized.` is the check that
+this path survives single-file packaging.
+
+**Linux and macOS execution is unverified.** The binaries have correct executable headers and the
+backbone projects pass `PortableBackboneProjectsTargetNoSpecificPlatform`, but both are static
+checks. Nothing in this repository has been observed running on either platform.
 
 ### M7 — wiring, and what it exposed
 
