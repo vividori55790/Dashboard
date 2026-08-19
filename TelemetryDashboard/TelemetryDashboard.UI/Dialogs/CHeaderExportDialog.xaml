@@ -1,0 +1,44 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.CHeaderExportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🛠️ STM32 / ESP32 C Header &amp; Driver Code Generator" 
+        Height="700" Width="900"
+        WindowStartupLocation="CenterOwner"
+        Background="#13141C" Foreground="#C0CAF5">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Card -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🛠️ MCU C/C++ FIRMWARE CODE GENERATOR" Foreground="#89DDFF" FontWeight="Bold" FontSize="14"/>
+                </StackPanel>
+                <TextBlock Text="Generates telemetry_config.h &amp; driver sources for STM32, ESP32, Arduino" Foreground="#A9B1D6" FontSize="11" HorizontalAlignment="Right"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Code Viewer Tabs -->
+        <TabControl Grid.Row="1" Margin="0,6" Background="Transparent" BorderThickness="0">
+            <TabItem Header="📄 telemetry_config.h (Header)">
+                <TextBox x:Name="TxtHeaderCode" Background="#16161E" Foreground="#9ECE6A" FontFamily="Consolas" FontSize="12" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8"/>
+            </TabItem>
+            <TabItem Header="💻 telemetry_driver.c (STM32 HAL Driver)">
+                <TextBox x:Name="TxtDriverCode" Background="#16161E" Foreground="#7AA2F7" FontFamily="Consolas" FontSize="12" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8"/>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer Buttons -->
+        <DockPanel Grid.Row="2" Margin="0,6,0,0">
+            <Button Content="📋 코드 클립보드 복사" DockPanel.Dock="Left" Padding="12,6" Click="BtnCopy_Click"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="💾 파일로 저장..." Padding="12,6" Margin="0,0,8,0" Click="BtnSave_Click"/>
+                <Button Content="닫기" Width="90" Padding="12,6" Click="BtnClose_Click"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

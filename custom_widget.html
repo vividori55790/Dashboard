@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>⚡ Telemetry Custom Web Widget Template</title>
+    <style>
+        body { background-color: #13141C; color: #C0CAF5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; margin: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+        .card { background-color: #16161E; border: 1px solid #3B4252; border-radius: 8px; padding: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .card-header { font-size: 11px; font-weight: bold; color: #7AA2F7; letter-spacing: 0.8px; margin-bottom: 8px; }
+        .val { font-size: 32px; font-weight: bold; color: #00E676; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; background: #00E676; color: #101014; }
+    </style>
+</head>
+<body>
+    <h2>⚡ Telemetry Custom Web Widget Boilerplate</h2>
+    <p>Powered by <code>telemetry-client.js</code> Live WebSocket Stream (ws://localhost:8080/ws)</p>
+    <div id="status" class="status-badge">CONNECTED</div>
+
+    <div class="grid">
+        <div class="card">
+            <div class="card-header">COM3 TEMPERATURE</div>
+            <div id="tempVal" class="val">-- °C</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">COM3 HUMIDITY</div>
+            <div id="humVal" class="val" style="color: #7DCFFF;">-- %</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Z-SCORE ANOMALY SCORE</div>
+            <div id="anomalyVal" class="val" style="color: #BB9AF7;">Z = --</div>
+        </div>
+    </div>
+
+    <script src="http://localhost:8080/telemetry-client.js"></script>
+    <script>
+        TelemetryClient.connect();
+        TelemetryClient.onData((data) => {
+            if (data.temp !== undefined) document.getElementById('tempVal').innerText = data.temp.toFixed(2) + ' °C';
+            if (data.humidity !== undefined) document.getElementById('humVal').innerText = data.humidity.toFixed(1) + ' %';
+            if (data.anomalyScore !== undefined) {
+                const el = document.getElementById('anomalyVal');
+                el.innerText = 'Z = ' + data.anomalyScore.toFixed(2);
+                el.style.color = data.isAnomaly ? '#FF5555' : '#BB9AF7';
+            }
+        });
+    </script>
+</body>
+</html>

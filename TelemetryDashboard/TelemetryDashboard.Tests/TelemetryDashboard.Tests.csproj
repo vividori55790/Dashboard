@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Portable by construction.
+
+    This project targeted net8.0-windows and referenced the WPF shell, which made all 590 tests
+    Windows-only and left "Core, Infrastructure and Plugins are portable net8.0 libraries" as a claim
+    nothing could falsify. Both the suffix and the UI reference are gone; the WPF-dependent tests
+    live in TelemetryDashboard.Tests.Desktop. ArchitectureRuleTests.Portability.cs fails if either
+    comes back.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RollForward>LatestMajor</RollForward>
+    <NoWarn>$(NoWarn);NU1701;NU1603</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.8.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.70" />
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+
+    <!--
+      Xunit.StaFact is deliberately absent, and belongs only to TelemetryDashboard.Tests.Desktop.
+
+      Its [WpfFact] runs a test on a thread carrying a WPF Dispatcher, so on net8.0 it fails at
+      runtime with `Could not load type 'System.Windows.Threading.DispatcherSynchronizationContext'
+      from assembly 'WindowsBase'` — and it does not fail as a red test. It kills the test host
+      process mid-run, which aborts the whole assembly: the first attempt at this split reported
+      "42 passed" and exit code 0 while silently abandoning the remaining ~480 tests. A green
+      partial run is worse than a failure.
+
+      Forty-five tests in Tier1 carried [WpfFact] without needing it — every one constructs a plain
+      state object declared in its own test file, and none touches a Dispatcher, an apartment state
+      or System.Windows. They now use [Fact]; no assertion changed. Leaving the package referenced
+      would let the attribute reappear and take the suite down with it, so the reference is gone and
+      [WpfFact] is a compile error here.
+    -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TelemetryDashboard.Core\TelemetryDashboard.Core.csproj" />
+    <ProjectReference Include="..\TelemetryDashboard.Infrastructure\TelemetryDashboard.Infrastructure.csproj" />
+    <ProjectReference Include="..\TelemetryDashboard.Plugins\TelemetryDashboard.Plugins.csproj" />
+
+    <!--
+      The headless host. It targets plain net8.0, so referencing it keeps this project portable —
+      the rule in ArchitectureRuleTests.Portability.cs still holds. Without the reference the host's
+      start-up wiring (plugin context construction, the extension catalogue listing) is exactly the
+      kind of code that compiles, ships and is never executed by anything, which is how
+      PluginHostContext and ManifestIndexMarketplace came to be referenced by nothing at all.
+    -->
+    <ProjectReference Include="..\TelemetryDashboard.Host\TelemetryDashboard.Host.csproj" />
+  </ItemGroup>
+
+</Project>

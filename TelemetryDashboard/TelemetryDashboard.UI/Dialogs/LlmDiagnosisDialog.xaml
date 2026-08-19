@@ -1,0 +1,132 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.LlmDiagnosisDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🤖 LLM Generative AI Telemetry Diagnostic Agent &amp; Auto-Control" 
+        Height="780" Width="1020"
+        WindowStartupLocation="CenterOwner"
+        Background="#0B0E14"
+        Foreground="#F0F6FC">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Title & Guide -->
+            <RowDefinition Height="Auto"/> <!-- LLM Config Box -->
+            <RowDefinition Height="Auto"/> <!-- Input Query & Quick Chips -->
+            <RowDefinition Height="*"/>    <!-- AI Markdown Report -->
+            <RowDefinition Height="Auto"/> <!-- Footer Actions -->
+        </Grid.RowDefinitions>
+
+        <!-- 1. Header & Guide Banner -->
+        <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="🧠 LLM Generative AI Telemetry Diagnostic Agent" Foreground="#00F0FF" FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="💡 사용 안내: 실제 OpenAI API 키를 입력하거나, 로컬에서 실행 중인 Ollama (http://localhost:11434)에 직접 연결하여 실시간 생성형 AI 진단을 수행합니다. API가 없으면 내장 전문가 규칙 엔진으로 즉시 동작합니다." Foreground="#8B949E" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="BtnToggleConfig" Content="⚙️ LLM API 설정" Padding="10,4" VerticalAlignment="Center" Click="BtnToggleConfig_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- 2. LLM Provider & API Settings (Collapsible) -->
+        <Border Grid.Row="1" x:Name="BorderConfig" Background="#18202C" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10" Visibility="Collapsed">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Provider:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CboProvider" Width="180" HorizontalAlignment="Left" Margin="0,0,12,6" SelectionChanged="CboProvider_SelectionChanged">
+                    <ComboBoxItem Content="오프라인 내장 엔진 (Offline Expert)" IsSelected="True"/>
+                    <ComboBoxItem Content="OpenAI (GPT-4o / GPT-4o-mini)"/>
+                    <ComboBoxItem Content="Local Ollama (Llama 3 / Qwen / DeepSeek)"/>
+                    <ComboBoxItem Content="Custom API Endpoint"/>
+                </ComboBox>
+
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Model Name:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                <TextBox Grid.Row="0" Grid.Column="3" x:Name="TxtModelName" Text="gpt-4o-mini" FontSize="11" Margin="0,0,0,6"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="API Key:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtApiKey" Text="" FontSize="11" Margin="0,0,12,0"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="Endpoint URL:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Row="1" Grid.Column="3" x:Name="TxtEndpointUrl" Text="https://api.openai.com/v1/chat/completions" FontSize="11"/>
+            </Grid>
+        </Border>
+
+        <!-- 3. Query Input & Quick Chips -->
+        <Border Grid.Row="2" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TxtQuery" Background="#0E131A" Foreground="#F0F6FC" BorderBrush="#283548" Padding="8,6" FontSize="13"
+                             Text="최근 온도 스파이크와 전압 강하 원인을 분석하고 60초 후 예측치를 알려줘" KeyDown="TxtQuery_KeyDown"/>
+                    <Button Grid.Column="1" x:Name="BtnRunQuery" Content="🚀 AI 실시간 진단 실행" Padding="14,6" Background="#00F0FF" Foreground="#0B0E14" FontWeight="Bold" Click="BtnRunQuery_Click" Margin="6,0,0,0"/>
+                </Grid>
+
+                <WrapPanel>
+                    <TextBlock Text="추천 질문:" Foreground="#8B949E" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Button Content="🔥 최근 온도 스파이크 원인 분석" Margin="0,0,6,4" Padding="6,3" Background="#18202C" Click="QuickQuery_Click" Tag="최근 온도 이상 스파이크 원인과 예측치를 상세 분석해줘"/>
+                    <Button Content="⚡ 전력단 서지 &amp; 단락 진단" Margin="0,0,6,4" Padding="6,3" Background="#18202C" Click="QuickQuery_Click" Tag="전압 및 전류 이상 변동과 전력단 상태 진단"/>
+                    <Button Content="⚙️ 베어링 진동 결함 체크" Margin="0,0,6,4" Padding="6,3" Background="#18202C" Click="QuickQuery_Click" Tag="진동 센서 Z-Score 이상 수치 및 기계적 마찰 결함 확인"/>
+                    <Button Content="🛡️ 종합 시스템 건전성 요약" Margin="0,0,6,4" Padding="6,3" Background="#18202C" Click="QuickQuery_Click" Tag="현재 시스템의 모든 채널 상태와 종합 건전성 리포트 요약"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 4. Report Markdown Viewer -->
+        <Border Grid.Row="3" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Status Badges -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <Border x:Name="BadgeSeverity" Background="#331018" BorderBrush="#FF2E63" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,8,0">
+                            <TextBlock x:Name="TxtSeverity" Text="SEVERITY: CRITICAL" Foreground="#FF2E63" FontWeight="Bold" FontSize="11"/>
+                        </Border>
+                        <Border Background="#18202C" BorderBrush="#283548" BorderThickness="1" CornerRadius="4" Padding="8,3">
+                            <TextBlock x:Name="TxtInferenceEngine" Text="ENGINE: OFFLINE EXPERT" Foreground="#00FF9D" FontSize="11"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock x:Name="TxtReportTimestamp" Text="Report Generated: Ready" Foreground="#8B949E" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </DockPanel>
+
+                <!-- Markdown Content -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="TxtReportMarkdown" Background="#0E131A" Foreground="#F0F6FC" BorderThickness="0"
+                             FontFamily="Consolas" FontSize="12" IsReadOnly="True" TextWrapping="Wrap"
+                             Text="AI 진단 결과가 여기에 마크다운 형식으로 상세히 출력됩니다."/>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- 5. Action Footer -->
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                <Button x:Name="BtnTriggerEmergencyAction" Content="⚠️ MCU 긴급 보호 명령 ($CMD,SAFE_MODE)" Background="#FF2E63" Foreground="#FFF" FontWeight="Bold" Padding="12,6" Margin="0,0,8,0" Click="BtnTriggerEmergencyAction_Click"/>
+                <TextBlock x:Name="TxtEmergencyStatus" Text="Emergency Trigger: Ready" Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="📋 리포트 복사" Padding="10,6" Margin="0,0,6,0" Click="BtnCopyReport_Click"/>
+                <Button Content="💾 .md 파일 저장" Padding="10,6" Margin="0,0,6,0" Click="BtnSaveReport_Click"/>
+                <Button Content="닫기" Padding="12,6" Click="BtnClose_Click"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,77 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.MlAnalyticsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🤖 ML Anomaly Detection &amp; Time-Series Forecasting Center" 
+        Height="650" Width="950"
+        WindowStartupLocation="CenterOwner"
+        Background="#13141C" Foreground="#C0CAF5">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🤖 MACHINE LEARNING ANALYTICS PIPELINE" Foreground="#89DDFF" FontWeight="Bold" FontSize="14"/>
+                </StackPanel>
+                <TextBlock Text="Live Z-Score Anomaly Scoring &amp; Predictive Forecasting Engine" Foreground="#A9B1D6" FontSize="11" HorizontalAlignment="Right"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ML Parameters Config -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="이상 감지 민감도 (Z-Score Threshold):" Foreground="#C0CAF5" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <Slider x:Name="SldThreshold" Grid.Column="1" Minimum="1.5" Maximum="4.0" Value="2.5" SmallChange="0.1" LargeChange="0.5" TickFrequency="0.1" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="SldThreshold_ValueChanged"/>
+                <TextBlock x:Name="TxtThresholdVal" Grid.Column="2" Text="2.5 σ (Standard Deviations)" Foreground="#00E676" FontWeight="Bold" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- ML Live Results Grid -->
+        <Grid Grid.Row="2" Margin="0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Channel Anomaly Scores -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="📊 REAL-TIME ANOMALY SCORES (Z-SCORE)" Foreground="#7AA2F7" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                    <ListBox x:Name="LstAnomalyScores" Grid.Row="1" Background="#16161E" BorderBrush="#3B4252" Foreground="#C0CAF5" FontFamily="Consolas" FontSize="11"/>
+                </Grid>
+            </Border>
+
+            <!-- Time-Series Forecasting -->
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="🔮 PREDICTIVE FORECASTING &amp; BREACH WARNINGS" Foreground="#E0AF68" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                    <ListBox x:Name="LstForecasts" Grid.Row="1" Background="#16161E" BorderBrush="#3B4252" Foreground="#C0CAF5" FontFamily="Consolas" FontSize="11"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Footer Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Content="닫기" Width="100" Click="BtnClose_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

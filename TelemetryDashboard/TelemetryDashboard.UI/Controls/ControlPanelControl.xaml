@@ -1,0 +1,198 @@
+<UserControl x:Class="TelemetryDashboard.UI.Controls.ControlPanelControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="880" d:DesignWidth="420">
+    <UserControl.Resources>
+        <Style TargetType="Border" x:Key="StatCardStyle">
+            <Setter Property="Background" Value="#121720"/>
+            <Setter Property="BorderBrush" Value="#283548"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="2"/>
+        </Style>
+
+        <Style TargetType="Border" x:Key="SectionCardStyle">
+            <Setter Property="Background" Value="#121720"/>
+            <Setter Property="BorderBrush" Value="#283548"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="4,3"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="#0B0E14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Stats Cards -->
+            <RowDefinition Height="Auto"/> <!-- Direct Node Control Switches -->
+            <RowDefinition Height="Auto"/> <!-- Z-Score Breakdown Panel -->
+            <RowDefinition Height="Auto"/> <!-- Live Sparkline Micro-Graph -->
+            <RowDefinition Height="*"/>    <!-- DataGrid Event Log -->
+            <RowDefinition Height="Auto"/> <!-- Quick Commands Transmitter -->
+            <RowDefinition Height="Auto"/> <!-- Footer Status -->
+        </Grid.RowDefinitions>
+
+        <!-- 1. Stats Cards Grid -->
+        <Grid Grid.Row="0" Margin="4,2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource StatCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="PACKET COUNT" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtPacketCount" Text="0 pkts" Foreground="#F0F6FC" FontSize="15" FontWeight="Bold" FontFamily="Consolas" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource StatCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="DATA RATE" Foreground="#00FF9D" FontSize="10" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtDataRate" Text="0.0 KB/s" Foreground="#00FF9D" FontSize="15" FontWeight="Bold" FontFamily="Consolas" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource StatCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="TEMP (MIN/MAX)" Foreground="#FFB800" FontSize="10" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtTempMinMax" Text="0.0 / 0.0 °C" Foreground="#F0F6FC" FontSize="12" FontFamily="Consolas" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource StatCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="VIB PEAK" Foreground="#BA68C8" FontSize="10" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtVibMax" Text="0.00 g" Foreground="#F0F6FC" FontSize="12" FontFamily="Consolas" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 2. Direct Node Control Switches -->
+        <Border Grid.Row="1" Style="{StaticResource SectionCardStyle}">
+            <StackPanel>
+                <TextBlock Text="⚙️ DIRECT NODE CONTROL &amp; SAMPLING" Foreground="#66FCF1" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                <WrapPanel>
+                    <ToggleButton x:Name="BtnNodeCom3Power" Content="Node COM3 (DAB): ON" IsChecked="True" Margin="0,0,4,4" Padding="8,4" Click="BtnNodeCom3Power_Click"/>
+                    <ToggleButton x:Name="BtnNodeCom4Power" Content="Node COM4 (PSFB): ON" IsChecked="True" Margin="0,0,4,4" Padding="8,4" Click="BtnNodeCom4Power_Click"/>
+                    <Button x:Name="BtnZeroCalibration" Content="🎯 Zero Cal" Margin="0,0,4,4" Padding="8,4" Click="BtnZeroCalibration_Click"/>
+                    <ToggleButton x:Name="BtnBurstMode" Content="⚡ 1000Hz Burst" IsChecked="False" Margin="0,0,4,4" Padding="8,4" Click="BtnBurstMode_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 3. Z-Score Anomaly Breakdown Panel -->
+        <Border Grid.Row="2" Style="{StaticResource SectionCardStyle}">
+            <StackPanel>
+                <TextBlock Text="🧠 ML ANOMALY Z-SCORE BREAKDOWN" Foreground="#FF2E63" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="TEMP Z-SCORE" Foreground="#8B949E" FontSize="9"/>
+                        <TextBlock x:Name="TxtTempZScore" Text="0.4σ [NORMAL]" Foreground="#00FF9D" FontSize="12" FontWeight="Bold" FontFamily="Consolas"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="VIB Z-SCORE" Foreground="#8B949E" FontSize="9"/>
+                        <TextBlock x:Name="TxtVibZScore" Text="0.2σ [NORMAL]" Foreground="#00FF9D" FontSize="12" FontWeight="Bold" FontFamily="Consolas"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock x:Name="TxtAnomalyStats" Text="Stats: μ = 25.0 °C | σ = 0.8 | Threshold = 2.5σ" Foreground="#8B949E" FontSize="10" FontFamily="Consolas"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 4. Live Sparkline Micro-Graph Canvas -->
+        <Border Grid.Row="3" Style="{StaticResource SectionCardStyle}">
+            <StackPanel>
+                <TextBlock Text="📈 LIVE TELEMETRY SPARKLINE PREVIEW" Foreground="#00F0FF" FontWeight="Bold" FontSize="10" Margin="0,0,0,4"/>
+                <Canvas x:Name="CanvasSparkline" Height="45" Background="#080B0F" ClipToBounds="True"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 5. Structured DataGrid Event Log -->
+        <Border Grid.Row="4" Style="{StaticResource SectionCardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="#18202C" CornerRadius="4" Padding="8,4" Margin="0,0,0,4">
+                    <DockPanel>
+                        <TextBlock Text="💻 STRUCTURED EVENT LOG" Foreground="#F0F6FC" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <CheckBox x:Name="ChkAutoScroll" Content="Auto-Scroll" IsChecked="True" Foreground="#8B949E" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Button Content="Clear" Padding="8,2" FontSize="10" Click="BtnClearLog_Click"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <DataGrid x:Name="DgEventLog" Grid.Row="1" Background="#0E131A" Foreground="#F0F6FC"
+                          AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#283548"
+                          RowBackground="#0E131A" AlternatingRowBackground="#141B24"
+                          FontFamily="Consolas" FontSize="10">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="Background" Value="#0E131A"/>
+                            <Setter Property="Foreground" Value="#F0F6FC"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Level}" Value="CRIT">
+                                    <Setter Property="Background" Value="#331018"/>
+                                    <Setter Property="Foreground" Value="#FF2E63"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="WARN">
+                                    <Setter Property="Background" Value="#2A2412"/>
+                                    <Setter Property="Foreground" Value="#FFEA00"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="75"/>
+                        <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="50"/>
+                        <DataGridTextColumn Header="Node" Binding="{Binding Node}" Width="55"/>
+                        <DataGridTextColumn Header="Var" Binding="{Binding Variable}" Width="50"/>
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="60"/>
+                        <DataGridTextColumn Header="Z-Score" Binding="{Binding ZScore}" Width="55"/>
+                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- 6. Quick Command Transmitter -->
+        <Border Grid.Row="5" Style="{StaticResource SectionCardStyle}">
+            <StackPanel>
+                <TextBlock Text="🚀 MCU COMMAND TRANSMITTER" Foreground="#00F0FF" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                <WrapPanel Margin="0,0,0,6">
+                    <Button Content="START TELEMETRY" Margin="0,0,4,4" Padding="6,3" Click="QuickCmd_Click" Tag="START_TELEMETRY"/>
+                    <Button Content="STOP TELEMETRY" Margin="0,0,4,4" Padding="6,3" Click="QuickCmd_Click" Tag="STOP_TELEMETRY"/>
+                    <Button Content="GET STATUS" Margin="0,0,4,4" Padding="6,3" Click="QuickCmd_Click" Tag="GET_STATUS"/>
+                    <Button Content="RESET MCU" Margin="0,0,4,4" Padding="6,3" Click="QuickCmd_Click" Tag="RESET_MCU"/>
+                </WrapPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TxtCustomCmd" Grid.Column="0" Background="#0E131A" Foreground="#F0F6FC" BorderBrush="#283548" Padding="6,4" KeyDown="TxtCustomCmd_KeyDown"/>
+                    <Button Content="Send 📤" Grid.Column="1" Margin="4,0,0,0" Padding="10,4" Background="#00F0FF" Foreground="#0B0E14" FontWeight="Bold" Click="BtnSendCustomCmd_Click"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- 7. Footer Status -->
+        <TextBlock x:Name="TxtSystemStatus" Grid.Row="6" Text="System Status: Ready" Foreground="#00FF9D" FontSize="10" Margin="8,2,8,4"/>
+    </Grid>
+</UserControl>

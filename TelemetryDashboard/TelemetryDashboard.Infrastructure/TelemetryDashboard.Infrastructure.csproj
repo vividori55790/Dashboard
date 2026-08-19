@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TelemetryDashboard.Infrastructure</RootNamespace>
+    <AssemblyName>TelemetryDashboard.Infrastructure</AssemblyName>
+    <NoWarn>$(NoWarn);NU1701;NU1603</NoWarn>
+
+    <!--
+      Platform compatibility analyzer (CA1416) — see TelemetryDashboard.Core.csproj. This is the
+      layer most exposed to it: System.IO.Ports, WMI hot-plug notifications and registry lookups are
+      all either Windows-only or platform-annotated, and this project is the one place where reaching
+      for one without a runtime guard is easy to do by accident.
+    -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Default</AnalysisMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Script engines for the plugin sandbox. Both are pure managed implementations: they need no
+      Node install, no CPython install and no native binaries, so a plugin written in JavaScript or
+      Python runs identically on Windows, macOS and Linux. That is the reason for these two
+      specifically — an engine that shells out to an interpreter would have made scripting a
+      feature that works only where someone remembered to install one.
+    -->
+    <PackageReference Include="Jint" Version="4.16.0" />
+    <PackageReference Include="IronPython" Version="3.4.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+    <PackageReference Include="SIPSorcery" Version="10.0.16" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kestrel hosting for the embedded web console (Infrastructure/WebServer). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TelemetryDashboard.Core\TelemetryDashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>

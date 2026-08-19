@@ -1,0 +1,55 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.AutoBaudScanDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="⚡ Auto Baud Rate &amp; Serial Port Scanner" 
+        Height="500" Width="700"
+        WindowStartupLocation="CenterOwner"
+        Background="#13141C" Foreground="#C0CAF5">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Card -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="⚡ HARDWARE AUTO BAUD RATE SCANNER" Foreground="#89DDFF" FontWeight="Bold" FontSize="14"/>
+                </StackPanel>
+                <TextBlock Text="Scans COM1-COM256 &amp; standard baud rates (9600..921600)" Foreground="#A9B1D6" FontSize="11" HorizontalAlignment="Right"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Progress Card -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <TextBlock x:Name="TxtStatus" Text="Scanning active serial ports..." Foreground="#00E676" FontWeight="Bold" FontSize="11"/>
+                    <TextBlock x:Name="TxtProgressPercent" Text="65%" Foreground="#7AA2F7" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right"/>
+                </DockPanel>
+                <ProgressBar x:Name="ProgScan" Height="14" Value="65" Minimum="0" Maximum="100" Foreground="#00E676" Background="#16161E" BorderBrush="#3B4252"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Live Scan Results -->
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="📋 DETECTED SERIAL PORTS &amp; BAUD RATES" Foreground="#E0AF68" FontWeight="Bold" FontSize="11" Margin="0,0,0,6"/>
+                <ListBox x:Name="LstDiscoveredPorts" Grid.Row="1" Background="#16161E" BorderBrush="#3B4252" Foreground="#C0CAF5" FontFamily="Consolas" FontSize="11"/>
+            </Grid>
+        </Border>
+
+        <!-- Footer Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button x:Name="BtnApply" Content="✅ 발견 포트 적용" Width="130" Padding="10,4" Margin="0,0,8,0" Click="BtnApply_Click"/>
+            <Button Content="닫기" Width="90" Padding="10,4" Click="BtnClose_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TelemetryDashboard.Core</RootNamespace>
+    <AssemblyName>TelemetryDashboard.Core</AssemblyName>
+    <NoWarn>$(NoWarn);NU1701;NU1603</NoWarn>
+
+    <!--
+      Platform compatibility analyzer (CA1416). This project promises no platform, so every call to
+      an API annotated [SupportedOSPlatform] or [UnsupportedOSPlatform] is a build warning here
+      rather than a PlatformNotSupportedException on someone's Mac. The alternative discovery
+      mechanism is a crash in production on a host nobody tested.
+      Do not silence CA1416 with a -windows suffix: that promises Windows instead of removing the
+      Windows-only call, and ArchitectureRuleTests.PortableBackboneProjectsTargetNoSpecificPlatform
+      rejects it.
+    -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Default</AnalysisMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,86 @@
+<UserControl x:Class="TelemetryDashboard.UI.Controls.StreamingServerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="800">
+    <Grid Background="#13141C">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Card -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Ellipse x:Name="ServerLed" Width="14" Height="14" Fill="#00E676" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="📡 WEBSOCKET &amp; HTTP LIVE TELEMETRY STREAMING SERVER" Foreground="#89DDFF" FontWeight="Bold" FontSize="13"/>
+                        <TextBlock x:Name="TxtServerEndpoint" Text="Endpoint: http://localhost:8080 | ws://localhost:8080/ws" Foreground="#A9B1D6" FontSize="11"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="BtnOpenWebConsole" Content="🌐 웹 시각화 콘솔 열기 (stream_client.html)" Padding="14,8" Background="#00E676" Foreground="#101014" FontWeight="Bold" FontSize="12" Click="BtnOpenWebConsole_Click" Margin="0,0,10,0"/>
+                    <Button x:Name="BtnToggleServer" Content="⏹️ 서버 정지" Padding="10,8" Click="BtnToggleServer_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Live Server Metrics & Client List -->
+        <Grid Grid.Row="1" Margin="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Metrics Cards -->
+            <StackPanel Grid.Column="0">
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="CONNECTED WEB / APP CLIENTS" Foreground="#7AA2F7" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock x:Name="TxtClientCount" Text="1 Client Connected" Foreground="#00E676" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
+                        <TextBlock Text="Supports HTML5 Web Browsers, Node-RED, Grafana, Custom Python/C# Apps" Foreground="#565F89" FontSize="10" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="LIVE TELEMETRY BROADCAST STATS" Foreground="#7DCFFF" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock x:Name="TxtBroadcastStats" Text="Total Broadcasted: 1,420 pkts (60 Hz)" Foreground="#C0CAF5" FontSize="16" FontWeight="Bold" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="⚡ QUICK INTEGRATION GUIDE FOR USERS" Foreground="#E0AF68" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <TextBlock Text="1. WebSocket URL:" Foreground="#A9B1D6" FontSize="10" FontWeight="Bold"/>
+                        <TextBox Text="ws://localhost:8080/ws" IsReadOnly="True" Background="#16161E" Foreground="#9ECE6A" BorderBrush="#3B4252" Padding="4" Margin="0,2,0,6"/>
+
+                        <TextBlock Text="2. HTTP REST API:" Foreground="#A9B1D6" FontSize="10" FontWeight="Bold"/>
+                        <TextBox Text="http://localhost:8080/api/status" IsReadOnly="True" Background="#16161E" Foreground="#9ECE6A" BorderBrush="#3B4252" Padding="4" Margin="0,2,0,6"/>
+
+                        <Button Content="📋 WebSocket URL 복사" Click="BtnCopyWsUrl_Click"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Architecture Info -->
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="🏗️ ARCHITECTURE: DATA HUB &amp; EXPORT ENGINE" Foreground="#BB9AF7" FontWeight="Bold" FontSize="12" Margin="0,0,0,8"/>
+                    <TextBlock Text="이 시스템은 고성능 텔레메트리 데이터 수집, 시계열 보관 및 실시간 변환 파이프라인 전용 허브입니다. 모든 수신 데이터는 웹소켓 표준 프로토콜로 브로드캐스트되어 사용자가 개조한 HTML 클라이언트(stream_client.html)나 외부 전용 모니터링 앱으로 즉시 전달됩니다." Foreground="#C0CAF5" TextWrapping="Wrap" FontSize="11" LineHeight="16"/>
+
+                    <Separator Height="1" Background="#3B4252" Margin="0,12"/>
+
+                    <TextBlock Text="📂 Embedded Web Client Console:" Foreground="#89DDFF" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtHtmlPath" Text="stream_client.html" Foreground="#9ECE6A" FontSize="10" TextWrapping="Wrap"/>
+
+                    <Button Content="📁 stream_client.html 파일 위치 열기" Margin="0,10,0,0" Click="BtnOpenHtmlLocation_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

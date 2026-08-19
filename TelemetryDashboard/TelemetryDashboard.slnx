@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="TelemetryDashboard.Core/TelemetryDashboard.Core.csproj" />
+  <Project Path="TelemetryDashboard.Host/TelemetryDashboard.Host.csproj" />
+  <Project Path="TelemetryDashboard.Infrastructure/TelemetryDashboard.Infrastructure.csproj" />
+  <Project Path="TelemetryDashboard.Plugins/TelemetryDashboard.Plugins.csproj" />
+  <Project Path="TelemetryDashboard.Tests.Desktop/TelemetryDashboard.Tests.Desktop.csproj" />
+  <Project Path="TelemetryDashboard.Tests/TelemetryDashboard.Tests.csproj" />
+  <Project Path="TelemetryDashboard.UI/TelemetryDashboard.UI.csproj" />
+</Solution>

@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ UPS용 DAB Converter ⟷ DB 서버용 PSFB Converter 전력망 &amp; 전력 전달 관제 콘솔</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #07090E;
+            --bg-surface: #0E121B;
+            --bg-card: #141926;
+            --border: #232B3D;
+            --border-glow: #00F0FF;
+            --text-primary: #F0F6FC;
+            --text-secondary: #8B949E;
+            --color-grid: #7AA2F7;
+            --color-dab: #00F0FF;
+            --color-psfb: #BD93F9;
+            --color-server: #00FF9D;
+            --color-warn: #FFB800;
+            --color-alert: #FF2E63;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); padding: 20px; min-height: 100vh; overflow-x: hidden; }
+
+        /* Top Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-title h1 { font-size: 20px; font-weight: 800; color: #FFFFFF; display: flex; align-items: center; gap: 8px; }
+        .header-title p { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+
+        .header-badges { display: flex; align-items: center; gap: 10px; }
+        .badge {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot.online { background: #00FF9D; box-shadow: 0 0 8px #00FF9D; }
+        .dot.offline { background: #FF2E63; box-shadow: 0 0 8px #FF2E63; }
+
+        /* Grid State Hero Banner */
+        .grid-hero-banner {
+            background: linear-gradient(90deg, rgba(0, 240, 255, 0.08), rgba(0, 255, 157, 0.04));
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        .grid-hero-banner.outage {
+            background: linear-gradient(90deg, rgba(255, 46, 99, 0.15), rgba(255, 184, 0, 0.08));
+            border-color: var(--color-alert);
+            box-shadow: 0 0 20px rgba(255, 46, 99, 0.2);
+        }
+        .hero-left { display: flex; align-items: center; gap: 14px; }
+        .hero-icon { font-size: 28px; }
+        .hero-title { font-size: 16px; font-weight: 800; }
+        .hero-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* Scenario Control Toolbar */
+        .scenario-toolbar {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .scenario-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .sc-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sc-btn:hover { border-color: var(--color-dab); transform: translateY(-1px); }
+        .sc-btn.active { background: var(--color-dab); color: #07090E; font-weight: 800; border-color: var(--color-dab); }
+        .sc-btn.btn-danger.active { background: var(--color-alert); color: #FFFFFF; border-color: var(--color-alert); }
+
+        /* Power Flow Single-Line Diagram */
+        .diagram-section {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px 20px;
+            margin-bottom: 20px;
+            position: relative;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .section-title { font-size: 14px; font-weight: 700; color: var(--color-dab); letter-spacing: 0.5px; }
+
+        .diagram-grid {
+            display: grid;
+            grid-template-columns: 1.1fr auto 1.3fr auto 1.3fr auto 1.1fr;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+        @media (max-width: 1200px) {
+            .diagram-grid { grid-template-columns: 1fr; gap: 16px; }
+            .flow-pipe { transform: rotate(90deg); margin: 10px 0; }
+        }
+
+        /* Converter / Node Cards */
+        .node-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .node-card:hover { border-color: rgba(0, 240, 255, 0.5); }
+        .node-card.active-glow { border-color: var(--color-dab); box-shadow: 0 0 15px rgba(0, 240, 255, 0.25); }
+        .node-card.alert-glow {
+            border-color: var(--color-alert) !important;
+            background: #240913 !important;
+            box-shadow: 0 0 20px rgba(255, 46, 99, 0.4) !important;
+            animation: pulseAlert 1.2s infinite;
+        }
+        @keyframes pulseAlert {
+            0% { box-shadow: 0 0 0 0 rgba(255, 46, 99, 0.5); }
+            70% { box-shadow: 0 0 0 12px rgba(255, 46, 99, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 46, 99, 0); }
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .node-name { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+        .node-mode-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: #1B2232;
+            color: #7AA2F7;
+        }
+        .node-mode-badge.outage { background: #FF2E63; color: #FFFFFF; }
+
+        .param-list { display: flex; flex-direction: column; gap: 6px; }
+        .param-row { display: flex; justify-content: space-between; font-size: 12px; }
+        .param-label { color: var(--text-secondary); }
+        .param-val { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--text-primary); }
+
+        /* Animated Power Flow Pipes */
+        .flow-pipe {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            min-width: 90px;
+        }
+        .pipe-label { font-size: 10px; font-family: 'JetBrains Mono'; font-weight: 700; color: #00FF9D; margin-bottom: 4px; }
+        .pipe-svg { width: 100%; height: 24px; }
+        .pipe-track { stroke: #18202C; stroke-width: 4; stroke-linecap: round; }
+        .pipe-flow {
+            stroke: #00FF9D;
+            stroke-width: 4;
+            stroke-dasharray: 8 6;
+            stroke-linecap: round;
+            animation: dashFlow 1s linear infinite;
+        }
+        .pipe-flow.isolated {
+            stroke: #3B4252;
+            stroke-dasharray: none;
+            animation: none;
+        }
+        @keyframes dashFlow {
+            from { stroke-dashoffset: 28; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Live Alarm Overlay Toast / Modal */
+        .alarm-modal {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            width: 420px;
+            background: #1C0A14;
+            border: 2px solid var(--color-alert);
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 10px 40px rgba(255, 46, 99, 0.4);
+            z-index: 9999;
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .alarm-modal.active { transform: translateX(0); }
+        .alarm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .alarm-title { font-size: 15px; font-weight: 800; color: var(--color-alert); display: flex; align-items: center; gap: 8px; }
+        .alarm-body { font-size: 12px; color: #F0F6FC; line-height: 1.5; margin-bottom: 14px; }
+        .alarm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .alarm-btn {
+            background: var(--color-alert);
+            border: none;
+            color: #FFFFFF;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .alarm-btn.ack { background: #2A1522; border: 1px solid var(--color-alert); }
+
+        /* Lower Metrics Layout */
+        .bottom-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 900px) { .bottom-layout { grid-template-columns: 1fr; } }
+
+        .metric-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .chart-box { height: 180px; width: 100%; position: relative; }
+        .log-box {
+            background: #07090D;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            height: 180px;
+            overflow-y: auto;
+            color: var(--text-secondary);
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-entry.crit { color: var(--color-alert); font-weight: bold; }
+        .log-entry.warn { color: var(--color-warn); }
+        .log-entry.info { color: #00FF9D; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title">
+            <h1>⚡ UPS DAB Converter ⟷ DB PSFB Converter 관제</h1>
+            <p>C# .NET 8 백엔드 실시간 시뮬레이션 스트림(WebSocket) 기반 전력 전달 &amp; 이상 감지 콘솔</p>
+        </div>
+        <div class="header-badges">
+            <div class="badge">
+                <span id="conn-dot" class="dot offline"></span>
+                <span id="conn-text" style="color: #FF2E63;">C# 프로그램 연결 대기 중...</span>
+            </div>
+            <div class="badge">
+                <span>⏱️ 세션 시간: </span>
+                <span id="lbl-session-time" style="color: #00F0FF; font-family: 'JetBrains Mono';">00:00:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 1. Grid & UPS Status Hero Banner -->
+    <div id="hero-banner" class="grid-hero-banner">
+        <div class="hero-left">
+            <div id="hero-icon" class="hero-icon">⚡</div>
+            <div>
+                <div id="hero-title" class="hero-title" style="color: #00FF9D;">GRID ONLINE — 상용 전력망 정상 급전 중</div>
+                <div id="hero-desc" class="hero-desc">전력망에서 380V AC가 정상 공급되고 있으며, DAB는 400V DC 버스 안정화 및 배터리 완속 충전(Standby) 중입니다.</div>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 11px; color: var(--text-secondary);">총 전달 전력 (Total Power)</div>
+            <div id="hero-power" style="font-family: 'JetBrains Mono'; font-size: 24px; font-weight: 800; color: #00FF9D;">12.80 kW</div>
+        </div>
+    </div>
+
+    <!-- 2. Live Stream Reactive Status Bar -->
+    <div class="scenario-toolbar" style="border-color: rgba(0, 240, 255, 0.2);">
+        <div style="font-size: 12px; font-weight: 600; color: #8B949E; display: flex; align-items: center; gap: 8px;">
+            <span>📡 <strong style="color: #00F0FF;">C# 프로그램 반응형 실시간 수신 모드:</strong> C# 데스크톱 프로그램(TelemetryDashboard)에서 전력망 버튼이나 슬라이더(400V/48V/부하율/이상주입)를 조작하면 이 웹 콘솔이 즉각 실시간으로 반응합니다.</span>
+        </div>
+    </div>
+
+    <!-- 3. Main Single-Line Diagram & Power Flow Animation -->
+    <div class="diagram-section">
+        <div class="section-header">
+            <div class="section-title">⚡ REAL-TIME POWER DISTRIBUTION SINGLE-LINE DIAGRAM (C# Telemetry Stream)</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">400V 고전압 DC 링크 &amp; 48V 초고밀도 서버 전원 버스</div>
+        </div>
+
+        <div class="diagram-grid">
+
+            <!-- Node 1: AC Grid -->
+            <div id="card-grid" class="node-card active-glow">
+                <div class="node-header">
+                    <span class="node-name" style="color: var(--color-grid);">🏢 380V AC 전력망</span>
+                    <span id="badge-grid-status" class="node-mode-badge" style="background:#1B2B4A; color:#7AA2F7;">ONLINE</span>
+                </div>
+                <div class="param-list">
+                    <div class="param-row"><span class="param-label">계통 전압</span><span id="val-grid-v" class="param-val">380.0 V</span></div>
+                    <div class="param-row"><span class="param-label">계통 주파수</span><span id="val-grid-f" class="param-val">60.0 Hz</span></div>
+                    <div class="param-row"><span class="param-label">수전 전력</span><span id="val-grid-p" class="param-val">12.8 kW</span></div>
+                    <div class="param-row"><span class="param-label">계통 상태</span><span id="val-grid-status" class="param-val" style="color:#00FF9D;">정상 급전</span></div>
+                </div>
+            </div>
+
+            <!-- Pipe 1: Grid -> DAB -->
+            <div class="flow-pipe">
+                <span id="pipe1-label" class="pipe-label">12.8 kW ➔</span>
+                <svg class="pipe-svg" viewBox="0 0 100 20">
+                    <line x1="5" y1="10" x2="95" y2="10" class="pipe-track" />
+                    <line id="pipe1-flow" x1="5" y1="10" x2="95" y2="10" class="pipe-flow" />
+                </svg>
+            </div>
+
+            <!-- Node 2: UPS DAB Converter -->
+            <div id="card-dab" class="node-card active-glow">
+                <div class="node-header">
+                    <span class="node-name" style="color: var(--color-dab);">🔋 UPS용 DAB Converter</span>
+                    <span id="badge-dab-mode" class="node-mode-badge" style="background:#0C2E33; color:#00F0FF;">STANDBY</span>
+                </div>
+                <div class="param-list">
+                    <div class="param-row"><span class="param-label">400V DC 버스</span><span id="val-dab-bus" class="param-val" style="color:#00F0FF;">400.0 V</span></div>
+                    <div class="param-row"><span class="param-label">배터리 전압/SoC</span><span id="val-dab-bat" class="param-val">384.5 V (94.5%)</span></div>
+                    <div class="param-row"><span class="param-label">배터리 전류</span><span id="val-dab-curr" class="param-val">+12.4 A</span></div>
+                    <div class="param-row"><span class="param-label">변환 효율</span><span id="val-dab-eff" class="param-val">97.8 %</span></div>
+                    <div class="param-row"><span class="param-label">위상각 (Phase Shift)</span><span id="val-dab-phi" class="param-val">18.4°</span></div>
+                    <div class="param-row"><span class="param-label">DAB 온도</span><span id="val-dab-temp" class="param-val">40.2 °C</span></div>
+                    <div class="param-row"><span class="param-label">ML Z-Score</span><span id="val-dab-z" class="param-val">—</span></div>
+                </div>
+            </div>
+
+            <!-- Pipe 2: DAB -> PSFB (400V Bus) -->
+            <div class="flow-pipe">
+                <span id="pipe2-label" class="pipe-label">400V DC ➔</span>
+                <svg class="pipe-svg" viewBox="0 0 100 20">
+                    <line x1="5" y1="10" x2="95" y2="10" class="pipe-track" />
+                    <line id="pipe2-flow" x1="5" y1="10" x2="95" y2="10" class="pipe-flow" />
+                </svg>
+            </div>
+
+            <!-- Node 3: DB Server PSFB Converter -->
+            <div id="card-psfb" class="node-card active-glow">
+                <div class="node-header">
+                    <span class="node-name" style="color: var(--color-psfb);">⚡ DB용 PSFB Converter</span>
+                    <span id="badge-psfb-mode" class="node-mode-badge" style="background:#2C1E3D; color:#BD93F9;">48V REGULATED</span>
+                </div>
+                <div class="param-list">
+                    <div class="param-row"><span class="param-label">입력 전압</span><span id="val-psfb-vin" class="param-val">400.0 V</span></div>
+                    <div class="param-row"><span class="param-label">출력 서버 전압</span><span id="val-psfb-vout" class="param-val" style="color:#00FF9D;">48.05 V</span></div>
+                    <div class="param-row"><span class="param-label">서버랙 총 전류</span><span id="val-psfb-iout" class="param-val">245.2 A</span></div>
+                    <div class="param-row"><span class="param-label">출력 전력</span><span id="val-psfb-pout" class="param-val">11.78 kW</span></div>
+                    <div class="param-row"><span class="param-label">PSFB 효율</span><span id="val-psfb-eff" class="param-val">98.4 %</span></div>
+                    <div class="param-row"><span class="param-label">PSFB 온도</span><span id="val-psfb-temp" class="param-val">44.1 °C</span></div>
+                    <div class="param-row"><span class="param-label">ML Z-Score</span><span id="val-psfb-z" class="param-val">—</span></div>
+                </div>
+            </div>
+
+            <!-- Pipe 3: PSFB -> DB Servers -->
+            <div class="flow-pipe">
+                <span id="pipe3-label" class="pipe-label">48V DC ➔</span>
+                <svg class="pipe-svg" viewBox="0 0 100 20">
+                    <line x1="5" y1="10" x2="95" y2="10" class="pipe-track" />
+                    <line id="pipe3-flow" x1="5" y1="10" x2="95" y2="10" class="pipe-flow" />
+                </svg>
+            </div>
+
+            <!-- Node 4: DB Server Racks -->
+            <div id="card-server" class="node-card active-glow">
+                <div class="node-header">
+                    <span class="node-name" style="color: var(--color-server);">🖥️ 데이터베이스 서버랙</span>
+                    <span class="node-mode-badge" style="background:#0C2E20; color:#00FF9D;">RUNNING</span>
+                </div>
+                <div class="param-list">
+                    <div class="param-row"><span class="param-label">서버랙 부하율</span><span id="val-srv-load" class="param-val">82.4 %</span></div>
+                    <div class="param-row"><span class="param-label">소비 전력</span><span id="val-srv-kw" class="param-val">11.78 kW</span></div>
+                    <div class="param-row"><span class="param-label">서버 가동 상태</span><span class="param-val" style="color:#00FF9D;">100% 무중단</span></div>
+                    <div class="param-row"><span class="param-label">공급 안정도</span><span class="param-val" style="color:#00F0FF;">99.999% SLA</span></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 4. Lower Real-Time Charts & Event Logs -->
+    <div class="bottom-layout">
+        <!-- Live Waveform Chart -->
+        <div class="metric-card">
+            <div style="font-size: 13px; font-weight: 700; color: #8B949E; margin-bottom: 10px; display: flex; justify-content: space-between;">
+                <span>📈 실시간 400V DC 버스 &amp; 48V 서버 전압 파형 (From C# Stream)</span>
+                <span id="lbl-chart-status" style="color: #00F0FF; font-family: 'JetBrains Mono'; font-size: 11px;">C# Backend 20Hz</span>
+            </div>
+            <div class="chart-box">
+                <canvas id="powerChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Real-Time Anomaly Log Box -->
+        <div class="metric-card">
+            <div style="font-size: 13px; font-weight: 700; color: #8B949E; margin-bottom: 10px; display: flex; justify-content: space-between;">
+                <span>📋 전력 이벤트 &amp; C# 백엔드 실시간 로그</span>
+                <span style="color: #00FF9D; font-size: 11px;">LIVE WS STREAM</span>
+            </div>
+            <div id="log-container" class="log-box">
+                <div class="log-entry info">[SYSTEM] WebSocket (ws://localhost:8080/ws) 연결을 대기 중입니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Real-Time Alarm Modal / Toast -->
+    <div id="alarm-modal" class="alarm-modal">
+        <div class="alarm-header">
+            <div class="alarm-title" id="lbl-alarm-title">🚨 [긴급 경보] 비정상 전력 데이터 감지!</div>
+            <span style="font-size: 11px; color: #FF2E63; font-weight: bold;" id="lbl-alarm-time">00:00:00</span>
+        </div>
+        <div id="alarm-body" class="alarm-body">
+            <!-- Replaced at runtime by the real alarm (see triggerAlarm). The markup used to
+                 ship a complete fabricated incident here — "배터리 과전류 이상 감지", 측정값
+                 68.4A, Z-Score 3.84σ, and a recommended action — so any path that revealed this
+                 panel before a real alarm arrived showed an operator a specific fault to act on
+                 that no instrument had reported. -->
+            <strong>표시할 경보가 없습니다.</strong><br>
+            서버에서 경보가 도착하면 이 자리에 실제 값이 표시됩니다.
+        </div>
+        <div class="alarm-actions">
+            <button class="alarm-btn ack" onclick="dismissAlarm()">확인 (Acknowledge)</button>
+            <button class="alarm-btn" onclick="sendScenarioCommand('NORMAL')">C# 정상 복구 명령 전송</button>
+        </div>
+    </div>
+
+    <!-- Telemetry Client Script: Strictly receives C# backend WebSocket data -->
+    <script>
+        let ws = null;
+        let isConnected = false;
+        let lastAlarmDismissedTime = 0;
+        let sessionStartTime = Date.now();
+
+        // Chart.js Setup
+        const ctx = document.getElementById('powerChart').getContext('2d');
+        const maxPoints = 50;
+        const labels = Array.from({length: maxPoints}, () => '');
+        const bus400Data = Array.from({length: maxPoints}, () => 400.0);
+        const bus48Data = Array.from({length: maxPoints}, () => 48.0);
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '400V DC 버스 (V)',
+                        data: bus400Data,
+                        borderColor: '#00F0FF',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        yAxisID: 'y400'
+                    },
+                    {
+                        label: '48V 서버 전압 (V)',
+                        data: bus48Data,
+                        borderColor: '#00FF9D',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        yAxisID: 'y48'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y400: {
+                        position: 'left',
+                        min: 350, max: 450,
+                        grid: { color: '#18202C' },
+                        ticks: { color: '#00F0FF', font: { family: 'JetBrains Mono', size: 10 } }
+                    },
+                    y48: {
+                        position: 'right',
+                        min: 35, max: 55,
+                        grid: { display: false },
+                        ticks: { color: '#00FF9D', font: { family: 'JetBrains Mono', size: 10 } }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#F0F6FC', boxWidth: 12 } }
+                }
+            }
+        });
+
+        function connectWebSocket() {
+            const wsUrl = "ws://localhost:8080/ws";
+            const connDot = document.getElementById('conn-dot');
+            const connText = document.getElementById('conn-text');
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    isConnected = true;
+                    connDot.className = 'dot online';
+                    connText.textContent = '🟢 C# 백엔드 실시간 수신 중 (LIVE 20Hz)';
+                    connText.style.color = '#00FF9D';
+                    logMessage('INFO', '✅ C# 프로그램 백엔드 WebSocket(ws://localhost:8080/ws) 스트림에 성공적으로 연결되었습니다.');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const packet = JSON.parse(event.data);
+                        handleBackendTelemetry(packet);
+                    } catch (e) {
+                        console.error('Packet parsing error:', e);
+                    }
+                };
+
+                ws.onclose = () => {
+                    isConnected = false;
+                    connDot.className = 'dot offline';
+                    connText.textContent = '🔴 C# 프로그램 연결 끊김 (2초 후 재연결 시도)';
+                    connText.style.color = '#FF2E63';
+                    setTimeout(connectWebSocket, 2000);
+                };
+
+                ws.onerror = () => {
+                    ws.close();
+                };
+            } catch (err) {
+                setTimeout(connectWebSocket, 2000);
+            }
+        }
+
+        // Handle Real Data From C# Backend (Real Hardware vs Simulator)
+        function handleBackendTelemetry(data) {
+            // Update session timer
+            const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+            const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+            const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+            const s = String(elapsed % 60).padStart(2, '0');
+            document.getElementById('lbl-session-time').textContent = `${h}:${m}:${s}`;
+
+            const connText = document.getElementById('conn-text');
+            const connDot = document.getElementById('conn-dot');
+
+            // 1. Handle REAL HARDWARE Data Stream
+            if (data.source === "REAL_HARDWARE") {
+                connDot.className = 'dot online';
+                connText.textContent = `🟢 실제 하드웨어 수신 중 (포트: ${data.port || 'COM'}, 노드: ${data.nodeId})`;
+                connText.style.color = '#00FF9D';
+
+                // Map real hardware values to cards & charts dynamically
+                renderRealHardwarePacket(data);
+                return;
+            }
+
+            // 2. Handle Unified Power Grid Telemetry Frame
+            if (data.type === "POWER_GRID_TELEMETRY") {
+                if (data.source === "REAL_HARDWARE") {
+                    connText.textContent = `🟢 실제 전력 시스템 수신 중 (REAL HARDWARE)`;
+                    connText.style.color = '#00FF9D';
+                } else {
+                    connText.textContent = `🟡 C# 가상 시뮬레이터 동작 중 (SIMULATOR)`;
+                    connText.style.color = '#FFB800';
+                }
+                renderUnifiedPowerFrame(data);
+            }
+        }
+
+        function renderRealHardwarePacket(pkt) {
+            const vName = (pkt.variable || '').toLowerCase();
+            const val = pkt.value;
+            const z = pkt.anomalyScore || 0;
+            const isAnomaly = pkt.isAnomaly || (z >= 2.5);
+
+            logMessage('INFO', `[실제 하드웨어 센서] 노드 '${pkt.nodeId}' ➔ ${pkt.variable} = ${val.toFixed(2)}${pkt.unit || ''} (Z=${z.toFixed(2)}σ)`);
+
+            // Dynamically update UI based on incoming real hardware variable
+            if (vName.includes('temp')) {
+                document.getElementById('val-dab-temp').textContent = `${val.toFixed(1)} °C`;
+            } else if (vName.includes('voltage') || vName.includes('bus') || vName.includes('v_in')) {
+                document.getElementById('val-dab-bus').textContent = `${val.toFixed(1)} V`;
+                bus400Data.push(val);
+                bus400Data.shift();
+                chart.update();
+            } else if (vName.includes('current') || vName.includes('curr') || vName.includes('i_')) {
+                document.getElementById('val-dab-curr').textContent = `${val >= 0 ? '+' : ''}${val.toFixed(1)} A`;
+            } else if (vName.includes('power') || vName.includes('kw')) {
+                document.getElementById('hero-power').textContent = `${val.toFixed(2)} kW`;
+                document.getElementById('val-srv-kw').textContent = `${val.toFixed(2)} kW`;
+            } else if (vName.includes('server') || vName.includes('48v') || vName.includes('v_out')) {
+                document.getElementById('val-psfb-vout').textContent = `${val.toFixed(2)} V`;
+                bus48Data.push(val);
+                bus48Data.shift();
+                chart.update();
+            }
+
+            if (isAnomaly) {
+                showAlarmPopup(`실제 하드웨어 이상 감지: ${pkt.nodeId}.${pkt.variable}`, `측정값: ${val.toFixed(2)}${pkt.unit || ''} (임계치 초과)`, z);
+            }
+        }
+
+        function renderUnifiedPowerFrame(frame) {
+            const grid = frame.grid;
+            const dab = frame.dab;
+            const psfb = frame.psfb;
+            const alarm = frame.alarm;
+            const scenario = frame.scenario || 'NORMAL';
+
+            // 1. Update Grid Node
+            document.getElementById('val-grid-v').textContent = `${grid.voltage.toFixed(1)} V`;
+            document.getElementById('val-grid-f').textContent = `${grid.frequency.toFixed(1)} Hz`;
+            document.getElementById('val-grid-p').textContent = `${grid.powerKw.toFixed(2)} kW`;
+            document.getElementById('val-grid-status').textContent = grid.status === 'OUTAGE' ? '✕ 정전 (차단됨)' : '정상 급전';
+            document.getElementById('val-grid-status').style.color = grid.status === 'OUTAGE' ? '#FF2E63' : '#00FF9D';
+
+            // 2. Update DAB Node
+            document.getElementById('val-dab-bus').textContent = `${dab.dcBusVoltage.toFixed(1)} V`;
+            document.getElementById('val-dab-bat').textContent = `${dab.batteryVoltage.toFixed(1)} V (${dab.batterySoC.toFixed(1)}%)`;
+            document.getElementById('val-dab-curr').textContent = `${dab.batteryCurrent >= 0 ? '+' : ''}${dab.batteryCurrent.toFixed(1)} A`;
+            document.getElementById('val-dab-eff').textContent = `${dab.efficiency.toFixed(1)} %`;
+            document.getElementById('val-dab-phi').textContent = `${dab.phaseShift.toFixed(1)}°`;
+            document.getElementById('val-dab-temp').textContent = `${dab.temp.toFixed(1)} °C`;
+            document.getElementById('val-dab-z').textContent = `${dab.anomalyScore.toFixed(2)}σ`;
+            document.getElementById('val-dab-z').style.color = dab.isAnomaly ? '#FF2E63' : '#00F0FF';
+
+            // 3. Update PSFB Node
+            document.getElementById('val-psfb-vin').textContent = `${psfb.inputDcVoltage.toFixed(1)} V`;
+            document.getElementById('val-psfb-vout').textContent = `${psfb.serverVoltage.toFixed(2)} V`;
+            document.getElementById('val-psfb-iout').textContent = `${psfb.serverCurrent.toFixed(1)} A`;
+            document.getElementById('val-psfb-pout').textContent = `${psfb.powerKw.toFixed(2)} kW`;
+            document.getElementById('val-psfb-eff').textContent = `${psfb.efficiency.toFixed(1)} %`;
+            document.getElementById('val-psfb-temp').textContent = `${psfb.temp.toFixed(1)} °C`;
+            document.getElementById('val-psfb-z').textContent = `${psfb.anomalyScore.toFixed(2)}σ`;
+            document.getElementById('val-psfb-z').style.color = psfb.isAnomaly ? '#FF2E63' : '#BD93F9';
+
+            // 4. Update Server Node & Hero Total
+            document.getElementById('val-srv-load').textContent = `${psfb.serverLoad.toFixed(1)} %`;
+            document.getElementById('val-srv-kw').textContent = `${psfb.powerKw.toFixed(2)} kW`;
+            document.getElementById('hero-power').textContent = `${psfb.powerKw.toFixed(2)} kW`;
+
+            // 5. Update Chart
+            bus400Data.push(dab.dcBusVoltage);
+            bus400Data.shift();
+            bus48Data.push(psfb.serverVoltage);
+            bus48Data.shift();
+            chart.update();
+
+            // 6. Update Visual Topology Modes
+            const heroBanner = document.getElementById('hero-banner');
+            const heroIcon = document.getElementById('hero-icon');
+            const heroTitle = document.getElementById('hero-title');
+            const heroDesc = document.getElementById('hero-desc');
+            const cardGrid = document.getElementById('card-grid');
+            const cardDab = document.getElementById('card-dab');
+            const cardPsfb = document.getElementById('card-psfb');
+            const badgeGrid = document.getElementById('badge-grid-status');
+            const badgeDab = document.getElementById('badge-dab-mode');
+            const badgePsfb = document.getElementById('badge-psfb-mode');
+            const pipe1Flow = document.getElementById('pipe1-flow');
+            const pipe1Label = document.getElementById('pipe1-label');
+
+            // Sync Scenario Buttons UI
+            document.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('active'));
+            if (scenario === 'NORMAL') document.getElementById('btn-sc-normal').classList.add('active');
+            else if (scenario === 'OUTAGE') document.getElementById('btn-sc-outage').classList.add('active');
+            else if (scenario === 'DAB_ANOMALY') document.getElementById('btn-sc-dab-fault').classList.add('active');
+            else if (scenario === 'PSFB_ANOMALY') document.getElementById('btn-sc-psfb-fault').classList.add('active');
+
+            if (grid.status === 'OUTAGE') {
+                heroBanner.className = 'grid-hero-banner outage';
+                heroIcon.textContent = '🚨';
+                heroTitle.textContent = 'GRID OUTAGE — 상용 전력망 차단됨! UPS 배터리 비상 급전 중';
+                heroTitle.style.color = '#FF2E63';
+                heroDesc.textContent = '전력망이 단절되어 DAB Converter가 즉시 배터리 방전(Discharging) 모드로 전환하여 DB 서버랙에 100% 무중단 전력을 공급하고 있습니다.';
+
+                cardGrid.className = 'node-card alert-glow';
+                badgeGrid.textContent = 'ISOLATED (차단)';
+                badgeGrid.style.background = '#FF2E63';
+                badgeGrid.style.color = '#FFFFFF';
+
+                badgeDab.textContent = '⚡ UPS DISCHARGING';
+                badgeDab.style.background = '#FFB800';
+                badgeDab.style.color = '#07090E';
+
+                pipe1Flow.className = 'pipe-flow isolated';
+                pipe1Label.textContent = '✕ ISOLATED';
+                pipe1Label.style.color = '#FF2E63';
+            } else {
+                heroBanner.className = 'grid-hero-banner';
+                heroIcon.textContent = '⚡';
+                heroTitle.textContent = 'GRID ONLINE — 상용 전력망 정상 급전 중';
+                heroTitle.style.color = '#00FF9D';
+                heroDesc.textContent = '전력망에서 380V AC가 정상 공급되고 있으며, DAB는 400V DC 버스 안정화 및 배터리 완속 충전(Standby) 중입니다.';
+
+                cardGrid.className = 'node-card active-glow';
+                badgeGrid.textContent = 'ONLINE';
+                badgeGrid.style.background = '#1B2B4A';
+                badgeGrid.style.color = '#7AA2F7';
+
+                badgeDab.textContent = 'STANDBY';
+                badgeDab.style.background = '#0C2E33';
+                badgeDab.style.color = '#00F0FF';
+
+                pipe1Flow.className = 'pipe-flow';
+                pipe1Label.textContent = `${grid.powerKw.toFixed(1)} kW ➔`;
+                pipe1Label.style.color = '#00FF9D';
+            }
+
+            // Anomaly Highlights
+            if (dab.isAnomaly) cardDab.className = 'node-card alert-glow';
+            else if (grid.status !== 'OUTAGE') cardDab.className = 'node-card active-glow';
+
+            if (psfb.isAnomaly) cardPsfb.className = 'node-card alert-glow';
+            else cardPsfb.className = 'node-card active-glow';
+
+            // 7. Alarm Modal Trigger from C# Backend
+            if (alarm && alarm.hasAlarm) {
+                if (Date.now() - lastAlarmDismissedTime > 4000) {
+                    showAlarmPopup(alarm.title, alarm.message, alarm.zScore);
+                }
+            } else {
+                dismissAlarm();
+            }
+        }
+
+        function showAlarmPopup(title, message, zScore) {
+            const modal = document.getElementById('alarm-modal');
+            document.getElementById('lbl-alarm-title').innerHTML = `🚨 [C# 실시간 경보] ${title}`;
+            document.getElementById('lbl-alarm-time').textContent = new Date().toLocaleTimeString();
+            // Two claims were removed from this popup, both asserted without being known:
+            //   "(임계값 2.5σ 초과)" hardcoded a threshold that TelemetryMlAnalyticsEngine exposes as
+            //   a settable property, so raising it to 3.5 left the alarm still citing 2.5; and
+            //   "조치 상태: 서킷 브레이커 & 버스트 모드 가동 중" told the operator the backend was
+            //   already handling the fault, which this page has no way to observe. An operator who
+            //   reads that stands down. Only the score actually delivered is shown now.
+            document.getElementById('alarm-body').innerHTML = `
+                <strong>${title}</strong><br>
+                • 상세 내용: ${message}<br>
+                • ML Z-Score: <span style="color:#FF2E63; font-weight:bold;">${zScore.toFixed(2)}σ</span>
+            `;
+            modal.classList.add('active');
+        }
+
+        function dismissAlarm() {
+            document.getElementById('alarm-modal').classList.remove('active');
+            lastAlarmDismissedTime = Date.now();
+        }
+
+        // Transmit command to C# Backend over WebSocket
+        function sendScenarioCommand(sc) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const cmdPayload = JSON.stringify({ command: "SET_SCENARIO", scenario: sc });
+                ws.send(cmdPayload);
+                logMessage('INFO', `[COMMAND_TX] 📡 C# 프로그램으로 시나리오 전환 명령 전송: ${sc}`);
+            } else {
+                logMessage('WARN', `[WARN] C# 프로그램에 연결되지 않았습니다. 프로그램(TelemetryDashboard.UI.exe)을 먼저 실행해 주세요.`);
+            }
+        }
+
+        function logMessage(level, text) {
+            const box = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level.toLowerCase()}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            box.insertBefore(entry, box.firstChild);
+            if (box.children.length > 50) box.removeChild(box.lastChild);
+        }
+
+        // Initialize connection
+        connectWebSocket();
+    </script>
+</body>
+</html>

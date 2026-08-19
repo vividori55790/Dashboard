@@ -1,0 +1,132 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.ZeroTrustSecurityDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🛡️ Zero-Trust AES-256-GCM 보안 &amp; Gorilla 시계열 비트 압축 벤치마크" 
+        Height="680" Width="880"
+        WindowStartupLocation="CenterOwner"
+        Background="#0B0E14"
+        Foreground="#F0F6FC">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Header -->
+            <RowDefinition Height="*"/>    <!-- Tabs: Security / Gorilla -->
+            <RowDefinition Height="Auto"/> <!-- Footer -->
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="🛡️ Zero-Trust AES-256-GCM &amp; Gorilla Delta-of-Delta Bit Compression" Foreground="#00F0FF" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="미인가 변조 방지를 위한 256-bit AEAD 암호화 및 메모리 대역폭을 90% 이상 절감하는 Gorilla 비트 압축 엔진" Foreground="#8B949E" FontSize="11" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Tabs -->
+        <TabControl Grid.Row="1" Background="#18202C" BorderBrush="#283548">
+            <!-- Tab 1: AES-256-GCM AEAD -->
+            <TabItem Header="🔒 AES-256-GCM 암호화" Foreground="#00FF9D">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Key Config -->
+                    <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="256-bit Master Key:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Grid.Column="1" x:Name="TxtAesKey" Text="0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF" FontSize="11" Margin="0,0,8,0"/>
+                            <Button Grid.Column="2" Content="🔑 신규 키 생성" Padding="10,4" Click="BtnGenerateKey_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Plaintext -->
+                    <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                        <TextBlock Text="Plaintext Telemetry Payload:" Foreground="#8B949E" DockPanel.Dock="Top" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtPlaintext" Height="50" TextWrapping="Wrap" Background="#0E131A" Foreground="#F0F6FC" FontSize="11">
+                            <![CDATA[{"nodeId":"COM3","channel":"temp","value":94.6,"zScore":3.8,"status":"CRITICAL"}]]>
+                        </TextBox>
+                    </DockPanel>
+
+                    <!-- Ciphertext & Tag Result -->
+                    <DockPanel Grid.Row="2" Margin="0,0,0,8">
+                        <TextBlock Text="AES-256-GCM Ciphertext &amp; AEAD Tag (Base64):" Foreground="#00FF9D" DockPanel.Dock="Top" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtCiphertext" TextWrapping="Wrap" IsReadOnly="True" Background="#0E131A" Foreground="#00FF9D"
+                                 FontFamily="Consolas" FontSize="11" Text="암호화 테스트를 실행하면 결과가 여기에 표시됩니다."/>
+                    </DockPanel>
+
+                    <!-- Action Buttons -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal">
+                        <Button Content="🔒 AES-256 암호화 실행" Padding="12,6" Background="#00FF9D" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,8,0" Click="BtnEncrypt_Click"/>
+                        <Button Content="🔓 복호화 무결성 검증" Padding="10,6" Background="#18202C" Margin="0,0,8,0" Click="BtnDecrypt_Click"/>
+                        <TextBlock x:Name="TxtAesStatus" Text="Ready" Foreground="#8B949E" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: Gorilla Delta-of-Delta Bit Compression -->
+            <TabItem Header="🗜️ Gorilla 시계열 압축 벤치마크" Foreground="#00F0FF">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Benchmark Metrics -->
+                    <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="원본 크기 (Raw Floats):" Foreground="#8B949E" FontSize="11"/>
+                                <TextBlock x:Name="TxtRawSize" Text="8,000 Bytes" Foreground="#F0F6FC" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Gorilla 압축 크기:" Foreground="#8B949E" FontSize="11"/>
+                                <TextBlock x:Name="TxtCompressedSize" Text="688 Bytes" Foreground="#00FF9D" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="압축비 (Compression Ratio):" Foreground="#8B949E" FontSize="11"/>
+                                <TextBlock x:Name="TxtRatio" Text="11.6 : 1" Foreground="#00F0FF" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="절감률 (Savings):" Foreground="#8B949E" FontSize="11"/>
+                                <TextBlock x:Name="TxtSavings" Text="91.4% 절감" Foreground="#FFB800" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Terminal Log -->
+                    <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                        <TextBlock Text="Gorilla Bit Stream Inspection &amp; Lossless Verification Log:" Foreground="#8B949E" DockPanel.Dock="Top" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtGorillaLog" TextWrapping="Wrap" IsReadOnly="True" Background="#0E131A" Foreground="#F0F6FC"
+                                 FontFamily="Consolas" FontSize="11" Text="[INIT] Gorilla Delta-of-Delta Bit Compressor Ready. Click benchmark to run."/>
+                    </DockPanel>
+
+                    <!-- Run Benchmark -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <Button Content="🚀 1,000개 실시간 샘플 Gorilla 압축 벤치마크 실행" Padding="14,6" Background="#00F0FF" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,8,0" Click="BtnRunGorillaBenchmark_Click"/>
+                        <TextBlock x:Name="TxtGorillaStatus" Text="Ready" Foreground="#8B949E" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer -->
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+            <Button Content="닫기" HorizontalAlignment="Right" Padding="12,6" Click="BtnClose_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>

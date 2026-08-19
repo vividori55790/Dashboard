@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 초간단 텔레메트리 실시간 웹 뷰어 (Starter Minimal)</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: #0B0E14; color: #F0F6FC; padding: 24px; min-height: 100vh; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #283548; padding-bottom: 16px; }
+        h1 { font-size: 20px; color: #00F0FF; }
+        .status-badge { background: #18202C; border: 1px solid #283548; padding: 6px 12px; border-radius: 20px; font-size: 12px; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FF2E63; margin-right: 6px; }
+        .status-dot.online { background: #00FF9D; box-shadow: 0 0 8px #00FF9D; }
+
+        /* 실시간 센서 카드 그리드 */
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: #121720; border: 1px solid #283548; border-radius: 10px; padding: 20px; transition: border-color 0.2s; }
+        .card:hover { border-color: #00F0FF; }
+        .card-label { font-size: 12px; color: #8B949E; text-transform: uppercase; margin-bottom: 8px; }
+        .card-value { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; color: #00FF9D; }
+        .card-unit { font-size: 14px; color: #8B949E; font-weight: normal; margin-left: 4px; }
+        
+        /* 이상치 발생 시 카드 강조 */
+        .card.alert { border-color: #FF2E63; background: #260A14; }
+        .card.alert .card-value { color: #FF2E63; }
+
+        /* 로그 창 */
+        .log-box { background: #07090D; border: 1px solid #283548; border-radius: 8px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; height: 140px; overflow-y: auto; color: #8B949E; }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>⚡ TelemetryDashboard — 초간단 실시간 웹 뷰어</h1>
+            <p style="font-size: 12px; color: #8B949E; margin-top: 4px;">HTML 파일 하나로 웹소켓 실시간 센서 데이터를 표시하는 기본 템플릿</p>
+        </div>
+        <div class="status-badge">
+            <span id="conn-dot" class="status-dot"></span>
+            <span id="conn-text">연결 대기 중...</span>
+        </div>
+    </header>
+
+    <!-- 실시간 수치 카드 -->
+    <div class="cards-grid">
+        <div id="card-temp" class="card">
+            <div class="card-label">🔥 온도 (Temperature)</div>
+            <div><span id="val-temp" class="card-value">0.00</span><span class="card-unit">°C</span></div>
+        </div>
+        <div id="card-vib" class="card">
+            <div class="card-label">⚙️ 진동 (Vibration)</div>
+            <div><span id="val-vib" class="card-value">0.000</span><span class="card-unit">g</span></div>
+        </div>
+        <div id="card-hum" class="card">
+            <div class="card-label">💧 습도 (Humidity)</div>
+            <div><span id="val-hum" class="card-value">0.0</span><span class="card-unit">%</span></div>
+        </div>
+        <div id="card-rpm" class="card">
+            <div class="card-label">🔄 회전속도 (RPM)</div>
+            <div><span id="val-rpm" class="card-value">0</span><span class="card-unit">RPM</span></div>
+        </div>
+        <div id="card-zscore" class="card">
+            <div class="card-label">🧠 ML 이상치 (Z-Score)</div>
+            <div><span id="val-zscore" class="card-value" style="color:#00F0FF">0.0</span><span class="card-unit">σ</span></div>
+        </div>
+    </div>
+
+    <!-- 원시 패킷 수신 로그 -->
+    <h3 style="font-size: 13px; color: #8B949E; margin-bottom: 8px;">📋 수신된 실시간 원시 패킷 (JSON):</h3>
+    <div id="log-box" class="log-box">연결을 시작합니다...</div>
+
+    <!-- ⚡ 초간단 데이터 수신 스크립트 (30줄) -->
+    <script>
+        // 1. 프로그램의 웹소켓 주소로 연결 (기본 포트: 8080)
+        const wsUrl = "ws://localhost:8080/ws";
+        const ws = new WebSocket(wsUrl);
+
+        const connDot = document.getElementById("conn-dot");
+        const connText = document.getElementById("conn-text");
+        const logBox = document.getElementById("log-box");
+
+        ws.onopen = () => {
+            connDot.classList.add("online");
+            connText.textContent = "실시간 연결됨 (LIVE 20Hz)";
+            connText.style.color = "#00FF9D";
+        };
+
+        ws.onclose = () => {
+            connDot.classList.remove("online");
+            connText.textContent = "연결 끊김 (재시도 중)";
+            connText.style.color = "#FF2E63";
+        };
+
+        // 2. 실시간 데이터 패킷 수신 시 화면 요소 업데이트 (실제 하드웨어 & 시뮬레이터 공용)
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.source === "REAL_HARDWARE") {
+                    connText.textContent = `🟢 실제 하드웨어 수신 중 (${data.port || 'COM'}, 노드: ${data.nodeId})`;
+                    connText.style.color = "#00FF9D";
+
+                    const v = (data.variable || '').toLowerCase();
+                    if (v.includes('temp')) document.getElementById("val-temp").textContent = data.value.toFixed(2);
+                    else if (v.includes('vib')) document.getElementById("val-vib").textContent = data.value.toFixed(3);
+                    else if (v.includes('hum')) document.getElementById("val-hum").textContent = data.value.toFixed(1);
+                    else if (v.includes('rpm')) document.getElementById("val-rpm").textContent = Math.round(data.value);
+                    else if (v.includes('volt') || v.includes('curr') || v.includes('power')) {
+                        document.getElementById("val-temp").textContent = data.value.toFixed(2);
+                    }
+                    if (data.anomalyScore !== undefined) document.getElementById("val-zscore").textContent = data.anomalyScore.toFixed(1);
+                } else {
+                    // 표준 텔레메트리 필드 매핑
+                    if (data.temp !== undefined) document.getElementById("val-temp").textContent = data.temp.toFixed(2);
+                    if (data.vibration !== undefined) document.getElementById("val-vib").textContent = data.vibration.toFixed(3);
+                    if (data.humidity !== undefined) document.getElementById("val-hum").textContent = data.humidity.toFixed(1);
+                    if (data.rpm !== undefined) document.getElementById("val-rpm").textContent = Math.round(data.rpm);
+                    if (data.anomalyScore !== undefined) document.getElementById("val-zscore").textContent = data.anomalyScore.toFixed(1);
+                }
+
+                // 이상치 발생 시 카드에 붉은색 경고 클래스 토글
+                const cardTemp = document.getElementById("card-temp");
+                if (data.anomalyScore >= 2.5 || data.isAnomaly) {
+                    cardTemp.classList.add("alert");
+                } else {
+                    cardTemp.classList.remove("alert");
+                }
+
+                // 로그 창에 최신 패킷 1줄 표시
+                logBox.textContent = `[${new Date().toLocaleTimeString()}] ${event.data}\n` + logBox.textContent.slice(0, 500);
+            } catch (e) {
+                console.error("패킷 파싱 오류:", e);
+            }
+        };
+    </script>
+</body>
+</html>

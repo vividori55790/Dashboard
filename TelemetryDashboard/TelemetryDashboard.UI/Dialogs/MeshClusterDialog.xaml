@@ -1,0 +1,74 @@
+<Window x:Class="TelemetryDashboard.UI.Dialogs.MeshClusterDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🌐 Multi-Hub P2P Cluster Mesh &amp; WebRTC Hub" 
+        Height="540" Width="820"
+        WindowStartupLocation="CenterOwner"
+        Background="#0B0E14"
+        Foreground="#F0F6FC">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Header -->
+            <RowDefinition Height="*"/>    <!-- Discovered Peer Hubs -->
+            <RowDefinition Height="Auto"/> <!-- WebRTC Peer Signaling Card -->
+            <RowDefinition Height="Auto"/> <!-- Footer -->
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+            <StackPanel DockPanel.Dock="Left">
+                <TextBlock Text="🌐 Multi-Hub P2P Distributed Cluster Mesh" Foreground="#00F0FF" FontSize="18" FontWeight="Bold"/>
+                <TextBlock Text="Decentralized peer-to-peer sync of telemetry snapshots, node status, and critical anomaly alarms" Foreground="#8B949E" FontSize="12" Margin="0,2,0,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="📡 브로드캐스트 하트비트 전송" Padding="10,6" Background="#00FF9D" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,6,0" Click="BtnBroadcast_Click"/>
+                <Button Content="🔄 피어 재검색" Padding="10,6" Click="BtnRefresh_Click"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Peer Hubs DataGrid -->
+        <Border Grid.Row="1" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="📡 DISCOVERED TELEMETRY HUBS (P2P MESH)" Foreground="#66FCF1" FontWeight="Bold" FontSize="11" Margin="0,0,0,8"/>
+                <DataGrid Grid.Row="1" x:Name="DgPeers" Background="#0E131A" Foreground="#F0F6FC"
+                          AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#283548"
+                          RowBackground="#0E131A" AlternatingRowBackground="#141B24" FontSize="11">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Peer ID" Binding="{Binding PeerId}" Width="90"/>
+                        <DataGridTextColumn Header="Hub Name" Binding="{Binding HubName}" Width="150"/>
+                        <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="130"/>
+                        <DataGridTextColumn Header="Port" Binding="{Binding Port}" Width="70"/>
+                        <DataGridTextColumn Header="Latency" Binding="{Binding Latency}" Width="80"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- WebRTC Peer Signaling Card -->
+        <Border Grid.Row="2" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="⚡ WebRTC Ultra-Low Latency Peer Streaming Bridge" Foreground="#BA68C8" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="DataChannel active for mobile &amp; browser clients at 60 FPS zero-jitter telemetry" Foreground="#8B949E" FontSize="11" Margin="0,2,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="📋 WebRTC SDP 오퍼 생성 및 복사" Padding="12,6" Background="#1E2636" Click="BtnCopyWebRtcOffer_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- Footer -->
+        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock x:Name="TxtMeshStatus" Text="Mesh Status: Listening on UDP Port 9090 | 3 Peers Connected" Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
+            <Button Content="닫기" HorizontalAlignment="Right" Padding="12,6" Click="BtnClose_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>
