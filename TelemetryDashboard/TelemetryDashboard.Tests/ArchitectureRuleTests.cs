@@ -440,9 +440,12 @@ public partial class ArchitectureRuleTests
         // to satisfy an arithmetic rule.
         "TelemetryDashboard.Core/Analytics/RollingChannelStatistics.cs",           // 182 lines
         "TelemetryDashboard.Core/Cluster/CoverageLedger.cs",                       // 151 lines
+        "TelemetryDashboard.Core/Recording/TelemetryCsvRecorder.cs",               // 157 lines
         "TelemetryDashboard.Core/Ingest/JsonChannelMap.cs",                        // 175 lines
+        "TelemetryDashboard.Core/Simulator/MonitoringProfileReader.cs",            // 165 lines
         "TelemetryDashboard.Core/Query/ChannelSeriesBuffer.cs",                    // 152 lines
         "TelemetryDashboard.Host/Configuration/CommandLineParser.cs",              // 182 lines
+        "TelemetryDashboard.Host/Ingest/IngestPublisher.cs",                       // 151 lines
         "TelemetryDashboard.Host/Ingest/PollingTelemetrySource.cs",                // 177 lines
         "TelemetryDashboard.Host/Ingest/SseTelemetrySource.cs",                    // 197 lines
         "TelemetryDashboard.Host/Startup/StartupBanner.cs",                        // 172 lines

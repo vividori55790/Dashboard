@@ -75,7 +75,34 @@ The rule now lives in `ArchitectureRuleTests.Wiring.cs` with a ratchet baseline 
 
 `ArchitectureRuleTests.NoNewProductionTypeIsUnreachable` now fails on any *new* unreachable type, and `EveryUnwiredTypeInTheBaselineIsStillUnwired` forces an entry off the baseline the moment it gains a reference, so the list can only shrink. Treat the baseline as the outstanding work it is.
 
-Current suite: **708 passing, 0 failing, 0 warnings** — 640 in the portable project, 68 in the desktop one.
+Current suite: **948 passing, 0 build warnings** — 880 in the portable project, 68 in the desktop one.
+This line records the size of the suite, not a claim that it is green: the count is checked against a
+real run, and if two are failing while something is mid-change, that is what the run says and what
+should be reported.
+
+### Verification that does not come from the test suite
+
+Two kinds of check exist alongside it, because there are defects unit tests structurally cannot
+reach — they feed the code data the tests themselves invented, and reality is less cooperative.
+
+**`verify_live.py`** starts the real binary against public infrastructure nobody here controls
+(Wikimedia EventStreams, the USGS earthquake feed) and asserts on what comes back. Twenty-three
+checks. It has already found four defects that a green suite did not: a missing `User-Agent` that
+Wikimedia answers with 403, a start-up banner announcing "no source" while an SSE reader was
+running, a forecast of *minus 228,000 bytes* for a page size, and a forecast field whose name
+promised sixty seconds while carrying two.
+
+**`PortabilityHazardTests`** hunts, on Windows, for the failures that only appear elsewhere. The
+Linux and macOS binaries have never been run — there is no machine here — so instead of waiting,
+this looks for the specific and well-known ways a Windows-developed .NET program breaks: literal
+backslashes in paths, numbers parsed without a fixed culture, case-mismatched file references,
+unguarded Windows-only APIs, and the Turkish dotted-I that stops `SIM:` and `HIST` matching. It
+found a real one: `PrefixParser`, the primary telemetry frame parser, used the ambient culture in
+one place and `InvariantCulture` in six others.
+
+That is not the same as running it, and nothing here should be read as proof that it runs. It turns
+"we have no idea" into "these particular things are ruled out", which is the difference between an
+unknown risk and a bounded one.
 
 ### Standalone packages
 

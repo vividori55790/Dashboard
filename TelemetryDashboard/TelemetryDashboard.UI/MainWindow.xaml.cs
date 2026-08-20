@@ -78,6 +78,11 @@ public partial class MainWindow : Window
         RegisterDefaultCommands();
         SetupSimulatorTimer();
 
+        // Before the first tick, because the tick asks the active profile which channels to plot.
+        // This call was missing entirely, which is why the profile picker opened empty and the
+        // subtitle kept its placeholder: the collection behind the picker was never filled.
+        InitializeProfiles();
+
         // Start continuous 20Hz telemetry stream so HTML gets live data immediately
         _simTimer?.Start();
 
@@ -85,40 +90,64 @@ public partial class MainWindow : Window
         StreamingControl.AttachServer(_streamingServer, _htmlClientPath);
 
         // Listen for HTML client commands over WebSocket
-        _streamingServer.CommandReceived += (s, cmd) =>
-        {
-            Dispatcher.Invoke(() =>
-            {
-                // No emoji in a log line. The event log renders these through the panel's text
-                // styles, and an emoji comes from a colour font that ignores Foreground entirely —
-                // so the one character in the row that the palette cannot reach was the one drawing
-                // most of the attention.
-                if (cmd.Contains("OUTAGE", StringComparison.OrdinalIgnoreCase))
-                {
-                    _simulator.Scenario = PowerScenario.GridOutage;
-                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: 계통 정전 시나리오 적용 — DAB UPS 배터리 방전 모드");
-                }
-                else if (cmd.Contains("DAB_ANOMALY", StringComparison.OrdinalIgnoreCase))
-                {
-                    _simulator.Scenario = PowerScenario.DabOvercurrent;
-                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: DAB 배터리 과전류 주입 — Z-Score는 실측 기반으로 산출됩니다.");
-                }
-                else if (cmd.Contains("PSFB_ANOMALY", StringComparison.OrdinalIgnoreCase))
-                {
-                    _simulator.Scenario = PowerScenario.PsfbUnderVoltage;
-                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: PSFB 48V 전압 강하 주입 — Z-Score는 실측 기반으로 산출됩니다.");
-                }
-                else if (cmd.Contains("NORMAL", StringComparison.OrdinalIgnoreCase))
-                {
-                    _simulator.Scenario = PowerScenario.Normal;
-                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: 정상 운전(계통 연계·대기)으로 복귀");
-                }
-            });
-        };
+        _streamingServer.CommandReceived += (s, cmd) => Dispatcher.Invoke(() => ApplyWebConsoleCommand(cmd));
 
         // Control Panel command callback: actually transmit. Previously this only wrote
         // "transmitted to serial port" into the log while nothing left the machine.
         ControlPanel.OnCommandSent += async (cmd) => await TransmitCommandAsync(cmd);
+    }
+
+    /// <summary>
+    /// Puts the built-in model into the fault a browser client asked for.
+    /// </summary>
+    /// <remarks>
+    /// The command tokens belong to the bundled example page's wire protocol, so they are matched
+    /// as they are. What the log says about them is a different matter: it used to narrate one
+    /// customer's converter — "DAB battery overcurrent injected", "PSFB 48 V rail sagging" — on
+    /// every installation, whichever system the operator had selected. The line now reports the
+    /// command that arrived and the fault the model was actually put into, which is true of every
+    /// profile because it describes the model rather than anybody's hardware.
+    /// <para>
+    /// No emoji in a log line. The event log renders these through the panel's text styles, and an
+    /// emoji comes from a colour font that ignores Foreground entirely — so the one character in
+    /// the row that the palette cannot reach was the one drawing most of the attention.
+    /// </para>
+    /// </remarks>
+    private void ApplyWebConsoleCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return;
+
+        PowerScenario? fault = null;
+
+        if (command.Contains("OUTAGE", StringComparison.OrdinalIgnoreCase))
+        {
+            fault = PowerScenario.GridOutage;
+        }
+        else if (command.Contains("DAB_ANOMALY", StringComparison.OrdinalIgnoreCase))
+        {
+            fault = PowerScenario.DabOvercurrent;
+        }
+        else if (command.Contains("PSFB_ANOMALY", StringComparison.OrdinalIgnoreCase))
+        {
+            fault = PowerScenario.PsfbUnderVoltage;
+        }
+        else if (command.Contains("NORMAL", StringComparison.OrdinalIgnoreCase))
+        {
+            fault = PowerScenario.Normal;
+        }
+
+        // Silently dropping a command the operator watched themselves press is worse than saying
+        // it was not understood; the browser gets no acknowledgement either way.
+        if (fault is null)
+        {
+            ControlPanel.LogMessage("WARN", $"웹 콘솔 명령 '{command}' 을 알 수 없어 적용하지 않았습니다.");
+            return;
+        }
+
+        _simulator.Scenario = fault.Value;
+        ControlPanel.LogMessage("SCENARIO",
+            $"웹 콘솔 명령 '{command}' — 시뮬레이터 고장 모델을 '{fault.Value}' 로 설정했습니다. " +
+            "이상 점수는 검출기가 계산합니다.");
     }
 
     private void ResolveHtmlClientPath()
@@ -167,15 +196,24 @@ public partial class MainWindow : Window
     private void PopulatePortAndBaud()
     {
         CboPort.Items.Clear();
+
+        // Only ports this machine reports. The fallback here used to add "COM1" and two entries
+        // named "COM3 (Virtual Dual-MCU)" and "COM4 (Virtual Dual-MCU)" when there were none, so a
+        // bench with nothing plugged in presented three selectable targets, two of them under names
+        // the serial stack would not even accept. The same fabrication was removed from the
+        // firmware dialog for the same reason; this was the copy of it that stayed.
         string[] ports = SerialPort.GetPortNames();
-        if (ports.Length == 0)
-        {
-            ports = new string[] { "COM1", "COM3 (Virtual Dual-MCU)", "COM4 (Virtual Dual-MCU)" };
-        }
         foreach (string p in ports)
         {
             CboPort.Items.Add(p);
         }
+
+        CboPort.IsEnabled = ports.Length > 0;
+        if (ports.Length == 0)
+        {
+            CboPort.Items.Add("사용 가능한 직렬 포트 없음");
+        }
+
         CboPort.SelectedIndex = 0;
 
         CboBaudRate.Items.Clear();
@@ -215,8 +253,7 @@ public partial class MainWindow : Window
         PowerPlantState state = _simulator.Advance(SimulationIntervalSec);
         ScoredPowerFrame frame = _frameBuilder.Build(state);
 
-        ScopeControl.PushTelemetryData(
-            state.AmbientTemperature, state.AmbientHumidity, state.Vibration, state.Rpm / 100.0);
+        PushProfileChannelsToScope(state);
 
         ControlPanel.UpdateTelemetryStats(
             state.AmbientTemperature, state.AmbientHumidity, state.Vibration, state.Rpm,

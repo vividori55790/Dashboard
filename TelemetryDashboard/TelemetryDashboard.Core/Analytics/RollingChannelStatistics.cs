@@ -120,6 +120,31 @@ public sealed class RollingChannelStatistics
         return (n * sumXY - sumX * sumY) / denominator;
     }
 
+    /// <summary>Smallest and largest value in the window, or NaN when it is empty.</summary>
+    /// <remarks>
+    /// The range a channel has actually occupied is the evidence any extrapolation has to answer
+    /// to. A forecast landing inside it, or a little beyond, is a claim the data supports; one
+    /// landing far outside is arithmetic rather than measurement — which is how a page-size channel
+    /// came to be forecast at a negative byte count.
+    /// </remarks>
+    public (double Min, double Max) ObservedRange()
+    {
+        if (_count == 0) return (double.NaN, double.NaN);
+
+        double min = double.PositiveInfinity;
+        double max = double.NegativeInfinity;
+
+        for (int i = 0; i < _count; i++)
+        {
+            double value = this[i];
+            if (!double.IsFinite(value)) continue;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+
+        return double.IsFinite(min) ? (min, max) : (double.NaN, double.NaN);
+    }
+
     /// <summary>
     /// The fitted trend together with how much of the variation it actually explains.
     /// </summary>

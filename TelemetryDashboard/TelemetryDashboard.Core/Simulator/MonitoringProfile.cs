@@ -55,8 +55,29 @@ public sealed class ProfileScenario
     public string? Fault { get; init; }
 }
 
+/// <summary>One addressable device the operator can command, e.g. a port or a converter board.</summary>
+/// <remarks>
+/// A node is separate from a channel because the two answer different questions: a channel is a
+/// quantity being watched, a node is a box that can be switched on and off. The control panel used
+/// to name two of them in XAML — one customer's battery converter and their server rail — so every
+/// other installation was offered power switches for hardware it does not own. A profile that
+/// declares no nodes gets no switches and is told so, which is the honest answer when the
+/// application has not been told what is out there.
+/// </remarks>
+public sealed class ProfileNode
+{
+    /// <summary>Stable key sent in the command, e.g. <c>COM3</c>. Not prose.</summary>
+    public required string Id { get; init; }
+
+    /// <summary>Button caption. Sentence case, naming the device rather than the click.</summary>
+    public required string Label { get; init; }
+
+    /// <summary>One line of tooltip. Empty when the label already says enough.</summary>
+    public string Description { get; init; } = string.Empty;
+}
+
 /// <summary>
-/// The set of channels and scenarios that describe one monitored system.
+/// The set of nodes, channels and scenarios that describe one monitored system.
 /// </summary>
 /// <remarks>
 /// This type exists because the first ribbon tab used to be one customer's converter, welded into
@@ -74,7 +95,22 @@ public sealed class MonitoringProfile
     /// <summary>One line describing what this profile monitors, shown under the picker.</summary>
     public string Summary { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Devices the operator can command. Empty is a legitimate answer, not a missing value: the
+    /// control panel then says the profile declares none rather than offering invented ones.
+    /// </summary>
+    public IReadOnlyList<ProfileNode> Nodes { get; init; } = [];
+
     public IReadOnlyList<ProfileChannel> Channels { get; init; } = [];
 
     public IReadOnlyList<ProfileScenario> Scenarios { get; init; } = [];
+
+    /// <summary>The name an operator would use for this profile.</summary>
+    /// <remarks>
+    /// The picker draws its rows through a display path, so the visible text was always right — but
+    /// everything that stringifies a profile without one got "TelemetryDashboard.Core.Simulator.
+    /// MonitoringProfile", including the name a screen reader announces for the selected row. A
+    /// type whose whole job is to be chosen from a list should be able to say what it is called.
+    /// </remarks>
+    public override string ToString() => DisplayName;
 }

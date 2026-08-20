@@ -18,9 +18,27 @@ public class AnomalyResult
     public double ZScore { get; set; }
     public bool IsAnomaly { get; set; }
 
-    /// <summary>Regression extrapolation of the channel 60 <em>seconds</em> ahead.</summary>
-    /// <remarks>Only meaningful when <see cref="HasForecast"/> is true.</remarks>
+    /// <summary>
+    /// Regression extrapolation of the channel, <see cref="ForecastHorizonSec"/> seconds ahead.
+    /// </summary>
+    /// <remarks>
+    /// The name is historical and now slightly wrong: this is not always sixty seconds. It is the
+    /// value at whatever horizon the channel's own history supports, and reading it without
+    /// <see cref="ForecastHorizonSec"/> beside it will mislead. Only meaningful when
+    /// <see cref="HasForecast"/> is true.
+    /// </remarks>
     public double PredictedValueIn60s { get; set; }
+
+    /// <summary>
+    /// How far ahead <see cref="PredictedValueIn60s"/> looks, in seconds. Zero when there is no
+    /// forecast.
+    /// </summary>
+    /// <remarks>
+    /// Part of the reading rather than a footnote to it. A prediction eleven seconds out and one
+    /// sixty seconds out are different claims about the world, and a display that shows the number
+    /// without the horizon has merged them.
+    /// </remarks>
+    public double ForecastHorizonSec { get; set; }
 
     /// <summary>
     /// True when the fitted trend explains enough of the variation to extrapolate from.
@@ -36,6 +54,17 @@ public class AnomalyResult
 
     /// <summary>How much of the channel's variation the fitted trend explains, 0 to 1.</summary>
     public double TrendRSquared { get; set; }
+
+    /// <summary>
+    /// True when a real trend, continued, would leave the range this channel has ever occupied.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from having no trend at all, and more informative than either a number or silence.
+    /// It says the direction is real and the destination is not credible — which is the state worth
+    /// telling an operator about, because it usually means either something is genuinely running
+    /// away or the channel is not the kind of quantity a straight line describes.
+    /// </remarks>
+    public bool ForecastLeavesObservedRange { get; set; }
 
     /// <summary>Seconds until the rising trend crosses the warning threshold, or -1 when not trending toward it.</summary>
     public double EstimatedTimeToBreachSec { get; set; }
@@ -243,12 +272,46 @@ public class TelemetryMlAnalyticsEngine
 
             // No forecast unless the line actually describes the data. Extrapolating a slope fitted
             // to scatter is how a page-size channel came to be predicted at a negative byte count.
-            result.HasForecast = fit.SupportsForecast;
-            result.PredictedValueIn60s = result.HasForecast
-                ? newValue + slopePerSecond * ForecastHorizonSec
-                : newValue;
+            (double observedMin, double observedMax) = channel.ObservedRange();
 
-            result.EstimatedTimeToBreachSec = result.HasForecast
+            // How far ahead this channel's own history will carry the trend, up to the full
+            // horizon. Asking only "does 60 seconds work" made the answer no for every channel at
+            // the default 20 Hz — the window holds two and a half seconds, and a minute is
+            // twenty-four times further than anything observed. Correct, and useless: a feature
+            // that is always silent tells an operator nothing.
+            //
+            // Answering "how far can I see" instead keeps the honesty and returns the utility. The
+            // reported horizon is part of the reading, not a footnote to it: eleven seconds ahead
+            // and sixty seconds ahead are different claims and must not share a field.
+            double supportedHorizon = SupportedHorizonSeconds(newValue, slopePerSecond, observedMin, observedMax);
+            double projected = newValue + slopePerSecond * supportedHorizon;
+
+            // Two separate questions, and the second one only got asked after live data answered
+            // it badly. Does a trend exist (R-squared), and does continuing it land somewhere the
+            // evidence reaches? A Wikipedia page-size channel passed the first and was forecast at
+            // minus 228,000 bytes, because a slope fitted over a minute says nothing about a
+            // quantity sixty seconds away that has never been within two orders of magnitude of
+            // that value.
+            //
+            // Clamping at zero was the tempting fix and is the wrong one: it invents a number.
+            // Withholding everything outside the observed range is also wrong, because predicting
+            // slightly past what has been seen is the entire point of a forecast. So the bound is
+            // taken from the data itself — one full width of the observed range beyond either end.
+            // Inside that, the projection is an extrapolation the channel's own history supports.
+            // Outside it, the useful and honest statement is not a number but the fact that the
+            // trend leaves plausible territory, and how soon.
+            result.ForecastLeavesObservedRange = fit.SupportsForecast && supportedHorizon <= 0;
+
+            result.HasForecast = fit.SupportsForecast && supportedHorizon > 0;
+            result.ForecastHorizonSec = result.HasForecast ? supportedHorizon : 0;
+            result.PredictedValueIn60s = result.HasForecast ? projected : newValue;
+
+            // Gated on the trend existing, not on the range bound, and the distinction matters most
+            // in exactly the case the bound catches. "The threshold is 27 seconds away" is a
+            // bounded question the data can answer; "the value will be 63 in sixty seconds" is an
+            // extrapolation well past anything observed. Withholding both would have removed the
+            // more useful of the two precisely when a channel was running away.
+            result.EstimatedTimeToBreachSec = fit.SupportsForecast
                 ? EstimateBreachSeconds(newValue, slopePerSecond, warningUpperThreshold)
                 : -1;
 
@@ -271,6 +334,57 @@ public class TelemetryMlAnalyticsEngine
     /// Seconds until a rising trend reaches <paramref name="threshold"/>.
     /// Returns -1 when the channel is flat, falling, or already past the threshold.
     /// </summary>
+    /// <summary>
+    /// The furthest ahead this channel's history supports, up to the configured horizon.
+    /// </summary>
+    /// <remarks>
+    /// Solves for the time at which the trend reaches the edge of the extrapolation bound, rather
+    /// than searching. A flat channel has zero width and therefore zero reach, which is correct: a
+    /// constant offers no basis for predicting a change.
+    ///
+    /// The result is floored at one second and rounded down. Sub-second foresight is not a
+    /// prediction anyone can act on, and offering it would dress up "no useful forecast" as a
+    /// number.
+    /// </remarks>
+    private double SupportedHorizonSeconds(
+        double currentValue, double slopePerSecond, double observedMin, double observedMax)
+    {
+        if (!double.IsFinite(slopePerSecond) || Math.Abs(slopePerSecond) < 1e-12) return 0;
+        if (!double.IsFinite(observedMin) || !double.IsFinite(observedMax)) return 0;
+
+        double width = observedMax - observedMin;
+        double limit = slopePerSecond > 0 ? observedMax + width : observedMin - width;
+        double reach = (limit - currentValue) / slopePerSecond;
+
+        if (!double.IsFinite(reach) || reach <= 0) return 0;
+
+        double horizon = Math.Floor(Math.Min(reach, ForecastHorizonSec));
+        return horizon >= 1 ? horizon : 0;
+    }
+
+    /// <summary>
+    /// Whether a projection lands close enough to what the channel has done to be worth stating.
+    /// </summary>
+    /// <remarks>
+    /// The allowance is one full width of the observed range beyond either end, so the bound scales
+    /// with the channel rather than with a constant somebody chose. A steady signal earns a narrow
+    /// allowance and a volatile one a wide allowance, which is the right way round: predicting a
+    /// large move for a quantity that has never moved is exactly the claim that needs evidence.
+    ///
+    /// A channel whose window is perfectly flat has zero width, so nothing but its own value passes.
+    /// That is correct — a constant offers no basis for predicting a change.
+    /// </remarks>
+    private static bool WithinExtrapolationBound(double projected, double observedMin, double observedMax)
+    {
+        if (!double.IsFinite(projected) || !double.IsFinite(observedMin) || !double.IsFinite(observedMax))
+        {
+            return false;
+        }
+
+        double width = observedMax - observedMin;
+        return projected >= observedMin - width && projected <= observedMax + width;
+    }
+
     private static double EstimateBreachSeconds(double currentValue, double slopePerSecond, double threshold)
     {
         if (double.IsNaN(slopePerSecond) || slopePerSecond <= 1e-9) return -1;

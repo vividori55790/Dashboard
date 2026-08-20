@@ -54,7 +54,13 @@ public class TelemetryCsvRecorder : IDisposable
         _writer = new StreamWriter(_fileStream, Encoding.UTF8) { AutoFlush = false };
 
         // Write CSV Header
-        _writer.WriteLine("Timestamp_ISO,Timestamp_Sec,NodeId,Channel,Value,ZScore,IsAnomaly,Predicted_60s,Status");
+        // Predicted_Value with its own horizon column, because the old Predicted_60s header was a
+        // claim the data stopped meeting: the engine now looks as far ahead as a channel's history
+        // supports, which is often a few seconds. An archive whose column header says sixty seconds
+        // while holding two-second predictions misleads every later reading of it, and archives are
+        // read long after anyone remembers the change.
+        _writer.WriteLine(
+            "Timestamp_ISO,Timestamp_Sec,NodeId,Channel,Value,ZScore,IsAnomaly,Predicted_Value,Predicted_Horizon_Sec,Status");
         _writer.Flush();
 
         RecordedPacketCount = 0;
@@ -67,7 +73,9 @@ public class TelemetryCsvRecorder : IDisposable
         return CurrentFilePath;
     }
 
-    public void RecordSample(string nodeId, string channel, double value, double zScore, bool isAnomaly, double predicted60s, string status = "OK")
+    public void RecordSample(
+        string nodeId, string channel, double value, double zScore, bool isAnomaly,
+        double predictedValue, string status = "OK", double predictedHorizonSec = 0)
     {
         if (!IsRecording) return;
 
@@ -75,8 +83,9 @@ public class TelemetryCsvRecorder : IDisposable
         string isoTime = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
         string line = string.Format(CultureInfo.InvariantCulture,
-            "{0},{1:F3},{2},{3},{4:F4},{5:F2},{6},{7:F4},{8}",
-            isoTime, nowSec, nodeId, channel, value, zScore, isAnomaly ? "TRUE" : "FALSE", predicted60s, status);
+            "{0},{1:F3},{2},{3},{4:F4},{5:F2},{6},{7:F4},{8:F0},{9}",
+            isoTime, nowSec, nodeId, channel, value, zScore, isAnomaly ? "TRUE" : "FALSE",
+            predictedValue, predictedHorizonSec, status);
 
         _lineQueue.Enqueue(line);
         Interlocked.Increment(ref _totalQueued);

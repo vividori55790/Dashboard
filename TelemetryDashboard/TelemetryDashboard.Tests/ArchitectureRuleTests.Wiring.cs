@@ -83,9 +83,12 @@ public partial class ArchitectureRuleTests
         // IronPython; keeping two entry points to one interpreter is the thing to fix, not to wire.
         "PythonNetAdapter",
         "ReplayRowItem",
-        // Bound from XAML only, which this rule's tokeniser cannot see: a command referenced as
-        // {Binding Save} appears nowhere as a type name. Listed rather than "fixed", because the
-        // honest statement is that the rule is blind here, not that the type is dead.
+        // Bound from XAML only, which this rule's tokeniser cannot see: a view model reached as
+        // {Binding Caption} or {Binding IsOn} inside a DataTemplate appears nowhere as a type name.
+        // Listed rather than "fixed", because the honest statement is that the rule is blind here,
+        // not that these types are dead. Both are verifiably live: the node switches they back were
+        // driven from a running window and produced real commands.
+        "NodePowerToggle",
         "RelayCommand",
         "SampleTelemetryPlugin",
         "SamplingChannelRow",

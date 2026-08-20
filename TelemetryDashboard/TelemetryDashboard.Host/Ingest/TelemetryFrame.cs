@@ -61,10 +61,38 @@ public sealed class TelemetryFrame
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsAnomaly { get; init; }
 
-    /// <summary>Extrapolated value 60 seconds ahead, absent before a baseline exists.</summary>
-    [JsonPropertyName("predicted60s")]
+    /// <summary>
+    /// Extrapolated value <see cref="PredictedHorizonSec"/> seconds ahead. Absent when the channel's
+    /// own history does not reach far enough to support any forecast at all.
+    /// </summary>
+    /// <remarks>
+    /// Never read this without <see cref="PredictedHorizonSec"/>. The horizon is not fixed: it is
+    /// as far as the trend can be carried while staying inside the range the channel has occupied,
+    /// which for a fast-sampled channel with a short window is often a few seconds rather than a
+    /// minute. The field keeps its old name so existing consoles do not break, and the horizon is
+    /// published beside it so nobody mistakes eleven seconds of foresight for sixty.
+    /// </remarks>
+    [JsonPropertyName("predicted")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Predicted60s { get; init; }
+
+    /// <summary>How far ahead <see cref="Predicted60s"/> looks, in seconds.</summary>
+    [JsonPropertyName("predictedHorizonSec")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? PredictedHorizonSec { get; init; }
+
+    /// <summary>
+    /// Present and true when a real trend, continued, would leave the range this channel has
+    /// occupied — so no number is given, but the fact is.
+    /// </summary>
+    /// <remarks>
+    /// Absent in the ordinary case, so a consumer sees it only when it means something. It is not
+    /// interchangeable with a missing <see cref="Predicted60s"/>: that says "no trend worth
+    /// extrapolating", this says "a trend that is heading somewhere implausible".
+    /// </remarks>
+    [JsonPropertyName("forecastLeavesRange")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ForecastLeavesRange { get; init; }
 
     /// <summary>Analyzer and settings behind the verdict, so a stored frame can be re-scored.</summary>
     [JsonPropertyName("analyzerId")]
@@ -97,6 +125,8 @@ public sealed class TelemetryFrame
             // trend worth extrapolating. Tying the two together published a forecast for every
             // judged channel, including the ones that are pure noise.
             Predicted60s = analysis.HasForecast ? analysis.PredictedValueIn60s : null,
+            PredictedHorizonSec = analysis.HasForecast ? analysis.ForecastHorizonSec : null,
+            ForecastLeavesRange = analysis.ForecastLeavesObservedRange ? true : null,
             AnalyzerId = analysis.AnalyzerId
         };
     }

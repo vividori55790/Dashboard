@@ -110,7 +110,26 @@ public sealed class DataRouter : IDataRouter
         return outputPackets;
     }
 
-    private void ProcessAndEmit(TelemetryPacket pkt, List<TelemetryPacket> collector)
+    /// <summary>
+    /// Puts a packet that was parsed elsewhere through the same delivery path as a routed one.
+    /// </summary>
+    /// <remarks>
+    /// Plugins subscribe here, so until this existed they saw only packets that matched a
+    /// configured routing rule. Anything decoded by the JSON channel map or by positional parsing
+    /// reached the chart, the archive and the wire, and reached no plugin at all — which meant a
+    /// plugin watching a live network feed received nothing while every surface reported it loaded
+    /// and running. The gap was invisible precisely because the data still arrived everywhere else.
+    ///
+    /// Alarm evaluation and the synthetic mark are applied here too, so a packet's provenance and
+    /// its alarm state do not depend on which parser happened to decode it.
+    /// </remarks>
+    public void Deliver(TelemetryPacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        ProcessAndEmit(packet, null);
+    }
+
+    private void ProcessAndEmit(TelemetryPacket pkt, List<TelemetryPacket>? collector)
     {
         if (_nodes.TryGetValue(pkt.NodeId, out var node))
         {
@@ -129,7 +148,7 @@ public sealed class DataRouter : IDataRouter
             pkt.NodeId = SimulatedNodeMarker.Apply(pkt.NodeId);
         }
 
-        collector.Add(pkt);
+        collector?.Add(pkt);
         PacketRouted?.Invoke(this, pkt);
 
         lock (_activePlugins)

@@ -25,11 +25,17 @@ param(
     [string]$Exe = "$PSScriptRoot\TelemetryDashboard\TelemetryDashboard.UI\bin\Debug\net8.0-windows\TelemetryDashboard.UI.exe",
     [string]$Out = "$PSScriptRoot\ui-capture.png",
     [int]$SettleSeconds = 22,
-    [switch]$Maximize = $true
+    [switch]$Maximize = $true,
+
+    # Toggle buttons to press, by their on-screen caption, before capturing.
+    # Here rather than in an ad-hoc script on the side, because the retry logic
+    # below is the whole reason this file exists: a one-off capture written
+    # beside it silently returned a blank white image on the first try.
+    [string[]]$Toggle = @()
 )
 
 $ErrorActionPreference = "Stop"
-Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Drawing, UIAutomationClient, UIAutomationTypes
 
 Add-Type @"
 using System;
@@ -54,6 +60,36 @@ public class UiCapture {
     }
     return bmp;
   }
+
+  // A hardware-accelerated WPF window sometimes hands PrintWindow a blank
+  // redirection surface: the bitmap comes back the right size and entirely
+  // one colour. That happened three times running to someone using this
+  // script, who came within a step of reporting the window as empty.
+  //
+  // A blank frame is indistinguishable from a real one by size alone, so the
+  // only defence is to look at the pixels. Sampling a sparse grid is enough --
+  // any genuine screenful of a dark UI with text on it has more than one
+  // colour in it, and sampling costs nothing next to launching the app.
+  public static bool LooksBlank(Bitmap b) {
+    if (b.Width < 64 || b.Height < 64) return true;
+
+    // Inset well past the window chrome. A first version sampled to the very
+    // edge, found the dark border pixels, concluded the image had more than
+    // one colour, and passed a capture whose entire client area was white --
+    // the exact failure it was written to catch. The title bar is excluded for
+    // the same reason: it renders from a different surface and is almost
+    // always present even when the content is not.
+    int left = b.Width / 10, right = b.Width - b.Width / 10;
+    int top = b.Height / 6, bottom = b.Height - b.Height / 10;
+
+    Color first = b.GetPixel(left, top);
+    for (int x = left; x < right; x += Math.Max(1, (right - left) / 24)) {
+      for (int y = top; y < bottom; y += Math.Max(1, (bottom - top) / 24)) {
+        if (b.GetPixel(x, y) != first) return false;
+      }
+    }
+    return true;
+  }
 }
 "@ -ReferencedAssemblies System.Drawing, System.Drawing.Primitives
 
@@ -71,7 +107,37 @@ try {
 
     if ($Maximize) { [UiCapture]::ShowWindow($process.MainWindowHandle, 3) | Out-Null; Start-Sleep -Seconds 5 }
 
-    $bitmap = [UiCapture]::Shot($process.MainWindowHandle)
+    foreach ($caption in $Toggle) {
+        $root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+        $match = New-Object System.Windows.Automation.PropertyCondition (
+            [System.Windows.Automation.AutomationElement]::NameProperty, $caption)
+        $element = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $match)
+        if (-not $element) { throw "no control captioned '$caption' was found in the window" }
+
+        # Through the automation pattern rather than a synthetic click, because that is the route a
+        # keyboard or a screen reader takes. A control wired only to Click looks fine to a mouse and
+        # does nothing here -- which is how one was found already.
+        $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()
+        "toggled '$caption'"
+        Start-Sleep -Seconds 4
+    }
+
+    # Retry a blank frame rather than saving it. Saving one is worse than
+    # failing: a picture is believed, and this one shows an empty application.
+    $bitmap = $null
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        if ($bitmap) { $bitmap.Dispose() }
+        $bitmap = [UiCapture]::Shot($process.MainWindowHandle)
+        if (-not [UiCapture]::LooksBlank($bitmap)) { break }
+        "attempt ${attempt}: the window rendered blank, retrying"
+        Start-Sleep -Seconds 2
+    }
+
+    if ([UiCapture]::LooksBlank($bitmap)) {
+        $bitmap.Dispose()
+        throw "the window captured blank five times running. This is a capture failure, not an empty application - do not read it as a finding about the UI."
+    }
+
     $bitmap.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
     "captured $($bitmap.Width) x $($bitmap.Height) physical pixels -> $Out"
     $bitmap.Dispose()

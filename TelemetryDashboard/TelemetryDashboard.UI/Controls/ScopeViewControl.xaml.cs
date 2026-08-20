@@ -66,6 +66,16 @@ public partial class ScopeViewControl : UserControl
         MainPlot.Plot.Style.ColorAxes(PlotColor("TextSecondaryBrush"));
         MainPlot.Plot.Style.ColorGrids(PlotColor("GridLineBrush"));
 
+        // The plotting library defaults to a Latin-only face, so every Korean channel name rendered
+        // in the legend as a row of empty boxes -- on a dashboard whose channels are named in
+        // Korean. Naming a face that has the glyphs is the whole fix, and the fallbacks matter:
+        // this list has to survive a machine that ships a different set of fonts.
+        // SetFontFromText asks the system for a face that can actually render the sample, rather
+        // than naming one and hoping it is installed. A machine without Malgun Gothic still gets
+        // something with the glyphs, and a machine with no Korean font at all is a genuine gap that
+        // no amount of naming would have closed.
+        MainPlot.Plot.Style.SetFontFromText("온도 진동 rpm");
+
         // ColorAxes paints the axis frame the same colour as the tick labels, and text contrast is
         // not border contrast: at that weight the frame drew a bright rectangle around the plot —
         // the "white border" the chart appeared to have. The frame is a container edge, so it takes
@@ -151,6 +161,9 @@ public partial class ScopeViewControl : UserControl
         return series;
     }
 
+    /// <summary>Whether each channel is scaled into a common band rather than sharing one axis.</summary>
+    private bool _fitEachChannel;
+
     private void ReplotData()
     {
         MainPlot.Plot.Clear();
@@ -160,13 +173,69 @@ public partial class ScopeViewControl : UserControl
             if (!channel.IsVisible || channel.SampleCount < 2) continue;
 
             (double[] xs, double[] ys) = channel.Snapshot();
+            string label = channel.Name;
+
+            if (_fitEachChannel)
+            {
+                (ys, string range) = Normalise(ys);
+                channel.ScaleNote = range;
+            }
+            else
+            {
+                channel.ScaleNote = string.Empty;
+            }
+
             var scatter = MainPlot.Plot.Add.Scatter(xs, ys);
             scatter.Color = ScottPlot.Color.FromHex(channel.ColorHex);
-            scatter.Label = channel.Name;
+            scatter.Label = label;
         }
 
-        MainPlot.Plot.Axes.AutoScale();
+        // The axis has to say what it is measuring. Renormalised data on an axis labelled "Value"
+        // shows the right shapes over the wrong numbers, and a reader has no way to tell.
+        MainPlot.Plot.Axes.Left.Label.Text = _fitEachChannel ? "Scaled per channel (see legend)" : "Value";
+
+        // The legend is where the real ranges went, so it has to be on screen when the axis stops
+        // carrying them. Promising "values move to the legend" while showing no legend would be the
+        // same class of untruth as the renormalised axis this exists to avoid.
+MainPlot.Plot.Axes.AutoScale();
         MainPlot.Refresh();
+    }
+
+    /// <summary>
+    /// Maps one channel's window onto 0..1 and reports the real range it came from.
+    /// </summary>
+    /// <remarks>
+    /// A flat channel has no range to divide by. Mapping it to zero would draw it on the floor
+    /// beside genuinely low channels; mapping it to the middle says "this is not moving", which is
+    /// what a flat line actually means. Its real value stays in the legend either way.
+    /// </remarks>
+    private static (double[] Values, string Range) Normalise(double[] values)
+    {
+        double min = double.PositiveInfinity, max = double.NegativeInfinity;
+        foreach (double value in values)
+        {
+            if (!double.IsFinite(value)) continue;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+
+        if (!double.IsFinite(min)) return (values, "no readings");
+
+        double span = max - min;
+        var scaled = new double[values.Length];
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            scaled[i] = span > 0 ? (values[i] - min) / span : 0.5;
+        }
+
+        return (scaled, span > 0 ? $"[{min:0.###} .. {max:0.###}]" : $"[flat at {min:0.###}]");
+    }
+
+    private void BtnFitEach_Changed(object sender, RoutedEventArgs e)
+    {
+        _fitEachChannel = BtnFitEach.IsChecked == true;
+        ReplotData();
     }
 
     private void BtnPause_Click(object sender, RoutedEventArgs e)

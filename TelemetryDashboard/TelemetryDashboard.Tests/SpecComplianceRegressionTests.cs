@@ -282,8 +282,17 @@ public class SpecComplianceRegressionTests
     [Trait("Category", "Tier1")]
     public void MlEngine_ForecastHorizonIsSixtySecondsNotSixtySamples()
     {
-        // 20 Hz feed rising by 0.05 per sample => +1.0 per second => +60.0 over 60 seconds.
-        var engine = new TelemetryMlAnalyticsEngine(windowSize: 64, sampleRateHz: 20.0);
+        // The regression this guards is real: the horizon must be sixty *seconds*, not sixty
+        // samples. It is now asserted at 0.5 Hz rather than 20 Hz, and the change is not a
+        // convenience — at 20 Hz a 64-sample window holds 3.2 seconds, and forecasting 60 seconds
+        // from it is an extrapolation nineteen times further than anything observed. The engine now
+        // withholds a forecast it cannot support, so the old configuration proved nothing about the
+        // horizon: it only proved the guard was absent.
+        //
+        // 0.5 Hz keeps the distinction intact — 60 seconds is 30 samples here, so a horizon
+        // measured in samples would still give the wrong answer — while asking the engine for a
+        // prediction its own history reaches.
+        var engine = new TelemetryMlAnalyticsEngine(windowSize: 64, sampleRateHz: 0.5);
         AnomalyResult result = new();
         double value = 0;
         for (int i = 0; i < 64; i++)
@@ -292,8 +301,9 @@ public class SpecComplianceRegressionTests
             value += 0.05;
         }
 
-        double expected = result.CurrentValue + 60.0;
-        result.PredictedValueIn60s.Should().BeApproximately(expected, 1.0);
+        // 0.05 per sample at 0.5 Hz is 0.025 per second, so sixty seconds ahead is +1.5.
+        result.HasForecast.Should().BeTrue("the horizon is inside the window this engine has seen");
+        result.PredictedValueIn60s.Should().BeApproximately(result.CurrentValue + 1.5, 0.2);
     }
 
     [Fact]

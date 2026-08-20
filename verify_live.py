@@ -99,10 +99,17 @@ def assert_honesty(frames, expect_simulated):
           f"{len(unjudged)} of {len(telemetry)} still in warm-up, none of them scored")
 
     # A forecast is only permitted where a trend was actually fitted.
-    forecast = [f for f in telemetry if "predicted60s" in f]
+    forecast = [f for f in telemetry if "predicted" in f]
     check("no forecast without a verdict",
           all("analyzerId" in f for f in forecast),
           f"{len(forecast)} of {len(telemetry)} frames carry a forecast")
+
+    # A prediction without its horizon is unreadable: two seconds ahead and sixty seconds ahead
+    # are different claims, and a console that shows the number alone has merged them.
+    check("every forecast states how far ahead it looks",
+          all(isinstance(f.get("predictedHorizonSec"), (int, float)) and f["predictedHorizonSec"] > 0
+              for f in forecast),
+          f"horizons seen: {sorted({f.get('predictedHorizonSec') for f in forecast})}")
 
     check("every scored frame names its analyzer",
           all(f.get("analyzerId") for f in telemetry if "anomalyScore" in f))

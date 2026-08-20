@@ -245,14 +245,14 @@ public class IngestPathTests
 
         await pump.RunAsync(CancellationToken.None);
 
-        // Nothing reached the router: a JSON document matches no routing rule, so it is parsed
-        // outside it. Plugins subscribe to the router, which means a plugin on a JSON or
-        // positionally-parsed feed currently receives nothing at all. Recorded here as a known
-        // limitation rather than asserted as if it were intended.
-        seen.Should().BeEmpty("packets parsed outside the router never reach plugin subscribers");
+        // A JSON document matches no routing rule, so it is parsed outside the router — and it
+        // still has to reach the plugins that subscribe there. It did not until the pump began
+        // delivering externally-parsed packets through the same path, which meant a plugin on a
+        // network feed received nothing while every other surface showed the data arriving.
+        seen.Should().NotBeEmpty("a packet parsed outside the router must still reach plugins");
+        seen.Should().OnlyContain(p => p.Flags.HasFlag(PacketFlags.Simulated));
+        seen.Should().OnlyContain(p => p.NodeId.StartsWith("SIM:"));
 
-        // What the record path publishes is marked, which is what the wire frame and the archive
-        // both carry.
         server.DvrPlayer.GetFramesInRange(0, double.MaxValue)
             .Should().OnlyContain(f => f.ChannelName.StartsWith("SIM:"));
     }
@@ -269,8 +269,9 @@ public class IngestPathTests
 
         await pump.RunAsync(CancellationToken.None);
 
-        // Same routing limitation as the synthetic case: a JSON document reaches no plugin.
-        seen.Should().BeEmpty();
+        seen.Should().NotBeEmpty();
+        seen.Should().OnlyContain(p => !p.Flags.HasFlag(PacketFlags.Simulated));
+        seen.Should().OnlyContain(p => !p.NodeId.StartsWith("SIM:"));
         server.DvrPlayer.GetFramesInRange(0, double.MaxValue)
             .Should().OnlyContain(f => !f.ChannelName.StartsWith("SIM:"));
     }

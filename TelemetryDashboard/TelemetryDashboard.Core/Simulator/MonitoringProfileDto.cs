@@ -20,8 +20,16 @@ internal sealed class ProfileDto
     public string? Id { get; init; }
     public string? DisplayName { get; init; }
     public string? Summary { get; init; }
+    public List<NodeDto>? Nodes { get; init; }
     public List<ChannelDto>? Channels { get; init; }
     public List<ScenarioDto>? Scenarios { get; init; }
+}
+
+internal sealed class NodeDto
+{
+    public string? Id { get; init; }
+    public string? Label { get; init; }
+    public string? Description { get; init; }
 }
 
 internal sealed class ChannelDto

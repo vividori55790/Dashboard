@@ -293,6 +293,29 @@
                                 ToolTip="가상 MCU 패킷을 실제 하드웨어와 같은 수집 경로로 흘려보냅니다."/>
                     </Grid>
 
+                    <!--
+                        What happened when the profile file was read, shown only when something went
+                        wrong with it.
+
+                        A picker listing only the built-in profiles looks identical whether the site
+                        never wrote a profile file or wrote one the loader could not use, and the
+                        second of those is a fault an operator can fix in a minute once they are told
+                        which file and why. Collapsed by default and never used for the ordinary
+                        no-file case, so its presence always means there is something to read.
+                    -->
+                    <Border x:Name="ProfileLoadBanner" Visibility="Collapsed" Margin="0,0,0,12"
+                            Background="{StaticResource WarningSubtleBrush}"
+                            BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusS}" Padding="12,10">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource IconText}" Text="&#xE7BA;"
+                                       Foreground="{StaticResource WarningBrush}"
+                                       Margin="0,0,10,0" VerticalAlignment="Top"/>
+                            <TextBlock x:Name="ProfileLoadText" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Setpoints. One row per channel the profile declares; nothing about which
                          channels exist is written down here. -->
                     <ItemsControl ItemsSource="{Binding ProfileChannels}" Margin="0,0,0,12">
@@ -410,9 +433,12 @@
                             <TextBlock Style="{StaticResource CommandLabel}" Text="웹 클라이언트 콘솔"/>
                         </StackPanel>
                     </Button>
-                    <Button Content="전력 변환기 콘솔" Click="BtnOpenPowerUpsPsfbConsole_Click"
+                    <!-- Named as the example it is. The caption used to read like the product's
+                         own console, which made one customer's converter look like the subject of
+                         the application rather than one of its samples. -->
+                    <Button Content="전력 변환기 예제 대시보드" Click="BtnOpenPowerUpsPsfbConsole_Click"
                             Style="{StaticResource RibbonCommand}"
-                            ToolTip="번들로 제공되는 DAB/PSFB 예제 대시보드를 엽니다."/>
+                            ToolTip="번들로 제공되는 예제 페이지 power_ups_psfb_dashboard.html 을 엽니다."/>
                     <Button Content="대시보드 빌더" Click="BtnOpenNoCodeBuilder_Click"
                             Style="{StaticResource RibbonCommand}"/>
                     <Button Content="웹 템플릿 가이드" Click="BtnOpenCustomWebTemplates_Click"

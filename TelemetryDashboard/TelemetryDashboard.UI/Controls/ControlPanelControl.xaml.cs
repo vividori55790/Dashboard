@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Analytics;
+using TelemetryDashboard.Core.Simulator;
 
 namespace TelemetryDashboard.UI.Controls;
 
@@ -44,11 +46,83 @@ public class EventLogEntry
         Value == NoValue && ZScore == NoValue ? string.Empty : $"{Value}  {ZScore}";
 }
 
+/// <summary>
+/// One generated node switch: the device the profile named, and what has been commanded of it.
+/// </summary>
+/// <remarks>
+/// The caption reports the last command this panel sent, and says so in as many words until one has
+/// been sent. The buttons it replaces opened captioned "On" with nothing having asked the device
+/// anything, which is a reading rather than a control — and a reading nobody took.
+/// <para>
+/// The command is sent from the state setter rather than from a click handler, and that is not a
+/// stylistic choice. A toggle button can be flipped by a click, by the space bar, and by assistive
+/// technology through the toggle pattern — and the last of those changes the checked state without
+/// ever raising Click. Hanging the command off the click left exactly one route that moved the
+/// switch on screen while nothing left the machine, which is the failure the caption exists to make
+/// impossible. Driving it from the state means every route agrees.
+/// </para>
+/// </remarks>
+public sealed class NodePowerToggle : INotifyPropertyChanged
+{
+    /// <summary>Caption state before this panel has commanded the device anything.</summary>
+    private const string NotCommanded = "no power command sent";
+
+    private readonly Action<NodePowerToggle, bool> _onCommanded;
+    private bool _isOn;
+    private bool _commanded;
+
+    public NodePowerToggle(ProfileNode node, Action<NodePowerToggle, bool> onCommanded)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(onCommanded);
+
+        _onCommanded = onCommanded;
+        Id = node.Id;
+        Label = node.Label;
+
+        // Falls back to the id rather than to nothing: the id is what leaves the machine in the
+        // command, so it is worth being able to read even when the profile wrote no description.
+        Description = string.IsNullOrWhiteSpace(node.Description) ? node.Id : node.Description;
+    }
+
+    /// <summary>The key sent in the power command, straight from the profile.</summary>
+    public string Id { get; }
+
+    public string Label { get; }
+
+    public string Description { get; }
+
+    /// <summary>The state this panel has commanded. Two-way bound to the switch.</summary>
+    public bool IsOn
+    {
+        get => _isOn;
+        set
+        {
+            if (_isOn == value && _commanded) return;
+
+            _isOn = value;
+            _commanded = true;
+            Raise(nameof(IsOn));
+            Raise(nameof(Caption));
+            _onCommanded(this, value);
+        }
+    }
+
+    public string Caption =>
+        _commanded ? $"{Label} — {(_isOn ? "on" : "off")}" : $"{Label} — {NotCommanded}";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void Raise(string property) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+}
+
 public partial class ControlPanelControl : UserControl
 {
     public event Action<string>? OnCommandSent;
 
     private readonly ObservableCollection<EventLogEntry> _eventLogEntries = new();
+    private readonly ObservableCollection<NodePowerToggle> _nodeToggles = new();
     private readonly List<double> _sparklineBuffer = new();
 
     /// <summary>Nominal serialised packet size used for the throughput estimate.</summary>
@@ -65,7 +139,38 @@ public partial class ControlPanelControl : UserControl
     {
         InitializeComponent();
         DgEventLog.ItemsSource = _eventLogEntries;
+        NodeControlList.ItemsSource = _nodeToggles;
+        NodeControlList.Visibility = Visibility.Collapsed;
         LogMessage("SYSTEM", "Control panel ready.");
+    }
+
+    /// <summary>
+    /// Rebuilds the node switches from the profile the host has just applied.
+    /// </summary>
+    /// <remarks>
+    /// A profile with no nodes leaves the list empty and puts a sentence in its place. The two are
+    /// deliberately different on screen: a panel that shows nothing looks the same whether the
+    /// profile declared nothing or the panel failed to render, and only one of those is fine.
+    /// </remarks>
+    public void ShowProfileNodes(string profileName, IReadOnlyList<ProfileNode> nodes)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        Dispatcher.Invoke(() =>
+        {
+            _nodeToggles.Clear();
+            foreach (ProfileNode node in nodes)
+            {
+                _nodeToggles.Add(new NodePowerToggle(node, SendNodePowerCommand));
+            }
+
+            bool any = _nodeToggles.Count > 0;
+            NodeControlList.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            TxtNoNodes.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            TxtNoNodes.Text =
+                $"'{profileName}' declares no nodes, so there is nothing here to switch. " +
+                "Add a nodes list to the profile to control devices from this panel.";
+        });
     }
 
     /// <summary>Resolves a theme brush, or null outside a running application.</summary>
@@ -81,7 +186,10 @@ public partial class ControlPanelControl : UserControl
             if (tag.Contains("ERR") || tag.Contains("CRIT") || message.Contains("CRITICAL")) level = "CRIT";
             else if (tag.Contains("WARN") || tag.Contains("SIM")) level = "WARN";
 
-            string node = "COM3";
+            // Only a message that names a port gets a port in the column. This defaulted to "COM3",
+            // so every panel and system line in the log was attributed to a port that had nothing
+            // to do with it — and on a machine with no COM3 at all, to a port that does not exist.
+            string node = EventLogEntry.NoValue;
             if (message.Contains("[COM4]")) node = "COM4";
             else if (message.Contains("[COM3]")) node = "COM3";
 
@@ -325,25 +433,9 @@ public partial class ControlPanelControl : UserControl
         CanvasSparkline.Children.Add(polyline);
     }
 
-    private void BtnNodeCom3Power_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is ToggleButton btn)
-        {
-            bool state = btn.IsChecked == true;
-            btn.Content = $"Node COM3 (DAB): {(state ? "On" : "Off")}";
-            SendCommand($"NODE_POWER COM3 {(state ? "ON" : "OFF")}");
-        }
-    }
-
-    private void BtnNodeCom4Power_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is ToggleButton btn)
-        {
-            bool state = btn.IsChecked == true;
-            btn.Content = $"Node COM4 (PSFB): {(state ? "On" : "Off")}";
-            SendCommand($"NODE_POWER COM4 {(state ? "ON" : "OFF")}");
-        }
-    }
+    /// <summary>Switches one of the profile's nodes, addressing it by the id the profile gave it.</summary>
+    private void SendNodePowerCommand(NodePowerToggle node, bool on) =>
+        SendCommand($"NODE_POWER {node.Id} {(on ? "ON" : "OFF")}");
 
     private void BtnZeroCalibration_Click(object sender, RoutedEventArgs e)
     {

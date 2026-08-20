@@ -65,22 +65,15 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
 
-                        <Border Style="{StaticResource TemplateRow}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource TemplateName}" Text="power_ups_psfb_dashboard.html"/>
-                                    <TextBlock Style="{StaticResource TemplateNote}"
-                                               Text="계통에서 양방향 DAB(UPS·배터리)를 거쳐 PSFB 48V 랙까지 이어지는 전력 단선도, 정전 및 방전 모드 전환, 이상치 알람 콘솔."/>
-                                </StackPanel>
-                                <Button Grid.Column="1" Content="브라우저에서 열기" VerticalAlignment="Center"
-                                        Click="BtnLaunchPowerUpsPsfb_Click"/>
-                            </Grid>
-                        </Border>
+                        <!--
+                            Neutral starters first, the worked example last.
 
+                            This list opened with one customer's converter dashboard, so the first
+                            thing anybody evaluating the templates read was somebody else's power
+                            chain. The file is still shipped and still described in full — it is a
+                            genuinely useful sample — but it is labelled as an example of what can be
+                            built rather than presented as the shape of the product.
+                        -->
                         <Border Style="{StaticResource TemplateRow}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -145,7 +138,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Style="{StaticResource TemplateRow}" Margin="0">
+                        <Border Style="{StaticResource TemplateRow}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -158,6 +151,23 @@
                                 </StackPanel>
                                 <Button Grid.Column="1" Content="브라우저에서 열기" VerticalAlignment="Center"
                                         Click="BtnLaunchDashboard_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TemplateRow}" Margin="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TemplateName}"
+                                               Text="power_ups_psfb_dashboard.html (예제)"/>
+                                    <TextBlock Style="{StaticResource TemplateNote}"
+                                               Text="한 가지 설비를 끝까지 구현해 본 예제입니다. 계통에서 양방향 DAB(UPS·배터리)를 거쳐 PSFB 48V 랙까지 이어지는 전력 단선도, 정전 및 방전 모드 전환, 이상치 알람 콘솔."/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="브라우저에서 열기" VerticalAlignment="Center"
+                                        Click="BtnLaunchPowerUpsPsfb_Click"/>
                             </Grid>
                         </Border>
                     </StackPanel>

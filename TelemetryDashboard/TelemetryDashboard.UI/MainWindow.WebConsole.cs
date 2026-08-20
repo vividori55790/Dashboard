@@ -40,16 +40,24 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>Opens the bundled power-converter example page.</summary>
+    /// <remarks>
+    /// One of several example pages shipped with the application, and named as such. The log line
+    /// used to describe it as though it were the product's console rather than a sample dashboard
+    /// for one worked example.
+    /// </remarks>
     private void BtnOpenPowerUpsPsfbConsole_Click(object sender, RoutedEventArgs e)
     {
+        const string page = "power_ups_psfb_dashboard.html";
+
         try
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = "http://localhost:8080/power_ups_psfb_dashboard.html",
+                FileName = $"http://localhost:8080/{page}",
                 UseShellExecute = true
             });
-            ControlPanel.LogMessage("WEB", "Opened UPS DAB <-> DB PSFB Power Distribution Console.");
+            ControlPanel.LogMessage("WEB", $"Opened bundled example dashboard: {page}");
         }
         catch (Exception ex)
         {

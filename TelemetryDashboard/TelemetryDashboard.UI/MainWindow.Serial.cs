@@ -45,8 +45,17 @@ public partial class MainWindow
     {
         if (!_isConnected)
         {
-            string portName = CboPort.SelectedItem?.ToString() ?? "COM1";
-            if (portName.Contains(" ")) portName = portName.Split(' ')[0]; // Strip suffix e.g. "(Virtual Dual-MCU)"
+            // No invented default. Connecting to "COM1" because nothing was selected produced a
+            // failure that reads as a broken cable rather than as an empty port list.
+            if (!CboPort.IsEnabled || CboPort.SelectedItem is null)
+            {
+                ControlPanel.LogMessage("WARN",
+                    "이 컴퓨터가 보고한 직렬 포트가 없어 연결할 수 없습니다. 장치를 연결한 뒤 포트 목록을 새로 고치세요.");
+                return;
+            }
+
+            string portName = CboPort.SelectedItem.ToString() ?? string.Empty;
+            if (portName.Contains(' ')) portName = portName.Split(' ')[0]; // Strip any descriptive suffix
 
             int baudRate = 115200;
             if (CboBaudRate.SelectedItem is int b) baudRate = b;

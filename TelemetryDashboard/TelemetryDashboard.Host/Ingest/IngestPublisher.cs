@@ -131,7 +131,8 @@ public sealed class IngestPublisher
             analysis.ZScore,
             analysis.IsAnomaly,
             analysis.PredictedValueIn60s,
-            analysis.HasVerdict ? "OK" : "UNSCORED");
+            analysis.HasVerdict ? "OK" : "UNSCORED",
+            analysis.ForecastHorizonSec);
 
         Interlocked.Increment(ref _published);
 

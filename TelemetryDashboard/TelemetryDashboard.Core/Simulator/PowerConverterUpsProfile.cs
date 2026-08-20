@@ -18,6 +18,21 @@ internal static class PowerConverterUpsProfile
         Id = MonitoringProfileLibrary.PowerConverterId,
         DisplayName = "DAB/PSFB UPS 전력 변환기 (예제)",
         Summary = "상용 전력망 → DAB 배터리 컨버터 → PSFB 48 V 서버 급전 체인 예제입니다.",
+        Nodes =
+        [
+            new ProfileNode
+            {
+                Id = "COM3",
+                Label = "DAB 배터리 컨버터",
+                Description = "COM3 에 연결된 양방향 DAB 컨버터 노드입니다."
+            },
+            new ProfileNode
+            {
+                Id = "COM4",
+                Label = "PSFB 서버 레일",
+                Description = "COM4 에 연결된 PSFB 48 V 급전 노드입니다."
+            }
+        ],
         Channels =
         [
             new ProfileChannel

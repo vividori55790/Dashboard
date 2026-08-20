@@ -142,12 +142,37 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource SubtitleText}" Text="Node control and sampling"/>
 
-                        <ToggleButton x:Name="BtnNodeCom3Power" Content="Node COM3 (DAB): On"
-                                      IsChecked="True" Margin="0,0,0,8"
-                                      HorizontalAlignment="Stretch" Click="BtnNodeCom3Power_Click"/>
-                        <ToggleButton x:Name="BtnNodeCom4Power" Content="Node COM4 (PSFB): On"
-                                      IsChecked="True" Margin="0,0,0,8"
-                                      HorizontalAlignment="Stretch" Click="BtnNodeCom4Power_Click"/>
+                        <!--
+                            One switch per device the selected profile declares.
+
+                            These were two buttons written out by hand, captioned with one
+                            customer's battery converter and their server rail, so every other
+                            installation was offered power switches for hardware it does not own —
+                            and the captions claimed both were already on, which nothing had asked
+                            and nothing had answered. Nothing here names a device now: the profile
+                            supplies the caption, the id that goes out on the wire, and the tooltip.
+                        -->
+                        <ItemsControl x:Name="NodeControlList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- IsChecked, not Click: a toggle can also be flipped from the
+                                         keyboard and through the accessibility toggle pattern,
+                                         neither of which raises Click, and a switch that moved
+                                         without sending anything is the one outcome the caption
+                                         exists to rule out. -->
+                                    <ToggleButton Content="{Binding Caption}" Margin="0,0,0,8"
+                                                  HorizontalAlignment="Stretch"
+                                                  ToolTip="{Binding Description}"
+                                                  IsChecked="{Binding IsOn, Mode=TwoWay}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Shown instead of the list when there is nothing to switch. An empty
+                             gap there would read as a panel that failed to load. -->
+                        <TextBlock x:Name="TxtNoNodes" Style="{StaticResource CaptionText}"
+                                   TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="No monitoring profile has been applied yet."/>
 
                         <Grid>
                             <Grid.ColumnDefinitions>

@@ -107,6 +107,34 @@ the record type — `Source`, `DerivedFrom`, `RawSource` — and this is the rea
 whose origin cannot be recovered cannot be disputed, and on a plant floor the disputed number is
 the one that matters.
 
+## A worked example of the rule catching the system out
+
+The engine published a 60-second forecast for every channel it had scored. A live feed made the
+result absurd — a Wikipedia page-size channel predicted at minus 228,000 bytes — and the first fix
+was to require that the fitted line actually explain the data. That withheld 92% of the forecasts
+the dashboard had been stating as fact, which was already a large correction.
+
+The second fix came from asking where a forecast may land: within one width of the range the channel
+has occupied, a bound the channel's own history sets rather than a constant anybody chose. A
+volatile channel earns a wide allowance and a steady one a narrow allowance, which is the right way
+round — predicting a large move for a quantity that has never moved is exactly the claim needing
+evidence.
+
+Then the arithmetic said something worse. The default window holds 50 samples at 20 Hz: **two and a
+half seconds**. The published field is called `Predicted60s`. Continuing a slope twenty-four times
+further than it was observed is not a prediction, and a perfectly clean ramp is now refused for the
+same reason noise is. The number was never supportable; the noisy channels merely made it visible by
+coming out negative.
+
+That is recorded as a finding rather than patched over, because the fix is a product decision: a
+window long enough to justify the horizon, or a horizon scaled to the window. Until one is chosen,
+the engine says nothing rather than saying something unfounded.
+
+One thing it does still say. Time-to-threshold is gated on the trend existing, not on the range
+bound, because "the threshold is 27 seconds away" is a bounded question the data can answer while
+"the value will be 63 in sixty seconds" is not. Withholding both would have removed the more useful
+of the two in precisely the situation where a channel is running away.
+
 ## What is built, and what is not
 
 This document describes a target. Claiming it is implemented would be the same category of error it

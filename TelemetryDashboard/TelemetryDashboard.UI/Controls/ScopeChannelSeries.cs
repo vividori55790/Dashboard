@@ -77,6 +77,28 @@ public sealed class ScopeChannelSeries : INotifyPropertyChanged
 
     public int SampleCount => _values.Count;
 
+    private string _scaleNote = string.Empty;
+
+    /// <summary>
+    /// The channel's real range, shown beside its name while the scope is scaling per channel.
+    /// </summary>
+    /// <remarks>
+    /// It lives here rather than in the plot's own legend because the plotting library renders that
+    /// legend in a Latin-only face: every Korean channel name came out as a row of empty boxes, and
+    /// two attempts at its font API did not change that. The toggle list is WPF text in the
+    /// application's own font stack, so it reads correctly — and one legend is better than two.
+    /// </remarks>
+    public string ScaleNote
+    {
+        get => _scaleNote;
+        set
+        {
+            if (_scaleNote == value) return;
+            _scaleNote = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScaleNote)));
+        }
+    }
+
     public bool IsVisible
     {
         get => _isVisible;

@@ -18,6 +18,11 @@ internal static class GenericMachineProfile
         Id = MonitoringProfileLibrary.GenericId,
         DisplayName = "일반 장비 (기본)",
         Summary = "온도·습도·진동·회전수 네 채널을 가진 기본 프로파일입니다.",
+
+        // No nodes, deliberately. This profile is what the application shows before anybody has
+        // told it what the machine is, and at that point it does not know of a single device it
+        // could switch on or off. Listing one would be inventing hardware.
+        Nodes = [],
         Channels =
         [
             new ProfileChannel

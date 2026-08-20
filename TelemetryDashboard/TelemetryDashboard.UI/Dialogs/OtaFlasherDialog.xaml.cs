@@ -15,7 +15,7 @@ namespace TelemetryDashboard.UI.Dialogs;
 /// <remarks>
 /// The transfer path itself was corrected earlier: no firmware image is invented, and success means
 /// "transmitted", not "flashed". What remained were the claims around it. The port list offered a
-/// fabricated "COM3 (Virtual DAB)" when the machine had no serial ports, so a bench with nothing
+/// fabricated virtual port when the machine had no serial ports, so a bench with nothing
 /// attached still looked ready; the firmware box was pre-filled with
 /// <c>C:\Firmware\mcu_node_v2.1.bin</c>; and the footer promised a 3000 ms bootloader watchdog that
 /// appears nowhere in <see cref="EdgeMcuOtaFlasher"/>. The figures shown are now read off the
@@ -46,9 +46,9 @@ public partial class OtaFlasherDialog : Window
     /// Lists the serial ports this machine reports.
     /// </summary>
     /// <remarks>
-    /// An empty list is left empty and said out loud. The previous fallback added a port named
-    /// "COM3 (Virtual DAB)" — not a device, and not even a name the serial stack would accept —
-    /// which made a machine with no hardware attached present a selectable target.
+    /// An empty list is left empty and said out loud. The previous fallback added a made-up virtual
+    /// port — not a device, and not even a name the serial stack would accept — which made a
+    /// machine with no hardware attached present a selectable target.
     /// </remarks>
     private void LoadPorts()
     {

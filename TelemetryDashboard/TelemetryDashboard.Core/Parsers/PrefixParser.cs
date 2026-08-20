@@ -85,7 +85,7 @@ public static class PrefixParser
                             NodeId = targetNodeId,
                             Variable = varName,
                             Value = calVal,
-                            Unit = tokens.Count > tokenIdx + 1 && !double.TryParse(tokens[tokenIdx + 1], out _) ? tokens[tokenIdx + 1] : "",
+                            Unit = tokens.Count > tokenIdx + 1 && !double.TryParse(tokens[tokenIdx + 1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _) ? tokens[tokenIdx + 1] : "",
                             Timestamp = rawPacket.Timestamp,
                             RawData = rawPacket.Payload,
                             Flags = PacketFlags.None

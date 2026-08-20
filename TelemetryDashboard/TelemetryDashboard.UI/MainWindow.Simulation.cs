@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Simulator;
+using TelemetryDashboard.UI.Controls;
 
 namespace TelemetryDashboard.UI;
 
@@ -35,13 +36,26 @@ public partial class MainWindow
 
     private MonitoringProfile? _activeProfile;
 
+    /// <summary>Channel ids named by a profile that the built-in model does not measure.</summary>
+    /// <remarks>
+    /// Kept so the explanation is written once per channel rather than twenty times a second. The
+    /// channel is left off the chart either way; this only governs how often that is said.
+    /// </remarks>
+    private readonly HashSet<string> _unmeasuredChannels = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
-    /// Loads the profile set and selects the neutral built-in one.
+    /// Loads the profile set, reports how that went, and selects the neutral built-in profile.
     /// </summary>
     /// <remarks>
-    /// The loader's account of itself goes straight into the event log, including the ordinary case
-    /// of there being no file. An operator who put a profile on disk and does not see it needs to
-    /// read why, and a silent fallback to a different profile is the one outcome worth refusing.
+    /// This existed and was never called, which is the whole of why the picker was empty: the
+    /// collection behind it stayed at zero items, no selection could be made, and the subtitle kept
+    /// the "preparing" placeholder it is given in XAML. Nothing about the load, the binding or the
+    /// ordering was wrong — the entry point simply had no caller.
+    /// <para>
+    /// A file that could not be used is now also said on the tab itself, not only in the event log.
+    /// An empty-looking picker and a picker whose file was rejected are the same picture, and this
+    /// application exists on the premise that those two must never be the same picture.
+    /// </para>
     /// </remarks>
     private void InitializeProfiles()
     {
@@ -55,20 +69,58 @@ public partial class MainWindow
         ControlPanel.LogMessage(
             set.Status == ProfileSourceStatus.Invalid ? "ERROR" : "PROFILE", set.Message);
 
+        ShowProfileLoadProblem(set);
+
         CboProfile.SelectedItem = MonitoringProfileSet.Default;
         if (_activeProfile is null) ApplyProfile(MonitoringProfileSet.Default);
     }
 
+    /// <summary>
+    /// Puts a rejected profile file in front of the operator, on the tab that lists profiles.
+    /// </summary>
+    /// <remarks>
+    /// Only for <see cref="ProfileSourceStatus.Invalid"/>. Having no profile file is the ordinary
+    /// state of a fresh installation and warning about it would teach the operator to ignore the
+    /// banner, which costs the one time it means something.
+    /// </remarks>
+    private void ShowProfileLoadProblem(MonitoringProfileSet set)
+    {
+        if (set.Status != ProfileSourceStatus.Invalid)
+        {
+            ProfileLoadBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ProfileLoadText.Text = set.Message;
+        ProfileLoadBanner.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Applies the picked profile, and stops the pick from being mistaken for a tab change.</summary>
+    /// <remarks>
+    /// SelectionChanged is a routed event, and the picker sits inside the ribbon's TabControl —
+    /// which is itself a Selector and answers the event as though one of its own tabs had been
+    /// chosen, re-realising its content. Marking it handled keeps the profile pick inside the
+    /// picker, where it belongs.
+    /// </remarks>
     private void CboProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        e.Handled = true;
         if (CboProfile.SelectedItem is MonitoringProfile profile) ApplyProfile(profile);
     }
 
-    /// <summary>Rebuilds the tab's controls from a profile and points the simulator at it.</summary>
+    /// <summary>Rebuilds everything a profile decides, and points the simulator at it.</summary>
+    /// <remarks>
+    /// Four things follow the selection, and they are listed here rather than each finding out on
+    /// their own: the simulator's setpoints, the setpoint sliders and scenario buttons on this tab,
+    /// the node switches in the control panel, and which channels the scope is fed.
+    /// </remarks>
     private void ApplyProfile(MonitoringProfile profile)
     {
         if (ReferenceEquals(profile, _activeProfile)) return;
+
+        MonitoringProfile? previous = _activeProfile;
         _activeProfile = profile;
+        _unmeasuredChannels.Clear();
 
         // Clearing first means a channel the previous profile drove stops being driven, rather
         // than lingering as a setpoint nothing on screen can see or reset.
@@ -87,9 +139,69 @@ public partial class MainWindow
             ProfileScenarios.Add(new ScenarioAction(scenario, RunScenario));
         }
 
+        ControlPanel.ShowProfileNodes(profile.DisplayName, profile.Nodes);
+        RetireScopeChannels(previous, profile);
+
         ActiveProfileText.Text = profile.DisplayName;
         ProfileSummaryText.Text = profile.Summary;
         ControlPanel.LogMessage("PROFILE", $"모니터링 프로파일 적용: {profile.DisplayName}");
+    }
+
+    /// <summary>
+    /// Stops plotting the outgoing profile's channels, without touching anything else on the scope.
+    /// </summary>
+    /// <remarks>
+    /// Only series the previous profile put there are retired. The scope also carries channels
+    /// discovered from the incoming packet stream, and those belong to the hardware rather than to
+    /// the selection — hiding them because the operator changed profile would blank out live traces
+    /// that never stopped arriving.
+    /// </remarks>
+    private void RetireScopeChannels(MonitoringProfile? previous, MonitoringProfile current)
+    {
+        if (previous is null) return;
+
+        foreach (ScopeChannelSeries series in ScopeControl.Channels)
+        {
+            bool wasProfileChannel = previous.Channels.Any(
+                c => string.Equals(c.Label, series.Name, StringComparison.OrdinalIgnoreCase));
+            bool stillWanted = current.Channels.Any(
+                c => string.Equals(c.Label, series.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (!wasProfileChannel || stillWanted) continue;
+
+            series.Clear();
+            series.IsVisible = false;
+        }
+    }
+
+    /// <summary>
+    /// Feeds the scope the channels the active profile declares, at their measured values.
+    /// </summary>
+    /// <remarks>
+    /// This used to push a fixed four — temperature, humidity, vibration and a figure labelled RPM
+    /// that was the model's rpm divided by a hundred — so the chart described the same four
+    /// quantities whichever system had been selected, and one of the four was a number nothing had
+    /// computed. A channel the built-in model does not measure is now left off the chart and named
+    /// in the log, because an absent trace is honest and a substituted one is not.
+    /// </remarks>
+    private void PushProfileChannelsToScope(PowerPlantState state)
+    {
+        if (_activeProfile is null) return;
+
+        foreach (ProfileChannel channel in _activeProfile.Channels)
+        {
+            if (SimulatorChannelReadings.TryRead(state, channel.Id, out double value))
+            {
+                ScopeControl.PushChannel(channel.Label, value);
+                continue;
+            }
+
+            if (_unmeasuredChannels.Add(channel.Id))
+            {
+                ControlPanel.LogMessage("WARN",
+                    $"채널 '{channel.Label}' ({channel.Id}) 은 내장 시뮬레이터가 계산하지 않아 스코프에 표시하지 않습니다.");
+            }
+        }
     }
 
     /// <summary>

@@ -165,12 +165,13 @@ public sealed class TelemetryIngestPump
     /// </remarks>
     private List<TelemetryPacket> Mark(List<TelemetryPacket> packets)
     {
-        if (!_source.IsSimulated) return packets;
-
+        // Through the router's delivery path, so a packet decoded by the channel map or the
+        // positional parser reaches plugins, alarm evaluation and the synthetic mark exactly as a
+        // rule-matched one does. Before this, a plugin on a JSON feed received nothing while every
+        // other surface showed the data arriving.
         foreach (TelemetryPacket packet in packets)
         {
-            packet.Flags |= PacketFlags.Simulated;
-            packet.NodeId = SimulatedNodeMarker.Apply(packet.NodeId);
+            _router.Deliver(packet);
         }
 
         return packets;

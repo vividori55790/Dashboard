@@ -51,7 +51,18 @@
                     </Button>
                     <!-- No glyph in the sanctioned set means "fit the axes to the data", and a
                          guessed one renders as an empty box, so this one is a plain caption. -->
-                    <Button x:Name="BtnAutoFit" Content="Auto fit" Margin="0,0,16,0" Click="BtnAutoFit_Click"/>
+                    <Button x:Name="BtnAutoFit" Content="Auto fit" Margin="0,0,8,0" Click="BtnAutoFit_Click"/>
+                    <!--
+                        One shared axis cannot show 1,200 rpm and 0.2 g at the same time: the small
+                        channels are flattened onto the floor and read as dead. Scaling each channel
+                        into a common band makes them all legible, at the cost of an axis that no
+                        longer carries units — so the axis says so when this is on, and the legend
+                        carries each channel's real range. A chart that silently renormalises is
+                        showing shapes while implying values.
+                    -->
+                    <ToggleButton x:Name="BtnFitEach" Content="Fit each" Margin="0,0,16,0"
+                                  ToolTip="Scale every channel into a common band so small ones stay readable. Values move to the legend."
+                                  Checked="BtnFitEach_Changed" Unchecked="BtnFitEach_Changed"/>
                 </StackPanel>
 
                 <!-- Channel toggles are generated from the channels actually received,
@@ -72,6 +83,11 @@
                                           IsChecked="{Binding IsVisible, Mode=TwoWay}"
                                           VerticalAlignment="Center"
                                           Checked="Channel_CheckChanged" Unchecked="Channel_CheckChanged"/>
+                                <!-- Empty unless the scope is scaling per channel, at which point
+                                     the axis stops carrying units and this is where they went. -->
+                                <TextBlock Text="{Binding ScaleNote}" Style="{StaticResource MonoText}"
+                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

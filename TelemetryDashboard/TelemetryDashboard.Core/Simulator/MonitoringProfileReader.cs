@@ -38,6 +38,9 @@ internal static class MonitoringProfileReader
             return null;
         }
 
+        List<ProfileNode>? nodes = ReadNodes(dto, name, problems);
+        if (nodes is null) return null;
+
         List<ProfileChannel>? channels = ReadChannels(dto, name, problems);
         if (channels is null) return null;
 
@@ -49,9 +52,47 @@ internal static class MonitoringProfileReader
             Id = dto.Id!,
             DisplayName = dto.DisplayName!,
             Summary = dto.Summary ?? string.Empty,
+            Nodes = nodes,
             Channels = channels,
             Scenarios = scenarios
         };
+    }
+
+    /// <summary>
+    /// Reads the devices a profile declares. An absent list means none, which is allowed.
+    /// </summary>
+    /// <remarks>
+    /// A duplicate id is rejected rather than merged: the id is what goes out in the power command,
+    /// so two buttons carrying the same one would send the same instruction under two captions and
+    /// leave the operator with no way to tell which device answered.
+    /// </remarks>
+    private static List<ProfileNode>? ReadNodes(ProfileDto dto, string name, List<string> problems)
+    {
+        var nodes = new List<ProfileNode>();
+
+        foreach (NodeDto node in dto.Nodes ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(node.Id) || string.IsNullOrWhiteSpace(node.Label))
+            {
+                problems.Add($"'{name}' — 노드에 id 또는 label 이 없습니다.");
+                return null;
+            }
+
+            if (nodes.Any(n => string.Equals(n.Id, node.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                problems.Add($"'{name}' — 노드 id '{node.Id}' 가 중복입니다.");
+                return null;
+            }
+
+            nodes.Add(new ProfileNode
+            {
+                Id = node.Id!,
+                Label = node.Label!,
+                Description = node.Description ?? string.Empty
+            });
+        }
+
+        return nodes;
     }
 
     private static List<ProfileChannel>? ReadChannels(ProfileDto dto, string name, List<string> problems)

@@ -2,8 +2,8 @@
     Firmware transfer to an edge MCU bootloader.
 
     Three things on this screen used to be invented: a default firmware path pointing at a file
-    nobody has, a fabricated "COM3 (Virtual DAB)" entry offered when the machine has no serial ports
-    at all, and a footer promising a 3000 ms bootloader watchdog that exists nowhere in the flasher.
+    nobody has, a fabricated virtual-port entry offered when the machine has no serial ports at all,
+    and a footer promising a 3000 ms bootloader watchdog that exists nowhere in the flasher.
     The transfer parameters shown now are the ones the flasher will actually use, and the banner
     reports whether a bootloader link is attached — without one the start button cannot do anything,
     which is worth saying before the operator selects a file.
