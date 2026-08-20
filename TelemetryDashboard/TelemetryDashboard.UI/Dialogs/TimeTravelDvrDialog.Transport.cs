@@ -13,21 +13,35 @@ namespace TelemetryDashboard.UI.Dialogs;
 /// </remarks>
 public partial class TimeTravelDvrDialog
 {
+    /// <summary>Starts or stops playback, and says which state the transport is now in.</summary>
+    /// <remarks>
+    /// The glyph and the caption are separate elements, so the icon font is never asked to render a
+    /// caption and the caption is never asked to render an icon. Nothing here assigns a colour:
+    /// this button used to be repainted amber while playing and green while stopped, two literal
+    /// values that spent status colours on a transport control which is neither alarming nor
+    /// reporting anything a machine measured.
+    /// </remarks>
     private void BtnTogglePlay_Click(object sender, RoutedEventArgs e)
     {
         _isPlaying = !_isPlaying;
+
         if (_isPlaying)
         {
-            BtnTogglePlay.Content = "⏸️ 일시정지 (Pause)";
-            BtnTogglePlay.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xB8, 0x00));
+            ShowTransport(playing: true);
             _playbackTimer.Start();
         }
         else
         {
-            BtnTogglePlay.Content = "▶️ 재생 (Play)";
-            BtnTogglePlay.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x9D));
+            ShowTransport(playing: false);
             _playbackTimer.Stop();
         }
+    }
+
+    /// <summary>Pause when it is running, play when it is not.</summary>
+    private void ShowTransport(bool playing)
+    {
+        PlayGlyph.Text = playing ? "" : "";
+        PlayLabel.Text = playing ? "일시정지" : "재생";
     }
 
     private void PlaybackTimer_Tick(object? sender, EventArgs e)
@@ -38,7 +52,7 @@ public partial class TimeTravelDvrDialog
         {
             SliderTimeline.Value = 0.0;
             _isPlaying = false;
-            BtnTogglePlay.Content = "▶️ 재생 (Play)";
+            ShowTransport(playing: false);
             _playbackTimer.Stop();
         }
         else
@@ -52,7 +66,7 @@ public partial class TimeTravelDvrDialog
         SliderTimeline.Value = 0.0;
         _isPlaying = false;
         _playbackTimer.Stop();
-        BtnTogglePlay.Content = "▶️ 재생 (Play)";
+        ShowTransport(playing: false);
     }
 
     /// <summary>Moves the playhead to the most recent frame an analyzer actually flagged.</summary>

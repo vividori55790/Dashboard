@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using TelemetryDashboard.Core.Ingest;
 using TelemetryDashboard.Core.Recording;
 using TelemetryDashboard.Host.Configuration;
 
@@ -27,6 +28,16 @@ public static class IngestSetup
     /// </remarks>
     public static async Task<ITelemetrySource?> OpenSourceAsync(HostOptions options, CancellationToken cancellationToken)
     {
+        if (options.PollEndpoint is not null)
+        {
+            return new PollingTelemetrySource(options.PollEndpoint, options.PollInterval);
+        }
+
+        if (options.SseEndpoint is not null)
+        {
+            return new SseTelemetrySource(options.SseEndpoint);
+        }
+
         if (options.SerialPort is not null)
         {
             var serial = new SerialTelemetrySource(options.SerialPort, options.BaudRate);
@@ -40,6 +51,20 @@ public static class IngestSetup
         }
 
         return options.Simulate ? new SimulatedTelemetrySource() : null;
+    }
+
+    /// <summary>
+    /// Loads the channel map, or returns null when none was configured.
+    /// </summary>
+    /// <remarks>
+    /// A map that cannot be read stops the start. The alternative is a host that connects to the
+    /// feed, reads every event and charts nothing, which looks exactly like a feed that has gone
+    /// quiet — and sends the operator looking at the wrong end of the problem.
+    /// </remarks>
+    public static JsonChannelMap? LoadChannelMap(HostOptions options)
+    {
+        if (options.ChannelMapPath is null) return null;
+        return JsonChannelMapReader.Load(options.ChannelMapPath);
     }
 
     /// <summary>Starts a CSV recording when one was asked for, otherwise returns null.</summary>

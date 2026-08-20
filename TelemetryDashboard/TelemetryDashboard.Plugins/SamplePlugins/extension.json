@@ -1,0 +1,9 @@
+{
+  "id": "sample.plugin",
+  "name": "Sample Telemetry Plugin",
+  "version": "1.1.0",
+  "author": "TelemetryDashboard",
+  "description": "Derives a per-channel rate of change (units/second) from routed telemetry and writes it to the host data logger.",
+  "minApiVersion": "1.0.0",
+  "entryAssembly": "TelemetryDashboard.Plugins.dll"
+}

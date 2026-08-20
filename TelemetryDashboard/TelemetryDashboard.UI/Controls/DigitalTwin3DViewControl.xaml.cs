@@ -29,7 +29,7 @@ public partial class DigitalTwin3DViewControl : UserControl
             transformGroup.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 0, 1), yaw)));
 
             TwinBox.Transform = transformGroup;
-            OrientationText.Text = $"Roll: {roll:F1}° | Pitch: {pitch:F1}° | Yaw: {yaw:F1}°";
+            OrientationText.Text = $"Roll {roll:F1}° · Pitch {pitch:F1}° · Yaw {yaw:F1}°";
         });
     }
 

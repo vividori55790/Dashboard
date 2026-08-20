@@ -61,14 +61,22 @@ public partial class TimeTravelDvrDialog : Window
         GenerateIncidentReport();
     }
 
+    /// <summary>Reports where the playhead is: live, or a signed offset into the past.</summary>
+    /// <remarks>
+    /// The two colours are tokens now. They were literal greens and cyans, and "live" is a state
+    /// the player is genuinely in, so it takes the success token; anywhere else in the timeline is
+    /// not a status at all and simply reads in the ordinary text colour.
+    /// </remarks>
     private void SliderTimeline_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (TxtTimelineCurrent == null) return;
+
         double offsetSec = SliderTimeline.Value;
-        TxtTimelineCurrent.Text = offsetSec == 0.0 ? "0.0s [LIVE]" : $"{offsetSec:F1}s";
-        TxtTimelineCurrent.Foreground = offsetSec == 0.0 ? 
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x9D)) :
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xF0, 0xFF));
+        bool live = offsetSec == 0.0;
+
+        TxtTimelineCurrent.Text = live ? "0.0s (실시간)" : $"{offsetSec:F1}s";
+        TxtTimelineCurrent.Foreground =
+            (System.Windows.Media.Brush)FindResource(live ? "SuccessBrush" : "TextPrimaryBrush");
 
         UpdateSnapshotView(offsetSec);
     }

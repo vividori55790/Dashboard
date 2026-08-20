@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using TelemetryDashboard.Core.Services;
 
 using TelemetryDashboard.UI.Diagnostics;
@@ -92,7 +93,7 @@ public partial class LlmDiagnosisDialog : Window
         if (string.IsNullOrWhiteSpace(query)) return;
 
         BtnRunQuery.IsEnabled = false;
-        TxtInferenceEngine.Text = "ENGINE: INFERRING...";
+        TxtInferenceEngine.Text = "엔진 — 분석 중";
 
         // Collect config values
         _config.ApiKey = TxtApiKey.Text.Trim();
@@ -112,23 +113,19 @@ public partial class LlmDiagnosisDialog : Window
         var report = await _agent.ProcessQueryWithLlmApiAsync(query, anomalies.ToList(), _config);
 
         TxtReportTimestamp.Text = usingLiveData
-            ? $"Report Generated: {DateTime.Now:HH:mm:ss} (live telemetry, {anomalies.Count} anomalies)"
-            : $"Report Generated: {DateTime.Now:HH:mm:ss} — NO LIVE ANOMALIES, sample data used";
+            ? $"{DateTime.Now:HH:mm:ss} 생성 · 실측 텔레메트리, 이상 징후 {anomalies.Count}건"
+            : $"{DateTime.Now:HH:mm:ss} 생성 · 기록된 이상 징후 없음, 예시 데이터로 작성";
         TxtReportMarkdown.Text = report.MarkdownReport;
-        TxtInferenceEngine.Text = $"ENGINE: {_config.Provider.ToUpper()} ({_config.ModelName})";
+        TxtInferenceEngine.Text = $"엔진 — {_config.Provider} ({_config.ModelName})";
 
-        if (report.SeverityLevel == "CRITICAL" || anomalies.Any(a => a.ZScore >= 3.5))
-        {
-            TxtSeverity.Text = "SEVERITY: CRITICAL (ACTION REQUIRED)";
-            BadgeSeverity.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x10, 0x18));
-            TxtSeverity.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0x2E, 0x63));
-        }
-        else
-        {
-            TxtSeverity.Text = "SEVERITY: NORMAL";
-            BadgeSeverity.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0A, 0x33, 0x2C));
-            TxtSeverity.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x9D));
-        }
+        // Status colours come from the palette and are spent only on a verdict the engine returned.
+        // They used to be four literal RGB values chosen here, in a window whose every other colour
+        // was defined somewhere else.
+        bool critical = report.SeverityLevel == "CRITICAL" || anomalies.Any(a => a.ZScore >= 3.5);
+        TxtSeverity.Text = critical ? "심각도 — 위험, 조치 필요" : "심각도 — 정상";
+        BadgeSeverity.Background = (Brush)FindResource(critical ? "DangerSubtleBrush" : "SuccessSubtleBrush");
+        BadgeSeverity.BorderBrush = (Brush)FindResource(critical ? "DangerBrush" : "SuccessBrush");
+        TxtSeverity.Foreground = (Brush)FindResource(critical ? "DangerBrush" : "SuccessBrush");
 
         BtnRunQuery.IsEnabled = true;
     }
@@ -137,9 +134,11 @@ public partial class LlmDiagnosisDialog : Window
     {
         string cmd = "$CMD,SAFE_MODE,NODE_1,THROTTLE_50";
         _onCommandSend?.Invoke(cmd);
-        TxtEmergencyStatus.Text = $"Emergency Trigger Dispatched: {cmd} at {DateTime.Now:HH:mm:ss}";
-        TxtEmergencyStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x9D));
-        MessageBox.Show(this, $"MCU Emergency Protection Command Dispatched:\n\n{cmd}\n\nAll power channels throttled to safe mode.", "Emergency Action Triggered", MessageBoxButton.OK, MessageBoxImage.Warning);
+        TxtEmergencyStatus.Text = $"{DateTime.Now:HH:mm:ss} 전송: {cmd}";
+        TxtEmergencyStatus.Foreground = (Brush)FindResource("WarningBrush");
+        MessageBox.Show(this,
+            $"긴급 보호 명령을 전송했습니다.\n\n{cmd}\n\n장비가 명령을 받아들였는지는 이벤트 로그에서 확인하십시오.",
+            "긴급 보호 명령", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void BtnCopyReport_Click(object sender, RoutedEventArgs e)

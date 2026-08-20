@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Query;
 
 namespace TelemetryDashboard.Core.Streaming;
 
@@ -40,6 +41,10 @@ public static class TelemetryHttpRoutes
             case "/api/dvr/report":
                 await WriteJsonAsync(response, BuildReport(server, context.Request.QueryString)).ConfigureAwait(false);
                 return;
+
+            case "/api/series":
+                await WriteSeriesAsync(response, server, context.Request.QueryString).ConfigureAwait(false);
+                return;
         }
 
         await ServeStaticAsync(response, path, content, fallbackHtmlPath).ConfigureAwait(false);
@@ -54,7 +59,55 @@ public static class TelemetryHttpRoutes
         totalPackets = server.TotalPacketsBroadcasted,
         dvrFrames = server.DvrPlayer.FrameCount,
         dvrDurationSec = server.DvrPlayer.MaxDurationSec,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/dvr/replay", "/api/dvr/report" }
+
+        // The display path's real cost, separated from ingest. subscribedClients is how many
+        // viewers are being served a reduction rather than the raw feed, and reducedPointsSent is
+        // what those viewers actually cost the wire.
+        seriesChannels = server.Series.ChannelCount,
+        seriesSamplesAccepted = server.Series.SamplesAccepted,
+        seriesSamplesRefused = server.Series.SamplesRefused,
+        subscribedClients = server.SubscribedClientCount,
+        reducedFramesSent = server.ReducedFramesSent,
+        reducedPointsSent = server.ReducedPointsSent,
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/dvr/replay", "/api/dvr/report" }
+    };
+
+    /// <summary>
+    /// Screen-shaped series query: <c>?channels=a,b&amp;windowSec=60&amp;maxPoints=2000&amp;reduction=minmax</c>.
+    /// </summary>
+    /// <remarks>
+    /// The reply is the same shape the WebSocket pump sends, metadata included, so a consumer
+    /// polling over HTTP and a consumer subscribed over a socket read identical guarantees about
+    /// what they were given.
+    /// </remarks>
+    private static async Task WriteSeriesAsync(
+        HttpListenerResponse response,
+        TelemetryStreamingServer server,
+        System.Collections.Specialized.NameValueCollection query)
+    {
+        string[] channels = (query["channels"] ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var options = new SubscriptionOptions(
+            channels,
+            SubscriptionOptions.DefaultMaxUpdateHz,
+            (int)ReadDouble(query["maxPoints"], SubscriptionOptions.DefaultMaxPoints),
+            ReadDouble(query["windowSec"], SubscriptionOptions.DefaultWindowSec),
+            ParseReduction(query["reduction"]));
+
+        double now = SeriesClock.UtcNowSec();
+        SeriesQueryResult result = server.Query(SeriesQueryRequest.Recent(
+            options.Channels, options.WindowSec, options.MaxPoints, now, options.Method));
+
+        ReadOnlyMemory<byte> body = SeriesFrameWriter.Write(result, now);
+        await WriteAsync(response, "application/json; charset=utf-8", body.ToArray()).ConfigureAwait(false);
+    }
+
+    private static ReductionMethod ParseReduction(string? raw) => raw?.ToLowerInvariant() switch
+    {
+        "lttb" or "largest-triangle-three-buckets" => ReductionMethod.LargestTriangleThreeBuckets,
+        "none" or "raw" => ReductionMethod.None,
+        _ => ReductionMethod.MinMax
     };
 
     /// <summary>

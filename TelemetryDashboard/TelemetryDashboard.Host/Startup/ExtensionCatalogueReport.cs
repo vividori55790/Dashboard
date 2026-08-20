@@ -17,24 +17,19 @@ namespace TelemetryDashboard.Host.Startup;
 /// catalogue could not be listed from anywhere. This is its entry point: <c>--extensions</c> names
 /// an index, the host reads it once at start-up and prints what it holds.
 /// <para>
-/// Listing only. Installing an extension runs a third party's code inside this process, and that
-/// is a decision with security consequences an operator makes deliberately — never a side effect
-/// of pointing the host at a catalogue.
+/// Listing only. Installing runs a third party's code inside this process, so it lives behind an
+/// explicit <see cref="ExtensionCommand"/> verb and is never a side effect of naming a catalogue.
 /// </para>
 /// <para>
-/// The rendering is separated from the printing so the exact wording can be asserted in a test.
-/// The failure wording in particular is load-bearing: a catalogue that could not be reached must
-/// never render as an empty list, because "nothing is published" and "I could not read it" lead an
-/// operator to opposite conclusions.
+/// Rendering is separated from printing so the wording can be asserted. The failure wording is the
+/// load-bearing part: a catalogue that could not be reached must never render as an empty one,
+/// because "nothing is published" and "I could not read it" lead to opposite conclusions.
 /// </para>
 /// </remarks>
 public sealed class ExtensionCatalogueReport
 {
     private ExtensionCatalogueReport(
-        string location,
-        IReadOnlyList<ExtensionDescriptor> extensions,
-        int rejectedCount,
-        string? failure)
+        string location, IReadOnlyList<ExtensionDescriptor> extensions, int rejectedCount, string? failure)
     {
         Location = location;
         Extensions = extensions;
@@ -143,6 +138,13 @@ public sealed class ExtensionCatalogueReport
         }
 
         lines.Add("                Listed only -- nothing was installed.");
+
+        // The next step, named, rather than left for the operator to find. A catalogue that can be
+        // read but not acted on was the previous state of this feature.
+        lines.Add(Location.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? "                An http(s) catalogue can be listed but not installed from."
+            : $"                To install: {ExtensionCommandLine.Verb} install --catalogue {Location} <id>");
+
         return lines;
     }
 }

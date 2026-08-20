@@ -93,12 +93,20 @@ public sealed class TelemetryFrame
             Unit = packet.Unit,
             AnomalyScore = judged ? analysis.ZScore : null,
             IsAnomaly = judged ? analysis.IsAnomaly : null,
-            Predicted60s = judged ? analysis.PredictedValueIn60s : null,
+            // Independent of the verdict: a channel can be scored confidently and still have no
+            // trend worth extrapolating. Tying the two together published a forecast for every
+            // judged channel, including the ones that are pure noise.
+            Predicted60s = analysis.HasForecast ? analysis.PredictedValueIn60s : null,
             AnalyzerId = analysis.AnalyzerId
         };
     }
 
-    /// <summary>Applies <see cref="SimulatedNodePrefix"/> to synthetic node ids.</summary>
+    /// <summary>Applies the synthetic marker, idempotently.</summary>
+    /// <remarks>
+    /// The router now marks packets as they are produced so plugins can see it too. Re-marking here
+    /// would produce <c>SIM:SIM:</c>, which is a different channel name and would split one
+    /// synthetic series into two.
+    /// </remarks>
     public static string MarkNode(string nodeId, bool simulated) =>
-        simulated ? SimulatedNodePrefix + nodeId : nodeId;
+        simulated ? Core.Models.SimulatedNodeMarker.Apply(nodeId) : nodeId;
 }

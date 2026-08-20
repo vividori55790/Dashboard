@@ -2,10 +2,13 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Analytics;
+using TelemetryDashboard.Core.Analytics.Detectors;
+using TelemetryDashboard.Core.Cluster;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Recording;
 using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Streaming;
+using TelemetryDashboard.Host.Configuration;
 using TelemetryDashboard.Host.Outbound;
 
 namespace TelemetryDashboard.Host.Ingest;
@@ -25,27 +28,59 @@ public sealed class IngestPublisher
     private readonly TelemetryStreamingServer _server;
     private readonly TelemetryCsvRecorder? _recorder;
     private readonly TelemetryMlAnalyticsEngine _analytics = new();
+    private readonly DetectorPanel _detectors;
     private readonly string _origin;
     private readonly bool _isSimulated;
 
     private long _published;
 
+    /// <param name="detectors">
+    /// Extra detectors to run beside the built-in engine, or null for the configured ones.
+    /// </param>
     public IngestPublisher(
         TelemetryStreamingServer server,
         string origin,
         bool isSimulated,
         TelemetryCsvRecorder? recorder,
-        IngestRateGuard guard)
+        IngestRateGuard guard,
+        DetectorPanel? detectors = null)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _origin = origin ?? string.Empty;
         _isSimulated = isSimulated;
         _recorder = recorder;
+        _detectors = detectors ?? AnalyticsSetup.Shared.Panel;
         Guard = guard ?? throw new ArgumentNullException(nameof(guard));
     }
 
     /// <summary>The rate guard protecting the stream, the console and the recorder.</summary>
     public IngestRateGuard Guard { get; }
+
+    /// <summary>
+    /// The configured detectors, and what each of them has actually judged.
+    /// </summary>
+    /// <remarks>
+    /// The built-in rolling z-score above is not the only opinion available any more, and this is
+    /// where the others are. Their verdicts are deliberately kept apart rather than merged into the
+    /// one score on the wire: a robust detector flagging a spike that the z-score's own poisoned
+    /// baseline hid is a diagnosis, and combining the two into a single number destroys it. The
+    /// per-detector tallies are the answer to "why is this detector silent" — one offered forty
+    /// thousand samples and judging none looks, from the chart, exactly like one that judged them
+    /// all and found nothing wrong.
+    /// </remarks>
+    public DetectorPanel Detectors => _detectors;
+
+    /// <summary>
+    /// Which reporting nodes have been heard from, and which have gone quiet.
+    /// </summary>
+    /// <remarks>
+    /// Applied to devices here, because on one machine that is where the failure already exists: a
+    /// sensor that stops sending produces no data, and no data renders as a calm channel rather
+    /// than as a fault. Counting the samples that arrived can never reveal it — only tracking who
+    /// was expected can. The same ledger answers the machine-level question unchanged once
+    /// instances exchange data with each other.
+    /// </remarks>
+    public CoverageLedger Coverage { get; } = new();
 
     /// <summary>
     /// Raised for every sample that reaches the wire, carrying the verdict as it was actually
@@ -74,7 +109,15 @@ public sealed class IngestPublisher
 
         if (!Guard.Allow(channel)) return ValueTask.CompletedTask;
 
+        Coverage.RecordSample(node);
+
         AnomalyResult analysis = _analytics.AnalyzeChannel(channel, packet.Value);
+
+        // Every other configured detector sees the same sample. None of them may block: the remote
+        // model detector answers from the last score that came back rather than waiting for the
+        // next one, and reports no verdict at all when there is no fresh answer to report. What
+        // they flagged is readable afterwards through Detectors.RecentFlags.
+        _detectors.Evaluate(channel, packet.Value, packet.Timestamp);
 
         _server.BroadcastTelemetry(
             TelemetryFrame.Create(packet, analysis, _origin, _isSimulated, portName));

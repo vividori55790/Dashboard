@@ -15,6 +15,19 @@ public sealed class DataRouter : IDataRouter
 
     public event EventHandler<TelemetryPacket>? PacketRouted;
 
+    /// <summary>
+    /// Whether the packets this router produces came from a synthetic source.
+    /// </summary>
+    /// <remarks>
+    /// Set once per run from the attached source. It exists because the mark used to be applied
+    /// further downstream, on the publish path, and plugins are delivered to from here — so a
+    /// plugin received two hundred simulated packets carrying no <see cref="PacketFlags.Simulated"/>
+    /// bit and an unprefixed node id, while the start-up banner promised that every frame carried
+    /// both. A plugin that cannot tell synthetic data from a measurement can write it into a report
+    /// as a measurement, which is the failure this project exists to prevent.
+    /// </remarks>
+    public bool SourceIsSimulated { get; set; }
+
     public void RegisterNode(SensorNode node)
     {
         _nodes[node.NodeId] = node;
@@ -106,6 +119,14 @@ public sealed class DataRouter : IDataRouter
             {
                 pkt.Flags |= PacketFlags.AlarmExceeded;
             }
+        }
+
+        // Marked here, after the node lookup above so configured node names still match, and before
+        // anything downstream sees the packet -- plugins included.
+        if (SourceIsSimulated)
+        {
+            pkt.Flags |= PacketFlags.Simulated;
+            pkt.NodeId = SimulatedNodeMarker.Apply(pkt.NodeId);
         }
 
         collector.Add(pkt);

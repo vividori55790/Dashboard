@@ -34,6 +34,12 @@ public static class Program
     /// <summary>Starts the host and blocks until a shutdown signal arrives.</summary>
     public static async Task<int> Main(string[] args)
     {
+        // Before anything binds a socket. Installing, enabling or removing an extension is an
+        // administrative act that ends: a process that also started serving telemetry would leave
+        // an operator unable to say whether the install happened before or after this host began
+        // running a third party's code.
+        if (ExtensionCommandLine.Matches(args)) return ExtensionCommand.Run(args);
+
         HostOptions options = CommandLineParser.Parse(args, EnvironmentVariables.Read());
 
         if (options.ShowHelp)
@@ -76,7 +82,21 @@ public static class Program
 
         // The pump is built before the plugins so they are handed the router it is publishing
         // through, and started after them so no frame is routed past a plugin that is not up yet.
-        TelemetryIngestPump? pump = source is null ? null : new TelemetryIngestPump(console.Server, source, recorder);
+        Core.Ingest.JsonChannelMap? channelMap;
+        try
+        {
+            channelMap = IngestSetup.LoadChannelMap(options);
+        }
+        catch (Exception ex) when (ex is System.IO.FileNotFoundException or System.IO.InvalidDataException)
+        {
+            Console.Error.WriteLine($"telemetry-host: {ex.Message}");
+            await console.DisposeAsync().ConfigureAwait(false);
+            return ExitUsage;
+        }
+
+        TelemetryIngestPump? pump = source is null
+            ? null
+            : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap);
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, (source as SerialTelemetrySource)?.SerialManager);
 

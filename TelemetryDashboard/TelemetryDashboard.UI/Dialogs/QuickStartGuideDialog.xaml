@@ -1,104 +1,167 @@
+<!--
+    The user guide.
+
+    Two things were wrong with it beyond the styling. It was written in emoji — every heading, every
+    tab, and the arrows inside the instructions — and emoji render from a colour font that ignores
+    Foreground, so they were the only marks on the page the palette could not reach. And it walked
+    the operator through a ribbon that no longer exists: "Dual-MCU 시뮬레이터 시작", "포트검색",
+    "오토스캔", "AI 진단 & DVR". A guide that names buttons the application does not have is worse
+    than no guide, so every step below names the caption the ribbon actually carries.
+-->
 <Window x:Class="TelemetryDashboard.UI.Dialogs.QuickStartGuideDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="📖 TelemetryDashboard v2.0 - 사용자 친화적 종합 기능 매뉴얼 &amp; 활성화 가이드" 
-        Height="700" Width="980"
+        Title="사용 안내"
+        Height="700" Width="980" MinHeight="480" MinWidth="640"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0E14"
-        Foreground="#F0F6FC">
+        Background="{StaticResource CanvasBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}">
+    <Window.Resources>
+        <Style x:Key="GuideHeading" TargetType="TextBlock" BasedOn="{StaticResource SubtitleText}">
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="GuideStep" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="Margin" Value="0,10,0,2"/>
+        </Style>
+
+        <!-- Body copy wraps and is never given a width: the guide is read at whatever size the
+             operator drags the window to. -->
+        <Style x:Key="GuideBody" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="LineHeight" Value="18"/>
+            <Setter Property="Margin" Value="12,0,0,0"/>
+        </Style>
+
+        <Style x:Key="GuidePage" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="Padding" Value="16"/>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Title -->
-            <RowDefinition Height="*"/>    <!-- Tabbed Manual -->
-            <RowDefinition Height="Auto"/> <!-- Footer -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="📖 TelemetryDashboard 종합 사용 매뉴얼 &amp; 기능 활성화 가이드" Foreground="#00F0FF" FontSize="18" FontWeight="Bold"/>
-            <TextBlock Text="이종 디바이스 데이터 수집, 실시간 파일 로깅, 생성형 AI 진단, No-Code 대시보드 및 OTA 플래싱 사용법" Foreground="#8B949E" FontSize="12" Margin="0,2,0,0"/>
+            <TextBlock Style="{StaticResource TitleText}" Text="Telemetry Dashboard 사용 안내"/>
+            <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="데이터 수집, CSV 기록, 자연어 진단, 웹 콘솔, 경보 전달, 펌웨어 업데이트까지 각 기능을 어디서 켜는지 설명합니다."/>
         </StackPanel>
 
-        <!-- Manual TabControl -->
-        <TabControl Grid.Row="1" Background="#121720" BorderBrush="#283548">
-            <!-- Tab 1: 시뮬레이터 & 시리얼 연결 -->
-            <TabItem Header="🔌 1. 연결 &amp; 데이터 수집" Foreground="#00F0FF">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
-                    <StackPanel>
-                        <TextBlock Text="🚀 데이터 수집 시작하기" Foreground="#00FF9D" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="1. 가상 MCU 시뮬레이터로 즉시 테스트하기:" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• 상단 리본 메뉴 [🔌 연결 &amp; 수집] ➔ [🚀 Dual-MCU 시뮬레이터 시작] 버튼 클릭&#x0a;• DAB 컨버터(COM3)와 PSFB 컨버터(COM4)의 4개 채널(온도, 습도, 진동, RPM)이 20Hz 속도로 즉시 실시간 생성되어 스코프와 우측 패널에 표시됩니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,8"/>
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
 
-                        <TextBlock Text="2. 실제 하드웨어 (아두이노/STM32/ESP32) 연결하기:" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• USB 시리얼 케이블을 PC에 연결 ➔ [🔄 포트검색] 클릭&#x0a;• 포트(예: COM3) 및 보드레이트(예: 115200) 선택 ➔ [🔗 연결 시작] 클릭&#x0a;• 만약 보드레이트를 모를 경우 [⚡ 오토스캔] 모달을 열어 9600~921600 중 유효한 패킷을 자동 탐지할 수 있습니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,0"/>
+            <TabItem Header="연결">
+                <ScrollViewer Style="{StaticResource GuidePage}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="데이터 수집 시작하기"/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="1. 하드웨어 없이 바로 시험하기"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [시뮬레이션 프로파일] 탭에서 프로파일을 고르고 [가상 MCU 스트림 시작]을 누릅니다. 가상 패킷이 실제 하드웨어와 같은 수집 경로로 흘러가므로, 파서·라우터·이상 탐지기가 모두 실제와 동일하게 동작합니다. 채널과 시나리오 버튼은 선택한 프로파일이 선언한 것만 나타납니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="2. 실제 장비 연결하기"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="USB 시리얼 케이블을 연결한 뒤 리본의 [연결] 탭에서 [포트 다시 검색]을 누르고, 포트와 보드레이트를 고른 다음 [연결]을 누릅니다. 보드레이트를 모르면 [보드레이트 자동 탐색]이 응답하는 조합을 찾아 줍니다. 연결 상태는 창 아래 상태 표시줄과 제목 표시줄에 함께 나타납니다."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 2: 실시간 CSV 파일 로깅 -->
-            <TabItem Header="📁 2. 실제 CSV 파일 로깅" Foreground="#00FF9D">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+            <TabItem Header="기록">
+                <ScrollViewer Style="{StaticResource GuidePage}">
                     <StackPanel>
-                        <TextBlock Text="💾 실제 시계열 데이터 디스크 저장 (CSV 영구 보존)" Foreground="#00FF9D" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="• 활성화 방법: 상단 리본 메뉴 [⚡ 도구 &amp; OTA 플래셔] ➔ [⏺️ CSV 녹화 시작] 클릭" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• 저장 위치: 프로그램 실행 폴더 내 `logs/telemetry_log_YYYYMMDD_HHmmss.csv` 파일로 자동 생성&#x0a;• 실시간 플러시: 수신되는 모든 패킷(타임스탬프, 노드ID, 채널, 실측치, Z-Score, 이상치 판정, 회귀 예측치)이 디스크에 즉시 안전하게 기록됩니다.&#x0a;• 녹화 종료: [⏹️ CSV 녹화 정지] 버튼을 누르면 파일이 닫히며, [📁 logs 폴더 열기] 버튼을 눌러 엑셀(Excel)이나 메모장으로 즉시 열람할 수 있습니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,8"/>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="CSV 파일로 남기기"/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="켜는 위치"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [도구] 탭에서 [CSV 녹화 시작]을 누릅니다. 녹화 중에는 같은 버튼이 [CSV 녹화 정지]로 바뀌고, 상태 표시줄이 기록된 건수와 파일 크기를 보고합니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="저장되는 내용"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="실행 폴더 아래 logs 디렉터리에 파일이 만들어지고, 수신되는 각 샘플의 타임스탬프·노드·채널·측정값·Z-점수·이상 판정·예측치가 즉시 디스크에 기록됩니다. 녹화를 멈추면 파일이 닫히며, [로그 폴더 열기]로 바로 찾아볼 수 있습니다."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 3: LLM AI 진단 및 Ollama 연동 -->
-            <TabItem Header="🤖 3. LLM AI 진단 &amp; 긴급제어" Foreground="#BA68C8">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+            <TabItem Header="진단">
+                <ScrollViewer Style="{StaticResource GuidePage}">
                     <StackPanel>
-                        <TextBlock Text="🧠 생성형 AI 자연어 진단 및 오프라인 전문가 규칙 엔진" Foreground="#00F0FF" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="1. 오프라인 모드 (기본값, 별도 설정 불필요):" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• 다채널 교차 상관 결함 분석기(온도+진동 = 베어링 마찰, 전압+전류 = 단락 서지)가 0.01초 만에 마크다운 리포트를 자동 생성합니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,8"/>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="자연어 진단 에이전트"/>
 
-                        <TextBlock Text="2. 로컬 Ollama 또는 OpenAI API 연동하기 (실제 생성형 AI 가동):" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• [🧠 AI 진단 &amp; DVR] ➔ [🤖 LLM 자연어 진단] ➔ [⚙️ LLM API 설정] 클릭&#x0a;• Local Ollama 선택 시: `http://localhost:11434/v1/chat/completions` (API 키 불필요, Llama 3 / DeepSeek 로컬 모델 사용)&#x0a;• OpenAI 선택 시: API Key 입력 ➔ [🚀 AI 실시간 진단 실행] 클릭 시 실제 GPT-4o가 실시간 텔레메트리 스냅샷을 분석합니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,0"/>
+                        <TextBlock Style="{StaticResource GuideStep}" Text="1. 내장 규칙 엔진 (기본값)"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [분석 및 재생] 탭에서 [자연어 진단 에이전트]를 엽니다. 별도 설정 없이, 이번 세션에 실제로 기록된 이상 징후를 근거로 마크다운 리포트를 만듭니다. 기록된 이상 징후가 없으면 리포트가 그 사실을 먼저 밝힙니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="2. 외부 언어 모델 연결"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="같은 창의 [LLM API 설정]에서 공급자를 고릅니다. 로컬 Ollama는 API 키 없이 http://localhost:11434 로 연결되고, OpenAI는 API 키와 모델 이름이 필요합니다. 어느 쪽이든 분석 대상은 화면에 떠 있는 것과 같은 텔레메트리 스냅샷입니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="3. 기록 구간 되짚어 보기"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="[타임트래블 DVR]은 보관된 프레임을 되감아 재생하고, 그 구간에 대한 사고 리포트를 만들어 줍니다. 기록이 없는 구간은 비어 있다고 표시할 뿐, 값을 지어내지 않습니다."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 4: No-Code 대시보드 & 웹 콘솔 -->
-            <TabItem Header="🌐 4. No-Code 대시보드 &amp; 웹 콘솔" Foreground="#66FCF1">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+            <TabItem Header="웹 콘솔">
+                <ScrollViewer Style="{StaticResource GuidePage}">
                     <StackPanel>
-                        <TextBlock Text="🌐 웹 브라우저 &amp; 스마트폰 실시간 시각화" Foreground="#00FF9D" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="1. 2D 노드 연결형 실시간 웹 콘솔:" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• 상단 리본 메뉴 [🌐 메쉬 &amp; 웹 스트리밍] ➔ [🌐 웹 시각화 콘솔] 클릭 (브라우저에서 http://localhost:8080/ 열림)&#x0a;• 웹 화면에서 마우스로 수집 소스 ➔ ML 연산기 ➔ 차트 노드 간 와이어를 드래그하여 연결할 수 있습니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,8"/>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="브라우저로 보기"/>
 
-                        <TextBlock Text="2. No-Code 드래그 앤 드롭 대시보드 빌더:" Foreground="#F0F6FC" FontWeight="Bold" Margin="0,4,0,2"/>
-                        <TextBlock Text="• [🛠️ No-Code 웹 대시보드 빌더] 클릭 ➔ 게이지, 차트, 수치 카드를 원하는 위치로 드래그 배치 ➔ [💾 독립형 HTML 내보내기] 1-클릭으로 `custom_dashboard.html` 생성" Foreground="#8B949E" TextWrapping="Wrap" Margin="10,0,0,0"/>
+                        <TextBlock Style="{StaticResource GuideStep}" Text="1. 번들 웹 콘솔"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [웹 콘솔] 탭에서 [웹 클라이언트 콘솔]을 누르면 기본 브라우저가 열립니다. 주소는 스트리밍 서버가 실제로 열려 있는 포트에서 만들어지므로, 포트를 바꿔 실행해도 안내되는 주소가 어긋나지 않습니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="2. 직접 만든 화면 붙이기"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="[대시보드 빌더]로 게이지·차트·수치 카드를 배치해 독립형 HTML로 내보낼 수 있고, [웹 템플릿 가이드]에는 그대로 고쳐 쓸 수 있는 예제가 들어 있습니다. 어떤 WebSocket 클라이언트든 같은 스트림을 구독할 수 있으며, 주소는 [WebSocket 주소 복사]로 클립보드에 담깁니다."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 5: Slack / Discord / Telegram 경보 -->
-            <TabItem Header="📲 5. 메신저 AI 경보 포워딩" Foreground="#FFB800">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+            <TabItem Header="경보">
+                <ScrollViewer Style="{StaticResource GuidePage}">
                     <StackPanel>
-                        <TextBlock Text="📲 실시간 웨이브폼 &amp; AI 요약 메시지 자동 전송" Foreground="#FFB800" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="• 활성화 방법: [📲 경보 &amp; 가변샘플링] ➔ [📲 Slack / Discord / Telegram 경보 설정] 클릭&#x0a;• 슬랙(Slack Incoming Webhook), 디스코드(Discord Webhook URL), 텔레그램(Bot Token, Chat ID) 주소를 입력하고 활성화 체크&#x0a;• [🧪 테스트 전송] 버튼을 눌러 ASCII 스파크라인 및 웨이브폼이 메신저로 정상 수신되는지 즉시 검증할 수 있습니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,4,0,0"/>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="경보 전달과 샘플링"/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="메신저로 경보 보내기"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [경보 및 샘플링] 탭에서 [경보 전달 설정]을 엽니다. Slack 수신 웹훅, Discord 웹훅 주소, Telegram 봇 토큰과 채팅 ID를 넣고 활성화한 뒤, 시험 전송으로 실제로 도착하는지 먼저 확인하십시오."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="샘플링 주기 자동 조절"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="[가변 샘플링 설정]은 채널이 조용할 때 주기를 늘리고 움직일 때 줄입니다. 저장 용량과 해상도를 맞바꾸는 설정이므로, 기록을 남기는 중이라면 바꾸기 전에 무엇을 잃는지 확인하십시오."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 6: OTA 펌웨어 플래셔 -->
-            <TabItem Header="⚡ 6. 엣지 MCU 원격 OTA 플래셔" Foreground="#FF2E63">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+            <TabItem Header="펌웨어">
+                <ScrollViewer Style="{StaticResource GuidePage}">
                     <StackPanel>
-                        <TextBlock Text="⚡ 하드웨어 분해 없는 원격 펌웨어 플래싱" Foreground="#FF2E63" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="• 활성화 방법: [⚡ 도구 &amp; OTA 플래셔] ➔ [⚡ 엣지 MCU 원격 OTA 플래셔] 클릭&#x0a;• 연결된 대상 포트(COM3)를 지정하고 컴파일된 `.bin`, `.hex`, `.elf` 파일 선택&#x0a;• [⚡ 펌웨어 플래싱 시작] 클릭 시 청크 단위 패킷 전송, 실시간 진행률(%), CRC32 무결성 검증 후 MCU가 자동으로 새 펌웨어로 부팅됩니다." Foreground="#8B949E" TextWrapping="Wrap" Margin="10,4,0,0"/>
+                        <TextBlock Style="{StaticResource GuideHeading}" Text="원격 펌웨어 업데이트"/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="여는 위치"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="리본의 [도구] 탭에서 [펌웨어 업데이트 (OTA)]를 엽니다. 대상 포트를 지정하고 컴파일된 .bin, .hex, .elf 파일을 고른 뒤 플래싱을 시작하면, 청크 단위로 전송하며 진행률과 CRC32 검증 결과를 보고합니다."/>
+
+                        <TextBlock Style="{StaticResource GuideStep}" Text="주의"/>
+                        <TextBlock Style="{StaticResource GuideBody}"
+                                   Text="플래싱은 되돌릴 수 없고, 도중에 전원이나 케이블이 끊기면 장비가 부팅하지 못할 수 있습니다. 시작 버튼이 붉은 이유가 이것입니다. 시작 전에 대상 포트가 맞는지 다시 확인하십시오."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
         </TabControl>
 
-        <!-- Footer -->
         <DockPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock Text="TelemetryDashboard v2.0 Enterprise Hub Manual" Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
-            <Button Content="닫기 (확인)" HorizontalAlignment="Right" Padding="14,6" Background="#00F0FF" Foreground="#0B0E14" FontWeight="Bold" Click="BtnClose_Click"/>
+            <TextBlock Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                       Text="이 안내는 리본에 실제로 있는 명령만 설명합니다."/>
+            <Button Content="닫기" HorizontalAlignment="Right"
+                    Style="{StaticResource PrimaryButton}" Click="BtnClose_Click"/>
         </DockPanel>
     </Grid>
 </Window>

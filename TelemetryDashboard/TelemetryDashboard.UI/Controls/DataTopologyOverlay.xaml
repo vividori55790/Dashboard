@@ -1,42 +1,82 @@
+<!--
+    The path a sample takes from the wire to the screen.
+
+    The heading used to read "ORGANIC DATA TOPOLOGY NETWORK", which names nothing an operator could
+    look for: there is no topology, no network, and nothing organic. It is four fixed stages in a
+    fixed order, so it says that.
+
+    Two of the figures below are dashes on purpose. The parser panel claimed "Valid: 99.9%" and the
+    formula panel claimed "Expressions Active", and no code anywhere wrote to either — they were
+    static text that looked like instrumentation.
+-->
 <UserControl x:Class="TelemetryDashboard.UI.Controls.DataTopologyOverlay"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-             mc:Ignorable="d" 
-             d:DesignHeight="250" d:DesignWidth="700">
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="200" d:DesignWidth="900">
     <UserControl.Resources>
-        <Style TargetType="Border" x:Key="NodeCardStyle">
-            <Setter Property="Background" Value="#1E1E2E"/>
-            <Setter Property="BorderBrush" Value="#3B4252"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                </Setter.Value>
-            </Setter>
+        <Style x:Key="NodeCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusM}"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+
+        <Style x:Key="NodeTitle" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="NodeDetail" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <!-- Connector: a rule and an arrowhead drawn as geometry. An arrow glyph would have to come
+             from the icon font, and the sanctioned set has none, so this is a shape. -->
+        <Style x:Key="ConnectorLine" TargetType="Rectangle">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Fill" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ConnectorHead" TargetType="Path">
+            <Setter Property="Data" Value="M0,0 L5,4 L0,8 Z"/>
+            <Setter Property="Fill" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
         </Style>
     </UserControl.Resources>
 
-    <Border Background="#1A1B26" BorderBrush="#3B4252" BorderThickness="1" CornerRadius="10" Padding="12" Margin="5">
+    <Border Style="{StaticResource Card}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Header -->
-            <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <DockPanel Grid.Row="0" Margin="0,0,0,16">
+                <TextBlock x:Name="ThroughputText" DockPanel.Dock="Right"
+                           Style="{StaticResource MonoText}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Text="No data received yet"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Ellipse Width="10" Height="10" Fill="#00E676" Margin="0,0,8,0" x:Name="StatusLed"/>
-                    <TextBlock Text="ORGANIC DATA TOPOLOGY NETWORK" Foreground="#89DDFF" FontWeight="Bold" FontSize="12"/>
+                    <Ellipse x:Name="StatusLed" Width="8" Height="8" Margin="0,0,8,0"
+                             VerticalAlignment="Center"
+                             Fill="{StaticResource TextTertiaryBrush}"/>
+                    <TextBlock Style="{StaticResource SubtitleText}" Margin="0"
+                               VerticalAlignment="Center" Text="Telemetry pipeline"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="10,0,0,0"
+                               VerticalAlignment="Center" Text="from the port to the screen"/>
                 </StackPanel>
-                <TextBlock x:Name="ThroughputText" Text="Data Stream: Active (60 Hz)" Foreground="#A9B1D6" FontSize="11" HorizontalAlignment="Right"/>
             </DockPanel>
 
-            <!-- Canvas Links & Nodes Grid -->
             <Grid Grid.Row="1">
                 <Canvas x:Name="LinkCanvas" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
 
@@ -51,63 +91,61 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Node 1: Source -->
-                    <Border Grid.Column="0" Style="{StaticResource NodeCardStyle}" x:Name="NodeSource" Cursor="Hand" MouseLeftButtonDown="Node_Click">
+                    <Border Grid.Column="0" Style="{StaticResource NodeCardStyle}" x:Name="NodeSource"
+                            Cursor="Hand" MouseLeftButtonDown="Node_Click">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="🔌 " FontSize="12"/>
-                                <TextBlock Text="DATA SOURCE" Foreground="#BB9AF7" FontWeight="Bold" FontSize="11"/>
-                            </StackPanel>
-                            <TextBlock x:Name="SourceDetailsText" Text="COM3/COM4 Sim" Foreground="#C0CAF5" FontSize="10" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="Telemetry Rx" Foreground="#7AA2F7" FontSize="9" Margin="0,2,0,0"/>
+                            <TextBlock Style="{StaticResource NodeTitle}" Text="1 · Source"/>
+                            <TextBlock x:Name="SourceDetailsText" Style="{StaticResource NodeDetail}"
+                                       Text="No source attached"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- Arrow 1 -->
-                    <TextBlock Grid.Column="1" Text=" ➔ " Foreground="#7AA2F7" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="4,0"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="12,0">
+                        <Rectangle Style="{StaticResource ConnectorLine}"/>
+                        <Path Style="{StaticResource ConnectorHead}"/>
+                    </StackPanel>
 
-                    <!-- Node 2: Parser -->
-                    <Border Grid.Column="2" Style="{StaticResource NodeCardStyle}" x:Name="NodeParser" Cursor="Hand" MouseLeftButtonDown="Node_Click">
+                    <Border Grid.Column="2" Style="{StaticResource NodeCardStyle}" x:Name="NodeParser"
+                            Cursor="Hand" MouseLeftButtonDown="Node_Click">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="⚙️ " FontSize="12"/>
-                                <TextBlock Text="PACKET PARSER" Foreground="#7AA2F7" FontWeight="Bold" FontSize="11"/>
-                            </StackPanel>
-                            <TextBlock Text="Framing &amp; CRC" Foreground="#C0CAF5" FontSize="10"/>
-                            <TextBlock x:Name="ParserStatsText" Text="Valid: 99.9%" Foreground="#9ECE6A" FontSize="9" Margin="0,2,0,0"/>
+                            <TextBlock Style="{StaticResource NodeTitle}" Text="2 · Parser"/>
+                            <TextBlock Style="{StaticResource NodeDetail}" Text="Framing and CRC"/>
+                            <TextBlock x:Name="ParserStatsText" Style="{StaticResource NodeDetail}"
+                                       Text="Valid frames: not measured" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- Arrow 2 -->
-                    <TextBlock Grid.Column="3" Text=" ➔ " Foreground="#7AA2F7" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="4,0"/>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="12,0">
+                        <Rectangle Style="{StaticResource ConnectorLine}"/>
+                        <Path Style="{StaticResource ConnectorHead}"/>
+                    </StackPanel>
 
-                    <!-- Node 3: Formula Engine -->
-                    <Border Grid.Column="4" Style="{StaticResource NodeCardStyle}" x:Name="NodeEngine" Cursor="Hand" MouseLeftButtonDown="Node_Click">
+                    <Border Grid.Column="4" Style="{StaticResource NodeCardStyle}" x:Name="NodeEngine"
+                            Cursor="Hand" MouseLeftButtonDown="Node_Click">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="🧮 " FontSize="12"/>
-                                <TextBlock Text="FORMULA EVAL" Foreground="#E0AF68" FontWeight="Bold" FontSize="11"/>
-                            </StackPanel>
-                            <TextBlock Text="Signal Processing" Foreground="#C0CAF5" FontSize="10"/>
-                            <TextBlock x:Name="EngineStatsText" Text="Expressions Active" Foreground="#7AA2F7" FontSize="9" Margin="0,2,0,0"/>
+                            <TextBlock Style="{StaticResource NodeTitle}" Text="3 · Formula engine"/>
+                            <TextBlock Style="{StaticResource NodeDetail}" Text="Derived channels"/>
+                            <TextBlock x:Name="EngineStatsText" Style="{StaticResource NodeDetail}"
+                                       Text="Expressions: not measured" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- Arrow 3 -->
-                    <TextBlock Grid.Column="5" Text=" ➔ " Foreground="#7AA2F7" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="4,0"/>
+                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="12,0">
+                        <Rectangle Style="{StaticResource ConnectorLine}"/>
+                        <Path Style="{StaticResource ConnectorHead}"/>
+                    </StackPanel>
 
-                    <!-- Node 4: Outputs -->
-                    <Border Grid.Column="6" Style="{StaticResource NodeCardStyle}" x:Name="NodeOutputs" Cursor="Hand" MouseLeftButtonDown="Node_Click">
+                    <Border Grid.Column="6" Style="{StaticResource NodeCardStyle}" x:Name="NodeOutputs"
+                            Cursor="Hand" MouseLeftButtonDown="Node_Click">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="📊 " FontSize="12"/>
-                                <TextBlock Text="OUTPUT VIEWS" Foreground="#7DCFFF" FontWeight="Bold" FontSize="11"/>
-                            </StackPanel>
-                            <TextBlock Text="2D Scope / 3D Twin" Foreground="#C0CAF5" FontSize="10"/>
-                            <TextBlock Text="Control Log" Foreground="#00E676" FontSize="9" Margin="0,2,0,0"/>
+                            <TextBlock Style="{StaticResource NodeTitle}" Text="4 · Views"/>
+                            <TextBlock Style="{StaticResource NodeDetail}"
+                                       Text="Scope, 3D twin, event log"/>
                         </StackPanel>
                     </Border>
-
                 </Grid>
             </Grid>
         </Grid>

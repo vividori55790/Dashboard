@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using TelemetryDashboard.Host.Ingest;
 
 namespace TelemetryDashboard.Host.Configuration;
 
@@ -71,6 +72,13 @@ public static class CommandLineParser
                     draft.PluginDirectory = Path.GetFullPath(rawPluginDir);
                     break;
 
+                // Not required to exist: a host pointed at a store before anything is installed
+                // must report it empty rather than refuse to start.
+                case "--extension-dir":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawExtensionDir)) return ArgumentCursor.MissingValue(argument);
+                    draft.ExtensionDirectory = Path.GetFullPath(rawExtensionDir);
+                    break;
+
                 // Not validated here: the value may be a URL, and a local path is checked by the
                 // fetch itself so an index deleted between start-up and the fetch still reports
                 // unreachable rather than being pre-cleared as fine.
@@ -106,6 +114,47 @@ public static class CommandLineParser
                     draft.UpdateRepository = rawRepo;
                     break;
 
+                case "--sse":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawSse)) return ArgumentCursor.MissingValue(argument);
+                    if (!Uri.TryCreate(rawSse, UriKind.Absolute, out Uri? sseUri)
+                        || (sseUri.Scheme != Uri.UriSchemeHttp && sseUri.Scheme != Uri.UriSchemeHttps))
+                    {
+                        return ArgumentCursor.Fail($"'{rawSse}' is not an absolute http(s) URL.");
+                    }
+                    draft.SseEndpoint = rawSse;
+                    break;
+
+                // Checked here because a map that cannot be read must stop the start rather than
+                // producing a host that connects to the feed and silently charts nothing.
+                case "--stream-map":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawMap)) return ArgumentCursor.MissingValue(argument);
+                    if (!File.Exists(rawMap)) return ArgumentCursor.Fail($"channel map '{rawMap}' does not exist.");
+                    draft.ChannelMapPath = Path.GetFullPath(rawMap);
+                    break;
+
+                case "--poll":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawPoll)) return ArgumentCursor.MissingValue(argument);
+                    if (!Uri.TryCreate(rawPoll, UriKind.Absolute, out Uri? pollUri)
+                        || (pollUri.Scheme != Uri.UriSchemeHttp && pollUri.Scheme != Uri.UriSchemeHttps))
+                    {
+                        return ArgumentCursor.Fail($"'{rawPoll}' is not an absolute http(s) URL.");
+                    }
+                    draft.PollEndpoint = rawPoll;
+                    break;
+
+                case "--poll-interval":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawInterval)) return ArgumentCursor.MissingValue(argument);
+                    if (!double.TryParse(rawInterval, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out double seconds)
+                        || TimeSpan.FromSeconds(seconds) < PollingTelemetrySource.MinimumInterval)
+                    {
+                        return ArgumentCursor.Fail(
+                            $"'{rawInterval}' is not a poll interval of at least "
+                            + $"{PollingTelemetrySource.MinimumInterval.TotalMilliseconds:N0} ms. Public feeds are shared.");
+                    }
+                    draft.PollInterval = TimeSpan.FromSeconds(seconds);
+                    break;
+
                 default:
                     return ArgumentCursor.Fail($"unknown argument '{argument}'.");
             }
@@ -113,6 +162,16 @@ public static class CommandLineParser
 
         // Both sources at once would mean broadcasting synthetic and measured frames on one
         // channel, with nothing downstream able to separate them again.
+        if (draft.PollEndpoint is not null && (draft.SseEndpoint is not null || draft.SerialPort is not null || draft.Simulate))
+        {
+            return ArgumentCursor.Fail("--poll cannot be combined with another source: one host reads one source.");
+        }
+
+        if (draft.SseEndpoint is not null && (draft.SerialPort is not null || draft.Simulate))
+        {
+            return ArgumentCursor.Fail("--sse cannot be combined with --serial or --simulate: one host reads one source.");
+        }
+
         if (draft.SerialPort is not null && draft.Simulate)
         {
             return ArgumentCursor.Fail("--serial and --simulate are mutually exclusive: pick measured data or synthetic data.");

@@ -1,4 +1,5 @@
 using TelemetryDashboard.Host.Outbound;
+using TelemetryDashboard.Host.Startup;
 
 namespace TelemetryDashboard.Host.Configuration;
 
@@ -20,6 +21,10 @@ public static class UsageText
 
         Usage:
           TelemetryDashboard.Host [options]
+          TelemetryDashboard.Host {ExtensionCommandLine.Verb} <action> [arguments]
+
+        The '{ExtensionCommandLine.Verb}' subcommand installs, enables, disables, removes and lists
+        extensions, then exits without serving anything. Run it with no action for its own help.
 
         Options:
           -p, --port <n>        TCP port for the streaming server.
@@ -43,6 +48,9 @@ public static class UsageText
                                 Directory scanned for plugin assemblies at start-up.
                                 Default: 'plugins' beside the executable.
                                 Env: {EnvironmentVariables.PluginDir}
+              --extension-dir <dir>
+                                Directory of installed extensions, managed by the '{ExtensionCommandLine.Verb}'
+                                subcommand. Default: '{ExtensionLoader.DefaultDirectoryName}' beside the executable.
           -x, --extensions <loc>
                                 URL or path of a JSON extension catalogue index. The host lists
                                 what it contains and installs nothing: running a third party's

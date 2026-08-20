@@ -45,7 +45,14 @@
   </ItemGroup>
 
   <!--
-    Copies the sample plugin into the host's plugins/ directory, where plugin discovery looks.
+    Stages the sample as an installable extension package - the assembly plus its extension.json -
+    into sample-extension/ beside the host.
+
+    It used to be copied into plugins/, where discovery loads every DLL it finds. That meant a
+    freshly built host executed plugin code on its first launch without anyone having asked it to,
+    which is precisely the decision `extensions install` exists to make explicit. plugins/ still
+    works and is still scanned; the sample simply is not pre-placed in it any more. Install it with
+    `TelemetryDashboard.Host extensions install ./sample-extension`.
 
     RuntimeIdentifier is cleared deliberately. `dotnet publish -r linux-x64` sets it as a global
     property that flows into this MSBuild call, so GetTargetPath answers with a RID-qualified path
@@ -53,6 +60,11 @@
     plain net8.0 library with one output for every RID, so asking for it without a RID is both
     correct and the only thing that works when cross-publishing.
   -->
+  <ItemGroup>
+    <SampleExtensionMetadata Include="..\TelemetryDashboard.Plugins\SamplePlugins\extension.json" />
+    <SampleExtensionMetadata Include="..\TelemetryDashboard.Plugins\SamplePlugins\README.md" />
+  </ItemGroup>
+
   <Target Name="StagePlugins" AfterTargets="Build">
     <MSBuild Projects="..\TelemetryDashboard.Plugins\TelemetryDashboard.Plugins.csproj"
              Targets="GetTargetPath"
@@ -60,19 +72,19 @@
       <Output TaskParameter="TargetOutputs" ItemName="StagedPluginAssembly" />
     </MSBuild>
 
-    <Copy SourceFiles="@(StagedPluginAssembly)"
-          DestinationFolder="$(OutDir)plugins"
+    <Copy SourceFiles="@(StagedPluginAssembly);@(SampleExtensionMetadata)"
+          DestinationFolder="$(OutDir)sample-extension"
           SkipUnchangedFiles="true" />
   </Target>
 
   <!--
     The same staging for `dotnet publish`. Publish does not carry OutDir content across, so without
-    this the published host is the one people actually deploy and the only one with no plugins
-    directory - discovery would find nothing on every machine that matters.
+    this the published host is the one people actually deploy and the only one with no example
+    extension to install.
   -->
   <Target Name="StagePluginsForPublish" AfterTargets="Publish" DependsOnTargets="StagePlugins">
-    <Copy SourceFiles="@(StagedPluginAssembly)"
-          DestinationFolder="$(PublishDir)plugins"
+    <Copy SourceFiles="@(StagedPluginAssembly);@(SampleExtensionMetadata)"
+          DestinationFolder="$(PublishDir)sample-extension"
           SkipUnchangedFiles="true" />
   </Target>
 

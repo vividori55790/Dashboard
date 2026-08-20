@@ -1,77 +1,135 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Ports;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
-using TelemetryDashboard.Core.Models;
-using TelemetryDashboard.Core.Services;
-using TelemetryDashboard.Core.Simulator;
-using TelemetryDashboard.UI.Dialogs;
-using TelemetryDashboard.UI.Docking;
+using System.Windows.Controls;
 using TelemetryDashboard.Core.Analytics;
+using TelemetryDashboard.Core.Models;
+using TelemetryDashboard.Core.Simulator;
 
 namespace TelemetryDashboard.UI;
 
-/// <summary>Simulation controls: grid scenarios, converter setpoints, and fault injection.</summary>
+/// <summary>
+/// The simulation tab: which system is being modelled, and running the model.
+/// </summary>
+/// <remarks>
+/// This file used to hold one handler per control on a hardcoded ribbon — a click for that
+/// customer's grid, a slider for their DC bus, a fault for their converter — so supporting a second
+/// installation meant editing XAML and C# together. The controls are now generated from the
+/// selected <see cref="MonitoringProfile"/>, and everything below is about applying a profile
+/// rather than about any particular piece of hardware.
+/// </remarks>
 public partial class MainWindow
 {
-    private void BtnSetGridNormal_Click(object sender, RoutedEventArgs e)
+    /// <summary>Profiles offered in the picker: the built-in ones plus anything on disk.</summary>
+    public ObservableCollection<MonitoringProfile> Profiles { get; } = [];
+
+    /// <summary>One slider row per channel of the selected profile.</summary>
+    public ObservableCollection<ChannelSetpoint> ProfileChannels { get; } = [];
+
+    /// <summary>One button per scenario of the selected profile.</summary>
+    public ObservableCollection<ScenarioAction> ProfileScenarios { get; } = [];
+
+    private MonitoringProfile? _activeProfile;
+
+    /// <summary>
+    /// Loads the profile set and selects the neutral built-in one.
+    /// </summary>
+    /// <remarks>
+    /// The loader's account of itself goes straight into the event log, including the ordinary case
+    /// of there being no file. An operator who put a profile on disk and does not see it needs to
+    /// read why, and a silent fallback to a different profile is the one outcome worth refusing.
+    /// </remarks>
+    private void InitializeProfiles()
     {
-        _simulator.Scenario = PowerScenario.Normal;
-        _simulator.GridVoltageSetpoint = 380.0;
-        ControlPanel.LogMessage("CONTROL", "⚡ [C# 제어] 상용 전력망 정상 모드 (380V 급전)");
+        MonitoringProfileSet set = MonitoringProfileStore.Load(AppDomain.CurrentDomain.BaseDirectory);
+
+        foreach (MonitoringProfile profile in set.Profiles)
+        {
+            Profiles.Add(profile);
+        }
+
+        ControlPanel.LogMessage(
+            set.Status == ProfileSourceStatus.Invalid ? "ERROR" : "PROFILE", set.Message);
+
+        CboProfile.SelectedItem = MonitoringProfileSet.Default;
+        if (_activeProfile is null) ApplyProfile(MonitoringProfileSet.Default);
     }
 
-    private void BtnSetGridOutage_Click(object sender, RoutedEventArgs e)
+    private void CboProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _simulator.Scenario = PowerScenario.GridOutage;
-        _simulator.GridVoltageSetpoint = 0.0;
-        ControlPanel.LogMessage("CONTROL", "🚨 [C# 제어] 전력망 정전/차단 ➔ UPS 배터리 비상 방전 모드 전환");
+        if (CboProfile.SelectedItem is MonitoringProfile profile) ApplyProfile(profile);
     }
 
-    private void SliderDabBus_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    /// <summary>Rebuilds the tab's controls from a profile and points the simulator at it.</summary>
+    private void ApplyProfile(MonitoringProfile profile)
     {
-        _simulator.DabBusVoltageSetpoint = e.NewValue;
-        if (TxtDabBus != null) TxtDabBus.Text = $"{e.NewValue:F0}V";
-    }
+        if (ReferenceEquals(profile, _activeProfile)) return;
+        _activeProfile = profile;
 
-    private void SliderPsfbVolt_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        _simulator.PsfbVoltageSetpoint = e.NewValue;
-        if (TxtPsfbVolt != null) TxtPsfbVolt.Text = $"{e.NewValue:F1}V";
-    }
-
-    private void SliderServerLoad_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        _simulator.ServerLoadSetpoint = e.NewValue;
-        if (TxtServerLoad != null) TxtServerLoad.Text = $"{e.NewValue:F0}%";
-    }
-
-    private void BtnInjectDabAnomaly_Click(object sender, RoutedEventArgs e)
-    {
-        _simulator.Scenario = PowerScenario.DabOvercurrent;
-        ControlPanel.LogMessage("CONTROL", "🔥 [C# 제어] DAB 배터리 과전류 주입 — Z-Score는 실측값으로 산출됩니다");
-    }
-
-    private void BtnInjectPsfbAnomaly_Click(object sender, RoutedEventArgs e)
-    {
-        _simulator.Scenario = PowerScenario.PsfbUnderVoltage;
-        ControlPanel.LogMessage("CONTROL", "📉 [C# 제어] PSFB 48V 전압 강하 주입 — Z-Score는 실측값으로 산출됩니다");
-    }
-
-    private void BtnResetAnomaly_Click(object sender, RoutedEventArgs e)
-    {
+        // Clearing first means a channel the previous profile drove stops being driven, rather
+        // than lingering as a setpoint nothing on screen can see or reset.
         _simulator.Reset();
-        if (SliderDabBus != null) SliderDabBus.Value = 400;
-        if (SliderPsfbVolt != null) SliderPsfbVolt.Value = 48;
-        if (SliderServerLoad != null) SliderServerLoad.Value = 82;
-        ControlPanel.LogMessage("CONTROL", "✅ [C# 제어] 모든 전력 수치 및 경보 정상 복구");
+        ProfileChannels.Clear();
+        ProfileScenarios.Clear();
+
+        foreach (ProfileChannel channel in profile.Channels)
+        {
+            _simulator.SetSetpoint(channel.Id, channel.Nominal);
+            ProfileChannels.Add(new ChannelSetpoint(channel, _simulator.SetSetpoint));
+        }
+
+        foreach (ProfileScenario scenario in profile.Scenarios)
+        {
+            ProfileScenarios.Add(new ScenarioAction(scenario, RunScenario));
+        }
+
+        ActiveProfileText.Text = profile.DisplayName;
+        ProfileSummaryText.Text = profile.Summary;
+        ControlPanel.LogMessage("PROFILE", $"모니터링 프로파일 적용: {profile.DisplayName}");
+    }
+
+    /// <summary>
+    /// Applies one scenario: its setpoints, then whatever fault it names.
+    /// </summary>
+    /// <remarks>
+    /// A scenario perturbs the physical model and nothing else. It never states a sigma, a severity
+    /// or an alarm — those come out of the analytics engine scoring the numbers that result, which
+    /// is the same path real hardware takes.
+    /// </remarks>
+    private void RunScenario(ProfileScenario scenario)
+    {
+        foreach (KeyValuePair<string, double> setpoint in scenario.Setpoints)
+        {
+            _simulator.SetSetpoint(setpoint.Key, setpoint.Value);
+
+            ChannelSetpoint? row = ProfileChannels.FirstOrDefault(
+                c => string.Equals(c.Id, setpoint.Key, StringComparison.OrdinalIgnoreCase));
+            row?.SetQuietly(setpoint.Value);
+        }
+
+        ApplyScenarioFault(scenario);
+        ControlPanel.LogMessage("SCENARIO", $"시나리오 적용: {scenario.Label}");
+    }
+
+    /// <summary>Resolves a scenario's fault name against the simulator's fault model.</summary>
+    private void ApplyScenarioFault(ProfileScenario scenario)
+    {
+        if (string.IsNullOrWhiteSpace(scenario.Fault)) return;
+
+        if (Enum.TryParse(scenario.Fault, ignoreCase: true, out PowerScenario fault))
+        {
+            _simulator.Scenario = fault;
+            return;
+        }
+
+        // A profile from a file can name a fault this build does not have. Saying so beats
+        // pressing a button that quietly does half of what its caption claims.
+        ControlPanel.LogMessage("WARN",
+            $"시나리오 '{scenario.Label}' 의 fault '{scenario.Fault}' 를 알 수 없어 설정값만 적용했습니다.");
     }
 
     private void BtnToggleSimulator_Click(object sender, RoutedEventArgs e)
@@ -90,7 +148,7 @@ public partial class MainWindow
     {
         if (_isConnected)
         {
-            ControlPanel.LogMessage("SIMULATOR", "Disconnect the hardware port before starting the simulator.");
+            ControlPanel.LogMessage("SIMULATOR", "하드웨어 포트를 먼저 연결 해제한 뒤 시뮬레이터를 시작하세요.");
             return;
         }
 
@@ -104,7 +162,8 @@ public partial class MainWindow
         _simulatorReadCts = new CancellationTokenSource();
         _ = Task.Run(() => ConsumeSimulatedPacketsAsync(_simulatorReadCts.Token));
 
-        ControlPanel.LogMessage("SIMULATOR", "Dual-MCU Virtual Simulator started (COM3/COM4 ingest active).");
+        BtnToggleSimulator.Content = "가상 MCU 스트림 정지";
+        ControlPanel.LogMessage("SIMULATOR", "가상 MCU 스트림 시작 (COM3/COM4 수집 활성).");
     }
 
     private void StopSimulator()
@@ -116,7 +175,8 @@ public partial class MainWindow
         _simulatorReadCts = null;
         _simulatorEngine.StopSimulation();
 
-        ControlPanel.LogMessage("SIMULATOR", "Dual-MCU Virtual Simulator stopped.");
+        BtnToggleSimulator.Content = "가상 MCU 스트림 시작";
+        ControlPanel.LogMessage("SIMULATOR", "가상 MCU 스트림 정지.");
     }
 
     /// <summary>
@@ -161,7 +221,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             await Dispatcher.InvokeAsync(() =>
-                ControlPanel.LogMessage("ERROR", $"Simulated ingest failed: {ex.Message}"));
+                ControlPanel.LogMessage("ERROR", $"가상 MCU 수집 실패: {ex.Message}"));
         }
     }
 }

@@ -50,15 +50,42 @@ public partial class ScopeViewControl : UserControl
     /// <summary>Channels discovered so far.</summary>
     public IReadOnlyList<ScopeChannelSeries> Channels => _channels;
 
+    /// <summary>
+    /// Applies the application's tokens to the plotting library.
+    /// </summary>
+    /// <remarks>
+    /// The plot used to set only its two background colours, from a literal hex that happened to
+    /// match the window at the time, and left axis text at the library's default near-black — so
+    /// the tick labels and axis titles were drawn nearly invisibly on a dark figure. Colours here
+    /// are read from the theme dictionary, so the chart follows the palette instead of shadowing it.
+    /// </remarks>
     private void InitializePlot()
     {
-        MainPlot.Plot.FigureBackground = ScottPlot.Color.FromHex("#13141C");
-        MainPlot.Plot.DataBackground = ScottPlot.Color.FromHex("#13141C");
-        MainPlot.Plot.Title("Real-Time Multi-Channel Telemetry Stream");
-        MainPlot.Plot.XLabel("Time (seconds)");
-        MainPlot.Plot.YLabel("Telemetry Value");
+        MainPlot.Plot.FigureBackground = PlotColor("CanvasBrush");
+        MainPlot.Plot.DataBackground = PlotColor("InsetBrush");
+        MainPlot.Plot.Style.ColorAxes(PlotColor("TextSecondaryBrush"));
+        MainPlot.Plot.Style.ColorGrids(PlotColor("GridLineBrush"));
+
+        // ColorAxes paints the axis frame the same colour as the tick labels, and text contrast is
+        // not border contrast: at that weight the frame drew a bright rectangle around the plot —
+        // the "white border" the chart appeared to have. The frame is a container edge, so it takes
+        // the border token every other container edge in the application takes.
+        foreach (ScottPlot.IAxis axis in MainPlot.Plot.Axes.GetAxes())
+        {
+            axis.FrameLineStyle.Color = PlotColor("BorderDefaultBrush");
+        }
+
+        MainPlot.Plot.Title("Live telemetry");
+        MainPlot.Plot.XLabel("Time (s)");
+        MainPlot.Plot.YLabel("Value");
         MainPlot.Refresh();
     }
+
+    /// <summary>Converts a theme brush into the plotting library's colour type.</summary>
+    private ScottPlot.Color PlotColor(string brushKey) =>
+        TryFindResource(brushKey) is System.Windows.Media.SolidColorBrush brush
+            ? new ScottPlot.Color(brush.Color.R, brush.Color.G, brush.Color.B, brush.Color.A)
+            : ScottPlot.Color.Gray(128);
 
     /// <summary>Queues one sample for a named channel, creating the channel on first sight.</summary>
     public void PushChannel(string channelName, double value)
@@ -103,7 +130,12 @@ public partial class ScopeViewControl : UserControl
 
         ReplotData();
         ScopeStatsText.Text = $"Samples: {_sampleCount:N0} | Channels: {_channels.Count} | Time: {elapsedSec:F1}s";
-        TopologyOverlay.UpdateTopologyStatus($"{_channels.Count} channel stream", 50, true);
+
+        // Measured, not assumed. The overlay was previously told "50 Hz, simulating" on every tick
+        // regardless of the source or the actual throughput.
+        double? rate = elapsedSec > 0 ? _sampleCount / elapsedSec : null;
+        TopologyOverlay.UpdateTopologyStatus(
+            $"{_channels.Count} channel(s) discovered", rate);
     }
 
     /// <summary>Finds or creates the series for a channel, honouring the channel cap.</summary>
@@ -140,7 +172,11 @@ public partial class ScopeViewControl : UserControl
     private void BtnPause_Click(object sender, RoutedEventArgs e)
     {
         _isPaused = !_isPaused;
-        BtnPause.Content = _isPaused ? "▶️ Resume Scope" : "⏸️ Pause Scope";
+
+        // Glyph and caption are separate elements so the icon font is never asked to render a
+        // caption, and the caption is never asked to render an icon.
+        PauseGlyph.Text = _isPaused ? "\uE768" : "\uE769";
+        PauseLabel.Text = _isPaused ? "Resume" : "Pause";
     }
 
     private void BtnClear_Click(object sender, RoutedEventArgs e)
@@ -153,6 +189,7 @@ public partial class ScopeViewControl : UserControl
         _startTime = DateTime.Now;
         ReplotData();
         ScopeStatsText.Text = "Samples: 0 | Channels: 0";
+        TopologyOverlay.UpdateTopologyStatus("No channels yet", null);
     }
 
     private void BtnAutoFit_Click(object sender, RoutedEventArgs e)

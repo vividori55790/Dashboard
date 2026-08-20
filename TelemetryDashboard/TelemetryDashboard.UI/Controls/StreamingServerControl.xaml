@@ -1,84 +1,150 @@
+<!--
+    Streaming server console.
+
+    Every number on this panel now starts as a dash. The defaults shipped here were "1 Client
+    Connected" and "Total Broadcasted: 1,420 pkts (60 Hz)" — a specific, calm, entirely invented
+    state that a panel showed before the server had been asked anything, and which looked exactly
+    like a healthy running server.
+
+    The URLs are filled in from the server's actual port rather than written into the markup, so a
+    server started on any other port stops advertising an address nothing is listening on.
+-->
 <UserControl x:Class="TelemetryDashboard.UI.Controls.StreamingServerControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-             mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="800">
-    <Grid Background="#13141C">
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="900">
+    <UserControl.Resources>
+        <Style x:Key="PanelSection" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <Style x:Key="UrlBox" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="Margin" Value="0,4,0,12"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header Card -->
-        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+        <!-- ==================== Header ==================== -->
+        <Border Grid.Row="0" Style="{StaticResource Card}" Margin="16,16,16,0">
             <DockPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Ellipse x:Name="ServerLed" Width="14" Height="14" Fill="#00E676" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="📡 WEBSOCKET &amp; HTTP LIVE TELEMETRY STREAMING SERVER" Foreground="#89DDFF" FontWeight="Bold" FontSize="13"/>
-                        <TextBlock x:Name="TxtServerEndpoint" Text="Endpoint: http://localhost:8080 | ws://localhost:8080/ws" Foreground="#A9B1D6" FontSize="11"/>
-                    </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnOpenWebConsole" Style="{StaticResource PrimaryButton}"
+                            Margin="0,0,8,0" Click="BtnOpenWebConsole_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource IconText}" Text="&#xE774;" Margin="0,0,8,0"/>
+                            <TextBlock Text="웹 시각화 콘솔 열기" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="BtnToggleServer" Click="BtnToggleServer_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="ServerToggleGlyph" Style="{StaticResource IconText}"
+                                       Text="&#xE71A;" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="ServerToggleLabel" Text="서버 정지" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="BtnOpenWebConsole" Content="🌐 웹 시각화 콘솔 열기 (stream_client.html)" Padding="14,8" Background="#00E676" Foreground="#101014" FontWeight="Bold" FontSize="12" Click="BtnOpenWebConsole_Click" Margin="0,0,10,0"/>
-                    <Button x:Name="BtnToggleServer" Content="⏹️ 서버 정지" Padding="10,8" Click="BtnToggleServer_Click"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Ellipse x:Name="ServerLed" Width="10" Height="10" Margin="0,0,10,0"
+                             VerticalAlignment="Center"
+                             Fill="{StaticResource TextTertiaryBrush}"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource TitleText}" Text="Streaming server"/>
+                        <TextBlock x:Name="TxtServerEndpoint" Style="{StaticResource MonoText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="Endpoint not known until a server is attached"
+                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- Live Server Metrics & Client List -->
-        <Grid Grid.Row="1" Margin="4">
+        <!-- ==================== Metrics and integration ==================== -->
+        <Grid Grid.Row="1" Margin="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Metrics Cards -->
             <StackPanel Grid.Column="0">
-                <Border Style="{StaticResource CardStyle}">
-                    <StackPanel>
-                        <TextBlock Text="CONNECTED WEB / APP CLIENTS" Foreground="#7AA2F7" FontSize="10" FontWeight="Bold"/>
-                        <TextBlock x:Name="TxtClientCount" Text="1 Client Connected" Foreground="#00E676" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
-                        <TextBlock Text="Supports HTML5 Web Browsers, Node-RED, Grafana, Custom Python/C# Apps" Foreground="#565F89" FontSize="10" Margin="0,2,0,0"/>
-                    </StackPanel>
+                <Border Style="{StaticResource PanelSection}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource CaptionText}" Text="Connected clients"/>
+                            <TextBlock x:Name="TxtClientCount" Style="{StaticResource MetricText}"
+                                       Text="—" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource CaptionText}" Text="Frames broadcast"/>
+                            <TextBlock x:Name="TxtBroadcastStats" Style="{StaticResource MetricText}"
+                                       Text="—" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
-                <Border Style="{StaticResource CardStyle}">
+                <Border Style="{StaticResource PanelSection}">
                     <StackPanel>
-                        <TextBlock Text="LIVE TELEMETRY BROADCAST STATS" Foreground="#7DCFFF" FontSize="10" FontWeight="Bold"/>
-                        <TextBlock x:Name="TxtBroadcastStats" Text="Total Broadcasted: 1,420 pkts (60 Hz)" Foreground="#C0CAF5" FontSize="16" FontWeight="Bold" Margin="0,4,0,0"/>
-                    </StackPanel>
-                </Border>
+                        <TextBlock Style="{StaticResource SubtitleText}" Text="Connecting a client"/>
 
-                <Border Style="{StaticResource CardStyle}">
-                    <StackPanel>
-                        <TextBlock Text="⚡ QUICK INTEGRATION GUIDE FOR USERS" Foreground="#E0AF68" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock Text="1. WebSocket URL:" Foreground="#A9B1D6" FontSize="10" FontWeight="Bold"/>
-                        <TextBox Text="ws://localhost:8080/ws" IsReadOnly="True" Background="#16161E" Foreground="#9ECE6A" BorderBrush="#3B4252" Padding="4" Margin="0,2,0,6"/>
+                        <TextBlock Style="{StaticResource LabelText}" Text="WebSocket"/>
+                        <TextBox x:Name="TxtWsUrl" Style="{StaticResource UrlBox}"
+                                 Text="Not available until the server is attached"/>
 
-                        <TextBlock Text="2. HTTP REST API:" Foreground="#A9B1D6" FontSize="10" FontWeight="Bold"/>
-                        <TextBox Text="http://localhost:8080/api/status" IsReadOnly="True" Background="#16161E" Foreground="#9ECE6A" BorderBrush="#3B4252" Padding="4" Margin="0,2,0,6"/>
+                        <TextBlock Style="{StaticResource LabelText}" Text="HTTP status"/>
+                        <TextBox x:Name="TxtHttpUrl" Style="{StaticResource UrlBox}"
+                                 Text="Not available until the server is attached"/>
 
-                        <Button Content="📋 WebSocket URL 복사" Click="BtnCopyWsUrl_Click"/>
+                        <Button HorizontalAlignment="Left" Click="BtnCopyWsUrl_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource IconText}" Text="&#xE8C8;" Margin="0,0,8,0"/>
+                                <TextBlock Text="WebSocket URL 복사" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,12,0,0"
+                                   Text="Any WebSocket client can subscribe to the stream, and any HTTP client can poll the status endpoint."/>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
-            <!-- Architecture Info -->
-            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+            <Border Grid.Column="2" Style="{StaticResource Card}" VerticalAlignment="Top">
                 <StackPanel>
-                    <TextBlock Text="🏗️ ARCHITECTURE: DATA HUB &amp; EXPORT ENGINE" Foreground="#BB9AF7" FontWeight="Bold" FontSize="12" Margin="0,0,0,8"/>
-                    <TextBlock Text="이 시스템은 고성능 텔레메트리 데이터 수집, 시계열 보관 및 실시간 변환 파이프라인 전용 허브입니다. 모든 수신 데이터는 웹소켓 표준 프로토콜로 브로드캐스트되어 사용자가 개조한 HTML 클라이언트(stream_client.html)나 외부 전용 모니터링 앱으로 즉시 전달됩니다." Foreground="#C0CAF5" TextWrapping="Wrap" FontSize="11" LineHeight="16"/>
+                    <TextBlock Style="{StaticResource SubtitleText}" Text="What this server does"/>
+                    <TextBlock Style="{StaticResource BodyText}" TextWrapping="Wrap" LineHeight="18"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Text="이 시스템은 고성능 텔레메트리 데이터 수집, 시계열 보관 및 실시간 변환 파이프라인 전용 허브입니다. 모든 수신 데이터는 웹소켓 표준 프로토콜로 브로드캐스트되어 사용자가 개조한 HTML 클라이언트(stream_client.html)나 외부 전용 모니터링 앱으로 즉시 전달됩니다."/>
 
-                    <Separator Height="1" Background="#3B4252" Margin="0,12"/>
+                    <Separator Margin="0,16"/>
 
-                    <TextBlock Text="📂 Embedded Web Client Console:" Foreground="#89DDFF" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
-                    <TextBlock x:Name="TxtHtmlPath" Text="stream_client.html" Foreground="#9ECE6A" FontSize="10" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource LabelText}" Text="Bundled web client page"/>
+                    <TextBlock x:Name="TxtHtmlPath" Style="{StaticResource MonoText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Text="No path attached yet" TextWrapping="Wrap" Margin="0,4,0,12"/>
 
-                    <Button Content="📁 stream_client.html 파일 위치 열기" Margin="0,10,0,0" Click="BtnOpenHtmlLocation_Click"/>
+                    <Button HorizontalAlignment="Left" Click="BtnOpenHtmlLocation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource IconText}" Text="&#xE8B7;" Margin="0,0,8,0"/>
+                            <TextBlock Text="파일 위치 열기" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Border>
         </Grid>

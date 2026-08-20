@@ -92,6 +92,10 @@ public sealed class PythonNetAdapter
         return false;
     }
 
+    /// <summary>The interpreter, built once per process.</summary>
+    private static readonly Lazy<ScriptEngine> SharedEngine =
+        new(EmbeddedPythonRuntime.CreateEngine, isThreadSafe: true);
+
     private bool Execute(string script, CancellationToken cancellationToken, out string errorMessage)
     {
         if (string.IsNullOrWhiteSpace(script))
@@ -116,7 +120,13 @@ public sealed class PythonNetAdapter
             }
         }
 
-        ScriptEngine engine = EmbeddedPythonRuntime.CreateEngine();
+        // One engine, reused. Building an IronPython runtime with tracing enabled costs far more
+        // than running a short hook, so creating one per call made a 200 ms budget mostly
+        // interpreter start-up: a script could be cancelled before it began, and the timeout then
+        // reported that it had not responded to interruption when it had never started. A fresh
+        // scope per run keeps each script's variables to itself, which is the isolation that
+        // matters; sharing the engine only shares the compiler.
+        ScriptEngine engine = SharedEngine.Value;
         PythonRunResult result = _runtime.Run(engine, engine.CreateScope(), script, cancellationToken);
 
         errorMessage = LastError = result.Error;

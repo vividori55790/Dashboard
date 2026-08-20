@@ -3,6 +3,7 @@ using System.Text.Json;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Query;
 
 namespace TelemetryDashboard.Core.Streaming;
 
@@ -32,7 +33,15 @@ public static class TelemetryFrameRecorder
     public const double DefaultAnomalyThreshold = 2.5;
 
     /// <summary>Records every numeric leaf of <paramref name="json"/> as its own DVR channel.</summary>
-    public static void Record(TimeTravelDvrPlayer dvr, string json, double anomalyThreshold = DefaultAnomalyThreshold)
+    /// <param name="series">
+    /// Optional rolling store fed from the same parse, so the query API sees the same channels the
+    /// DVR does without a second pass over the frame.
+    /// </param>
+    public static void Record(
+        TimeTravelDvrPlayer dvr,
+        string json,
+        double anomalyThreshold = DefaultAnomalyThreshold,
+        SeriesStore? series = null)
     {
         if (dvr is null || string.IsNullOrWhiteSpace(json)) return;
 
@@ -45,12 +54,23 @@ public static class TelemetryFrameRecorder
             double? score = ResolveAnomalyScore(document.RootElement);
             double timestamp = TimeTravelDvrPlayer.UtcNowSeconds();
 
-            RecordObject(dvr, document.RootElement, node, score, anomalyThreshold, timestamp, depth: 0);
+            // Arrival time, not measurement time: this path receives frames whose own timestamp
+            // field is not trusted to be a clock the server shares. A producer that knows better
+            // should call TelemetryStreamingServer.PublishSample with the sample's own timestamp.
+            var sink = series is null ? default : new SeriesSink(series, SeriesClock.UtcNowSec());
+
+            RecordObject(dvr, document.RootElement, node, score, anomalyThreshold, timestamp, depth: 0, sink);
         }
         catch (JsonException)
         {
             // A frame that is not JSON simply has no channels to record.
         }
+    }
+
+    /// <summary>Where the series store writes go, and the instant they are stamped with.</summary>
+    private readonly record struct SeriesSink(SeriesStore? Store, double TimestampSec)
+    {
+        public void Append(string channel, double value) => Store?.Append(channel, value, TimestampSec);
     }
 
     private static void RecordObject(
@@ -60,7 +80,8 @@ public static class TelemetryFrameRecorder
         double? inheritedScore,
         double threshold,
         double timestamp,
-        int depth)
+        int depth,
+        SeriesSink sink)
     {
         if (depth > 4) return; // guard against pathologically nested frames
 
@@ -75,6 +96,8 @@ public static class TelemetryFrameRecorder
             {
                 case JsonValueKind.Number when property.Value.TryGetDouble(out double value):
                     if (IsMetadataField(property.Name)) break;
+
+                    sink.Append($"{prefix}.{property.Name}", value);
 
                     // A frame that carried no score field is recorded without a verdict rather
                     // than with a verdict of zero: the producer never judged this sample, and
@@ -92,7 +115,7 @@ public static class TelemetryFrameRecorder
 
                 case JsonValueKind.Object:
                     string nested = ResolveNodeId(property.Value, property.Name);
-                    RecordObject(dvr, property.Value, $"{prefix}.{nested}", score, threshold, timestamp, depth + 1);
+                    RecordObject(dvr, property.Value, $"{prefix}.{nested}", score, threshold, timestamp, depth + 1, sink);
                     break;
             }
         }

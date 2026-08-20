@@ -1,0 +1,11 @@
+{
+  "name": "wikimedia-recentchange",
+  "nodePath": "meta.domain",
+  "nodeFallback": "wikimedia",
+
+  "channels": [
+    { "variable": "page_bytes",  "path": "length.new", "unit": "B" },
+    { "variable": "bytes_before","path": "length.old", "unit": "B" },
+    { "variable": "revision",    "path": "revision.new" }
+  ]
+}

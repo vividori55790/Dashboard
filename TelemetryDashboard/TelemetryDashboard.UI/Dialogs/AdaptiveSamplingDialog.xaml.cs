@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
@@ -12,8 +12,12 @@ namespace TelemetryDashboard.UI.Dialogs;
 public class SamplingChannelRow
 {
     public string ChannelName { get; set; } = string.Empty;
-    public string CurrentRate { get; set; } = "1 Hz";
-    public string Mode { get; set; } = "🟢 NOMINAL";
+
+    // A dash, not a plausible-looking rate. Every field here is overwritten from controller state
+    // before the row reaches the grid, and a default that reads like a measurement would survive
+    // any future path that forgets to.
+    public string CurrentRate { get; set; } = "-";
+    public string Mode { get; set; } = "-";
     public string LastZScore { get; set; } = "-";
     public string Status { get; set; } = string.Empty;
 }
@@ -59,12 +63,14 @@ public partial class AdaptiveSamplingDialog : Window
     private void RefreshView()
     {
         var rows = new List<SamplingChannelRow>(Channels.Length);
+        bool anyElevated = false;
 
         foreach (string channel in Channels)
         {
             SamplingMode mode = _controller.GetSamplingMode(channel);
             int rate = _controller.GetSamplingRate(channel);
             bool hasScore = _lastScores.TryGetValue(channel, out double score);
+            anyElevated |= mode != SamplingMode.Nominal;
 
             rows.Add(new SamplingChannelRow
             {
@@ -72,14 +78,14 @@ public partial class AdaptiveSamplingDialog : Window
                 CurrentRate = $"{rate:N0} Hz",
                 Mode = mode switch
                 {
-                    SamplingMode.Burst => "⚡ BURST",
-                    SamplingMode.Cooldown => "🕒 COOLDOWN",
-                    _ => "🟢 NOMINAL"
+                    SamplingMode.Burst => "버스트",
+                    SamplingMode.Cooldown => "쿨다운",
+                    _ => "평시"
                 },
                 LastZScore = hasScore ? $"{score:F1}σ" : "-",
                 Status = mode switch
                 {
-                    SamplingMode.Burst => "🚨 이상 파형 고속 캡처 중",
+                    SamplingMode.Burst => "이상 구간 고속 캡처 중",
                     SamplingMode.Cooldown => "쿨다운 유지 중",
                     _ => "정상 저전력 로깅"
                 }
@@ -88,13 +94,18 @@ public partial class AdaptiveSamplingDialog : Window
 
         DgChannelSampling.ItemsSource = rows;
 
-        bool anyBurst = rows.Any(r => r.Mode.Contains("BURST") || r.Mode.Contains("COOLDOWN"));
-        TxtCurrentMode.Text = anyBurst
-            ? $"모드: ⚡ BURST MODE ({_controller.BurstRateHz:N0} Hz 활성)"
-            : $"모드: 🟢 NOMINAL ({_controller.BaseRateHz:N0} Hz)";
-        TxtCurrentMode.Foreground = new SolidColorBrush(anyBurst
-            ? Color.FromRgb(0xFF, 0x2E, 0x63)
-            : Color.FromRgb(0x00, 0xFF, 0x9D));
+        // Read the elevation off the controller's own mode, not off the rendered caption. Matching
+        // on the display string tied the summary line to the wording of the table beside it.
+        TxtCurrentMode.Text = anyElevated
+            ? $"버스트 전환됨 · {_controller.BurstRateHz:N0} Hz"
+            : $"평시 · {_controller.BaseRateHz:N0} Hz";
+
+        // Amber is state the controller reported: some channel left its nominal rate because a
+        // score crossed the threshold. Nominal stays in the ordinary text colour, so a quiet
+        // screen looks quiet rather than reassuringly green.
+        TxtCurrentMode.Foreground = anyElevated
+            ? (Brush)FindResource("WarningBrush")
+            : (Brush)FindResource("TextSecondaryBrush");
     }
 
     private void BtnTriggerSurge_Click(object sender, RoutedEventArgs e)
@@ -113,7 +124,7 @@ public partial class AdaptiveSamplingDialog : Window
 
         int burstRate = _controller.GetSamplingRate("COM3.Temperature");
         TxtTestStatus.Text =
-            $"[{DateTime.Now:HH:mm:ss}] {surge:F1}σ 주입 ➔ COM3.Temperature 실제 전환 결과: {burstRate:N0} Hz";
+            $"[{DateTime.Now:HH:mm:ss}] 시험값 {surge:F1}σ 주입, COM3.Temperature 전환 결과 {burstRate:N0} Hz";
     }
 
     private void BtnResetNormal_Click(object sender, RoutedEventArgs e)
@@ -169,4 +180,15 @@ public partial class AdaptiveSamplingDialog : Window
     }
 
     private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Escape closes the dialog. Bound on KeyDown rather than PreviewKeyDown so a control that
+    /// uses Escape itself — an open combo box dropdown — still gets it first.
+    /// </summary>
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        e.Handled = true;
+        Close();
+    }
 }

@@ -76,12 +76,16 @@ public sealed class IngestRecordPath
     {
         ArgumentNullException.ThrowIfNull(packet);
 
-        if (packet.Flags.HasFlag(PacketFlags.Simulated))
+        // The router marks packets from a synthetic source as it produces them, so plugins can see
+        // the mark too. That is consistent and expected. What must never happen is a packet
+        // claiming to be synthetic on a run reading real hardware -- that would let fabricated data
+        // enter an archive of measurements wearing the wrong label.
+        if (packet.Flags.HasFlag(PacketFlags.Simulated) && !_isSimulated)
         {
             throw new InvalidOperationException(
-                "A packet reaching the record path must not be pre-marked as simulated: the "
-                + "projection has no field for the flag and would drop it. Let the path stamp it "
-                + "from the source instead.");
+                "A packet claims to be simulated on a run whose source is real hardware. Refusing "
+                + "rather than relabelling it: one of the two is wrong, and guessing which would "
+                + "put fabricated data into an archive of measurements.");
         }
 
         DataRecord record = TelemetryPacketProjection.ToRecord(packet) with { Source = portName ?? string.Empty };

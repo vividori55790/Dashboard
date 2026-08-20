@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using TelemetryDashboard.Core.Models;
@@ -18,6 +19,128 @@ namespace TelemetryDashboard.UI;
 /// <summary>Shell chrome: recording, theme, language, palette, drag-and-drop and shortcuts.</summary>
 public partial class MainWindow
 {
+    /// <summary>Puts the dock's tab strips on the application's own tab template.</summary>
+    /// <remarks>
+    /// This cannot be done from XAML, and the reason is worth writing down.
+    ///
+    /// AvalonDock's pane controls derive from TabControl, so their tabs are ordinary TabItems — but
+    /// each pane hands its containers a style of its own, and an explicit container style beats the
+    /// dictionary's implicit TabItem style, so the dock never saw the design system at all. Its tab
+    /// template takes the unselected tab's fill straight from the stock Windows theme (a pale grey
+    /// gradient) and, worse, hardcodes <c>#FFFFFFFF</c> for the selected tab inside a template
+    /// trigger. A Setter cannot outrank a template trigger, so no amount of styling from outside
+    /// reaches it: the template itself has to be replaced. That is why the second document rendered
+    /// as a pale empty box beside a white selected tab, with both captions drawn in a foreground
+    /// meant for a dark surface.
+    ///
+    /// Replacing the pane's whole style is not the answer either — that was tried, and it discards
+    /// the pane template and the tab's header template with it, leaving a stock TabControl showing
+    /// "AvalonDock.Layout.LayoutDocument" where the captions belong. So the container style is
+    /// derived from AvalonDock's rather than substituted for it: everything the dock needs is
+    /// inherited, and the visual setters — including the template — are copied from the very same
+    /// implicit TabItem style the ribbon uses, so there is one tab appearance in the application
+    /// and no second copy of it to keep in step.
+    /// </remarks>
+    private void DockManager_Loaded(object sender, RoutedEventArgs e)
+    {
+        // The manager is loaded before it has built its pane controls, so this first pass normally
+        // finds nothing to style. LayoutUpdated is the hook that fires once they exist; it detaches
+        // itself as soon as every pane in the tree has been dealt with, so it costs one tree walk
+        // rather than one per layout pass.
+        DockManager.LayoutUpdated += DockManager_LayoutUpdated;
+        ApplyDockTabTheme();
+    }
+
+    private void DockManager_LayoutUpdated(object? sender, EventArgs e)
+    {
+        if (ApplyDockTabTheme())
+        {
+            DockManager.LayoutUpdated -= DockManager_LayoutUpdated;
+        }
+    }
+
+    /// <summary>Styles already derived here, so a second pass does not re-wrap its own work.</summary>
+    private readonly HashSet<Style> _themedDockTabStyles = new();
+
+    /// <summary>Returns true once every pane in the tree has been dealt with.</summary>
+    private bool ApplyDockTabTheme()
+    {
+        if (TryFindResource(typeof(TabItem)) is not Style appTabStyle) return true;
+
+        bool foundAPane = false;
+        bool allStyled = true;
+
+        foreach (TabControl pane in DockTabControls(DockManager))
+        {
+            foundAPane = true;
+
+            // The pane's own frame, for the same reason as the tabs: its template binds these two
+            // to the control, and the style behind it hands them a white border, which drew a
+            // bright 1px rectangle around each pane.
+            pane.Background = (Brush)FindResource("CanvasBrush");
+            pane.BorderBrush = (Brush)FindResource("BorderSubtleBrush");
+
+            if (pane.ItemContainerStyle is not Style dockStyle)
+            {
+                allStyled = false;
+                continue;
+            }
+
+            if (_themedDockTabStyles.Contains(dockStyle)) continue;
+
+            try
+            {
+                var themed = new Style(typeof(TabItem), dockStyle);
+
+                // Base first, derived last: within one style the last setter for a property wins,
+                // so walking the BasedOn chain outward-in leaves the most specific setter on top.
+                foreach (SetterBase setter in AppTabSetters(appTabStyle))
+                {
+                    themed.Setters.Add(setter);
+                }
+
+                themed.Seal();
+                _themedDockTabStyles.Add(themed);
+                pane.ItemContainerStyle = themed;
+            }
+            catch (Exception ex)
+            {
+                // Cosmetic only. A dock that keeps its own tab chrome is worse-looking, not broken,
+                // and is not worth taking the window down for — but it is said out loud rather than
+                // swallowed, because a silently unthemed dock looks like the styling was never
+                // written.
+                ControlPanel.LogMessage("SYSTEM",
+                    $"Dock tab styling skipped on {pane.GetType().Name}: {ex.GetType().Name}");
+                return true;
+            }
+        }
+
+        return foundAPane && allStyled;
+    }
+
+    private static IEnumerable<SetterBase> AppTabSetters(Style style)
+    {
+        if (style.BasedOn is not null)
+        {
+            foreach (SetterBase inherited in AppTabSetters(style.BasedOn)) yield return inherited;
+        }
+
+        foreach (SetterBase own in style.Setters) yield return own;
+    }
+
+    /// <summary>The document and anchorable pane controls, which are the dock's only TabControls.</summary>
+    private static IEnumerable<TabControl> DockTabControls(DependencyObject root)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, i);
+            if (child is TabControl pane) yield return pane;
+
+            foreach (TabControl nested in DockTabControls(child)) yield return nested;
+        }
+    }
+
     private void BtnCopyWsUrl_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText("ws://localhost:8080/ws");
@@ -35,8 +158,7 @@ public partial class MainWindow
         if (!_csvRecorder.IsRecording)
         {
             string path = _csvRecorder.StartRecording();
-            BtnToggleRecord.Content = "⏹️ CSV 녹화 정지 (저장)";
-            BtnToggleRecord.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0x2E, 0x63));
+            ShowRecording(true);
             ControlPanel.LogMessage("DATA", $"[REC START] Writing real CSV disk file: {path}");
         }
         else
@@ -44,8 +166,7 @@ public partial class MainWindow
             long count = _csvRecorder.RecordedPacketCount;
             long size = _csvRecorder.FileSizeBytes;
             string path = _csvRecorder.StopRecording();
-            BtnToggleRecord.Content = "⏺️ 실제 CSV 디스크 녹화";
-            BtnToggleRecord.Background = new SolidColorBrush(Color.FromRgb(0x18, 0x20, 0x2C));
+            ShowRecording(false);
             ControlPanel.LogMessage("DATA", $"[REC STOP] Real file saved -> {path} ({count} rows, {size / 1024} KB)");
 
             var result = MessageBox.Show(this,

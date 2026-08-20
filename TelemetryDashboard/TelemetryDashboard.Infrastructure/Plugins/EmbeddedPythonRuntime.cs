@@ -71,11 +71,20 @@ public sealed class EmbeddedPythonRuntime
 
         if (cancellationToken.CanBeCanceled)
         {
-            engine.SetTrace((frame, kind, payload) =>
+            // The hook must return itself. In Python's tracing protocol a trace function returning
+            // None means "stop tracing this frame", so returning null fired the callback exactly
+            // once and then went silent — and a module-level `while True: pass` never leaves its
+            // frame, so it never called back again and cancellation was never observed. The timeout
+            // then reported that the script had not responded to interruption, which was true, and
+            // the reason was that nothing was asking it to.
+            IronPython.Runtime.Exceptions.TracebackDelegate? hook = null;
+            hook = (frame, kind, payload) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return null!;
-            });
+                return hook!;
+            };
+
+            engine.SetTrace(hook);
         }
 
         try

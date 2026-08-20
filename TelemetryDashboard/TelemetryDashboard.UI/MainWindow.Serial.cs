@@ -67,19 +67,15 @@ public partial class MainWindow
                 if (ok)
                 {
                     _isConnected = true;
-                    BtnToggleConnect.Content = "❌ 연결 해제";
-                    BtnToggleConnect.Background = new SolidColorBrush(Color.FromRgb(255, 85, 85));
-                    StatusConnectionText.Text = "Status: Connected (REAL HARDWARE)";
-                    StatusConnectionText.Foreground = new SolidColorBrush(Color.FromRgb(0, 230, 118));
-                    StatusPortText.Text = $"Port: {portName} | Baud: {baudRate}";
-                    ControlPanel.LogMessage("SYSTEM", $"✅ Connected to real hardware port {portName} @ {baudRate} Baud.");
+                    ShowConnected(portName, baudRate);
+                    ControlPanel.LogMessage("SYSTEM", $"하드웨어 포트 {portName} @ {baudRate} baud 연결됨.");
 
                     _serialReadCts = new CancellationTokenSource();
                     _ = Task.Run(() => ProcessRealSerialPacketsAsync(_serialReadCts.Token));
                 }
                 else
                 {
-                    ControlPanel.LogMessage("ERROR", $"❌ Failed to open serial port {portName}. Check if device is plugged in.");
+                    ControlPanel.LogMessage("ERROR", $"시리얼 포트 {portName} 를 열지 못했습니다. 장치 연결을 확인하세요.");
                 }
             }
             catch (Exception ex)
@@ -93,11 +89,8 @@ public partial class MainWindow
             _serialReadCts?.Cancel();
             await _serialManager.DisconnectAllAsync();
 
-            BtnToggleConnect.Content = "🔗 연결 시작";
-            BtnToggleConnect.Background = new SolidColorBrush(Color.FromRgb(122, 162, 247));
-            StatusConnectionText.Text = "Status: Disconnected";
-            StatusConnectionText.Foreground = new SolidColorBrush(Color.FromRgb(255, 85, 85));
-            ControlPanel.LogMessage("SYSTEM", "Disconnected from serial port.");
+            ShowDisconnected();
+            ControlPanel.LogMessage("SYSTEM", "시리얼 포트 연결을 해제했습니다.");
         }
     }
 

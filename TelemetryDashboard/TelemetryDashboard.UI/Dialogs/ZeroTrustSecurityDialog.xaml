@@ -1,31 +1,54 @@
+<!--
+    A bench for two primitives: AES-256-GCM and the Gorilla compressor.
+
+    This window was titled "Zero-Trust 보안" and read as a security configuration screen, but nothing
+    it does affects the application: the key it generates is used only by the text box below it, and
+    no telemetry path consults it. The header also promised the compressor saves "90% 이상" of memory
+    bandwidth, and the four metric tiles shipped pre-filled with 8,000 bytes, 688 bytes, 11.6:1 and
+    91.4% — a result for a specific synthetic signal, displayed before any benchmark had run. The
+    tiles now start empty and the caption says where mesh encryption is actually configured.
+-->
 <Window x:Class="TelemetryDashboard.UI.Dialogs.ZeroTrustSecurityDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="🛡️ Zero-Trust AES-256-GCM 보안 &amp; Gorilla 시계열 비트 압축 벤치마크" 
-        Height="680" Width="880"
+        Title="암호화 및 압축 검증"
+        Height="680" Width="860" MinHeight="560" MinWidth="680"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0E14"
-        Foreground="#F0F6FC">
-    <Grid Margin="16">
+        Background="{StaticResource CanvasBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}">
+
+    <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Header -->
-            <RowDefinition Height="*"/>    <!-- Tabs: Security / Gorilla -->
-            <RowDefinition Height="Auto"/> <!-- Footer -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12">
-            <StackPanel>
-                <TextBlock Text="🛡️ Zero-Trust AES-256-GCM &amp; Gorilla Delta-of-Delta Bit Compression" Foreground="#00F0FF" FontSize="16" FontWeight="Bold"/>
-                <TextBlock Text="미인가 변조 방지를 위한 256-bit AEAD 암호화 및 메모리 대역폭을 90% 이상 절감하는 Gorilla 비트 압축 엔진" Foreground="#8B949E" FontSize="11" Margin="0,4,0,0"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Style="{StaticResource TitleText}" Text="암호화 및 압축 검증 (Crypto and compression bench)"/>
+            <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="AES-256-GCM 암·복호화와 Gorilla 시계열 압축을 직접 실행해 동작을 확인하는 창입니다."/>
+        </StackPanel>
+
+        <!-- What this window does not do. It reads as a settings screen and is not one. -->
+        <Border Grid.Row="1" Margin="0,0,0,12"
+                Background="{StaticResource WarningSubtleBrush}"
+                BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                CornerRadius="{StaticResource RadiusS}" Padding="12,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource IconText}" Text="&#xE946;"
+                           Foreground="{StaticResource WarningBrush}" Margin="0,0,10,0"
+                           VerticalAlignment="Top"/>
+                <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource WarningBrush}"
+                           TextWrapping="Wrap"
+                           Text="여기서 만든 키는 이 창 안에서만 쓰입니다. 실제 텔레메트리나 저장 파일에는 적용되지 않으며, 메시 트래픽 암호화는 [클러스터 메시] 창의 클러스터 암호구절로 설정합니다."/>
             </StackPanel>
         </Border>
 
-        <!-- Tabs -->
-        <TabControl Grid.Row="1" Background="#18202C" BorderBrush="#283548">
-            <!-- Tab 1: AES-256-GCM AEAD -->
-            <TabItem Header="🔒 AES-256-GCM 암호화" Foreground="#00FF9D">
-                <Grid Margin="12">
+        <TabControl Grid.Row="2">
+            <TabItem Header="AES-256-GCM">
+                <Grid Margin="0,16,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -33,100 +56,139 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Key Config -->
-                    <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,10">
+                    <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SubtitleText}" Text="키"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource LabelText}"
+                                           Margin="0,0,12,0" Text="256비트 마스터 키"/>
+                                <TextBox Grid.Column="1" x:Name="TxtAesKey" Margin="0,0,8,0"
+                                         IsReadOnly="True" FontFamily="{StaticResource MonoFont}"/>
+                                <Button Grid.Column="2" Content="새 키 생성" MinWidth="110"
+                                        Click="BtnGenerateKey_Click"/>
+                            </Grid>
+                            <TextBlock Style="{StaticResource CaptionText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="창을 열 때마다 난수로 새로 만들어지며 저장되지 않습니다. 창을 닫으면 이 키로 만든 암호문은 복호화할 수 없습니다."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SubtitleText}" Text="평문"/>
+                            <TextBox x:Name="TxtPlaintext" MinHeight="60" TextWrapping="Wrap"
+                                     AcceptsReturn="True" VerticalContentAlignment="Top"
+                                     FontFamily="{StaticResource MonoFont}"
+                                     Text="{}{&quot;nodeId&quot;:&quot;COM3&quot;,&quot;channel&quot;:&quot;temp&quot;,&quot;value&quot;:94.6}"/>
+                            <TextBlock Style="{StaticResource CaptionText}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="예시로 채워진 문자열입니다. 측정값이 아니라 암호화 입력일 뿐입니다."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="256-bit Master Key:" Foreground="#8B949E" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBox Grid.Column="1" x:Name="TxtAesKey" Text="0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF" FontSize="11" Margin="0,0,8,0"/>
-                            <Button Grid.Column="2" Content="🔑 신규 키 생성" Padding="10,4" Click="BtnGenerateKey_Click"/>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Style="{StaticResource SubtitleText}"
+                                       Text="암호문 및 인증 태그"/>
+                            <TextBox Grid.Row="1" x:Name="TxtCiphertext"
+                                     Style="{StaticResource ConsoleTextBox}" TextWrapping="Wrap"
+                                     Text="암호화를 실행하면 nonce, 암호문, 인증 태그가 여기에 표시됩니다."/>
                         </Grid>
                     </Border>
 
-                    <!-- Plaintext -->
-                    <DockPanel Grid.Row="1" Margin="0,0,0,8">
-                        <TextBlock Text="Plaintext Telemetry Payload:" Foreground="#8B949E" DockPanel.Dock="Top" Margin="0,0,0,4"/>
-                        <TextBox x:Name="TxtPlaintext" Height="50" TextWrapping="Wrap" Background="#0E131A" Foreground="#F0F6FC" FontSize="11">
-                            <![CDATA[{"nodeId":"COM3","channel":"temp","value":94.6,"zScore":3.8,"status":"CRITICAL"}]]>
-                        </TextBox>
+                    <DockPanel Grid.Row="3">
+                        <TextBlock x:Name="TxtAesStatus" Style="{StaticResource CaptionText}"
+                                   DockPanel.Dock="Left" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Text="대기 중"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="복호화 검증" Margin="0,0,8,0" Click="BtnDecrypt_Click"/>
+                            <Button Content="암호화" Style="{StaticResource PrimaryButton}" MinWidth="100"
+                                    Click="BtnEncrypt_Click"/>
+                        </StackPanel>
                     </DockPanel>
-
-                    <!-- Ciphertext & Tag Result -->
-                    <DockPanel Grid.Row="2" Margin="0,0,0,8">
-                        <TextBlock Text="AES-256-GCM Ciphertext &amp; AEAD Tag (Base64):" Foreground="#00FF9D" DockPanel.Dock="Top" Margin="0,0,0,4"/>
-                        <TextBox x:Name="TxtCiphertext" TextWrapping="Wrap" IsReadOnly="True" Background="#0E131A" Foreground="#00FF9D"
-                                 FontFamily="Consolas" FontSize="11" Text="암호화 테스트를 실행하면 결과가 여기에 표시됩니다."/>
-                    </DockPanel>
-
-                    <!-- Action Buttons -->
-                    <StackPanel Grid.Row="3" Orientation="Horizontal">
-                        <Button Content="🔒 AES-256 암호화 실행" Padding="12,6" Background="#00FF9D" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,8,0" Click="BtnEncrypt_Click"/>
-                        <Button Content="🔓 복호화 무결성 검증" Padding="10,6" Background="#18202C" Margin="0,0,8,0" Click="BtnDecrypt_Click"/>
-                        <TextBlock x:Name="TxtAesStatus" Text="Ready" Foreground="#8B949E" VerticalAlignment="Center"/>
-                    </StackPanel>
                 </Grid>
             </TabItem>
 
-            <!-- Tab 2: Gorilla Delta-of-Delta Bit Compression -->
-            <TabItem Header="🗜️ Gorilla 시계열 압축 벤치마크" Foreground="#00F0FF">
-                <Grid Margin="12">
+            <TabItem Header="Gorilla 압축">
+                <Grid Margin="0,16,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Benchmark Metrics -->
-                    <Border Grid.Row="0" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
+                    <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SubtitleText}" Text="측정 결과"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="원본"/>
+                                    <TextBlock x:Name="TxtRawSize" Style="{StaticResource MetricText}"
+                                               Margin="0,4,0,0" Text="—"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="압축 후"/>
+                                    <TextBlock x:Name="TxtCompressedSize" Style="{StaticResource MetricText}"
+                                               Margin="0,4,0,0" Text="—"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="압축비"/>
+                                    <TextBlock x:Name="TxtRatio" Style="{StaticResource MetricText}"
+                                               Margin="0,4,0,0" Text="—"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="절감률"/>
+                                    <TextBlock x:Name="TxtSavings" Style="{StaticResource MetricText}"
+                                               Margin="0,4,0,0" Text="—"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Style="{StaticResource CaptionText}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Text="압축률은 데이터에 따라 달라집니다. 아래 벤치마크는 매끄럽게 변하는 합성 파형을 입력으로 쓰므로, 실제 계측 신호에서는 다른 값이 나옵니다."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="원본 크기 (Raw Floats):" Foreground="#8B949E" FontSize="11"/>
-                                <TextBlock x:Name="TxtRawSize" Text="8,000 Bytes" Foreground="#F0F6FC" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Gorilla 압축 크기:" Foreground="#8B949E" FontSize="11"/>
-                                <TextBlock x:Name="TxtCompressedSize" Text="688 Bytes" Foreground="#00FF9D" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="압축비 (Compression Ratio):" Foreground="#8B949E" FontSize="11"/>
-                                <TextBlock x:Name="TxtRatio" Text="11.6 : 1" Foreground="#00F0FF" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="3">
-                                <TextBlock Text="절감률 (Savings):" Foreground="#8B949E" FontSize="11"/>
-                                <TextBlock x:Name="TxtSavings" Text="91.4% 절감" Foreground="#FFB800" FontSize="15" FontWeight="Bold" Margin="0,2,0,0"/>
-                            </StackPanel>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Style="{StaticResource SubtitleText}"
+                                       Text="실행 기록"/>
+                            <TextBox Grid.Row="1" x:Name="TxtGorillaLog"
+                                     Style="{StaticResource ConsoleTextBox}" TextWrapping="Wrap"
+                                     Text="벤치마크를 실행하면 결과가 여기에 표시됩니다."/>
                         </Grid>
                     </Border>
 
-                    <!-- Terminal Log -->
-                    <DockPanel Grid.Row="1" Margin="0,0,0,8">
-                        <TextBlock Text="Gorilla Bit Stream Inspection &amp; Lossless Verification Log:" Foreground="#8B949E" DockPanel.Dock="Top" Margin="0,0,0,4"/>
-                        <TextBox x:Name="TxtGorillaLog" TextWrapping="Wrap" IsReadOnly="True" Background="#0E131A" Foreground="#F0F6FC"
-                                 FontFamily="Consolas" FontSize="11" Text="[INIT] Gorilla Delta-of-Delta Bit Compressor Ready. Click benchmark to run."/>
+                    <DockPanel Grid.Row="2">
+                        <TextBlock x:Name="TxtGorillaStatus" Style="{StaticResource CaptionText}"
+                                   DockPanel.Dock="Left" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Text="대기 중"/>
+                        <Button HorizontalAlignment="Right" Style="{StaticResource PrimaryButton}"
+                                MinWidth="180" Content="합성 샘플 1,000개로 벤치마크"
+                                Click="BtnRunGorillaBenchmark_Click"/>
                     </DockPanel>
-
-                    <!-- Run Benchmark -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal">
-                        <Button Content="🚀 1,000개 실시간 샘플 Gorilla 압축 벤치마크 실행" Padding="14,6" Background="#00F0FF" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,8,0" Click="BtnRunGorillaBenchmark_Click"/>
-                        <TextBlock x:Name="TxtGorillaStatus" Text="Ready" Foreground="#8B949E" VerticalAlignment="Center"/>
-                    </StackPanel>
                 </Grid>
             </TabItem>
         </TabControl>
 
-        <!-- Footer -->
-        <DockPanel Grid.Row="2" Margin="0,12,0,0">
-            <Button Content="닫기" HorizontalAlignment="Right" Padding="12,6" Click="BtnClose_Click"/>
+        <DockPanel Grid.Row="3" Margin="0,16,0,0">
+            <Button Content="닫기" HorizontalAlignment="Right" IsCancel="True" Click="BtnClose_Click"/>
         </DockPanel>
     </Grid>
 </Window>

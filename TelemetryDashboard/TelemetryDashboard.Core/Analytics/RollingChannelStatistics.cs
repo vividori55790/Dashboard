@@ -120,6 +120,47 @@ public sealed class RollingChannelStatistics
         return (n * sumXY - sumX * sumY) / denominator;
     }
 
+    /// <summary>
+    /// The fitted trend together with how much of the variation it actually explains.
+    /// </summary>
+    /// <remarks>
+    /// The slope alone is not enough to forecast from, and trusting it produced visibly absurd
+    /// output on real data: a Wikipedia page-size channel, which is noise rather than a ramp, was
+    /// forecast at minus 228,000 bytes sixty seconds ahead. A least-squares line always exists —
+    /// fit one to noise and you get a confident slope pointing nowhere. R-squared is what
+    /// distinguishes a trend from a line drawn through scatter.
+    /// </remarks>
+    public TrendFit TrendFitOverWindow()
+    {
+        int n = _count;
+        if (n < 2) return new TrendFit(0.0, 0.0, n);
+
+        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumYY = 0;
+        for (int i = 0; i < n; i++)
+        {
+            double y = this[i];
+            sumX += i;
+            sumY += y;
+            sumXY += i * y;
+            sumXX += (double)i * i;
+            sumYY += y * y;
+        }
+
+        double sxx = n * sumXX - sumX * sumX;
+        double syy = n * sumYY - sumY * sumY;
+        double sxy = n * sumXY - sumX * sumY;
+
+        if (Math.Abs(sxx) < 1e-12) return new TrendFit(0.0, 0.0, n);
+
+        double slope = sxy / sxx;
+
+        // A flat channel has no variance to explain. Reporting R-squared of 1 for it would license
+        // a forecast built on nothing; zero correctly says the line explains no variation.
+        double rSquared = Math.Abs(syy) < 1e-12 ? 0.0 : Math.Clamp(sxy * sxy / (sxx * syy), 0.0, 1.0);
+
+        return new TrendFit(slope, rSquared, n);
+    }
+
     public void Clear()
     {
         Array.Clear(_window, 0, _window.Length);

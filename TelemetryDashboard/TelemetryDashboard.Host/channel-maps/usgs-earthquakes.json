@@ -1,0 +1,11 @@
+{
+  "name": "usgs-earthquakes",
+  "nodePath": "metadata.title",
+  "nodeFallback": "usgs",
+
+  "channels": [
+    { "variable": "latest_magnitude", "path": "features.0.properties.mag" },
+    { "variable": "latest_depth_km",  "path": "features.0.geometry.coordinates.2", "unit": "km" },
+    { "variable": "event_count",      "path": "metadata.count" }
+  ]
+}

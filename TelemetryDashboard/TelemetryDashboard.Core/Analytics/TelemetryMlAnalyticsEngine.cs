@@ -1,8 +1,8 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using TelemetryDashboard.Core.Analytics;
+using TelemetryDashboard.Core.Resilience;
 
 namespace TelemetryDashboard.Core.Analytics;
 
@@ -19,7 +19,23 @@ public class AnomalyResult
     public bool IsAnomaly { get; set; }
 
     /// <summary>Regression extrapolation of the channel 60 <em>seconds</em> ahead.</summary>
+    /// <remarks>Only meaningful when <see cref="HasForecast"/> is true.</remarks>
     public double PredictedValueIn60s { get; set; }
+
+    /// <summary>
+    /// True when the fitted trend explains enough of the variation to extrapolate from.
+    /// </summary>
+    /// <remarks>
+    /// The same distinction <see cref="HasVerdict"/> draws for the z-score, for the same reason. A
+    /// least-squares line always exists, so a noisy channel yields a confident slope pointing
+    /// nowhere: on a live Wikipedia feed this produced a forecast of minus 228,000 bytes for a page
+    /// size. Callers must check this before rendering the number, exactly as they check
+    /// <see cref="HasVerdict"/> before rendering a sigma.
+    /// </remarks>
+    public bool HasForecast { get; set; }
+
+    /// <summary>How much of the channel's variation the fitted trend explains, 0 to 1.</summary>
+    public double TrendRSquared { get; set; }
 
     /// <summary>Seconds until the rising trend crosses the warning threshold, or -1 when not trending toward it.</summary>
     public double EstimatedTimeToBreachSec { get; set; }
@@ -44,6 +60,20 @@ public class AnomalyResult
 
     /// <summary>True when this result carries an actual judgement.</summary>
     public bool HasVerdict => !string.IsNullOrEmpty(AnalyzerId);
+
+    /// <summary>
+    /// True when this channel's history was discarded by the channel ceiling and this sample is
+    /// re-starting warm-up rather than continuing a series.
+    /// </summary>
+    /// <remarks>
+    /// Without this flag an evicted channel is indistinguishable from a newly connected one: both
+    /// report a small <see cref="SampleCount"/> and no verdict. The difference matters because the
+    /// second is expected and the first means the system is over its configured limit and is
+    /// silently dropping the very history the operator is relying on. It stays set for the whole
+    /// re-warm-up, not just the first sample after readmission, so a caller that samples partway
+    /// through still learns why there is no verdict.
+    /// </remarks>
+    public bool RestartedAfterEviction { get; set; }
 }
 
 /// <summary>
@@ -60,14 +90,27 @@ public class TelemetryMlAnalyticsEngine
     /// <summary>Horizon, in seconds, of <see cref="AnomalyResult.PredictedValueIn60s"/>.</summary>
     public const double ForecastHorizonSec = 60.0;
 
-    private readonly ConcurrentDictionary<string, RollingChannelStatistics> _channels =
-        new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Resident channels, capped. Was an unbounded <c>ConcurrentDictionary</c> that retained every
+    /// channel name the process had ever seen; measured at about 690 managed bytes per channel, so
+    /// a million channels cost 657 MB and nothing stopped it climbing past that.
+    /// </summary>
+    private readonly BoundedChannelRegistry<RollingChannelStatistics> _channels;
 
-    /// <summary>Most recent anomalous result per channel, for diagnosis and alerting.</summary>
-    private readonly ConcurrentDictionary<string, AnomalyResult> _recentAnomalies =
-        new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Most recent anomalous result per channel, for diagnosis and alerting. Capped separately and
+    /// far lower: <see cref="RecentAnomalies"/> sorts this on every read, which was measured at
+    /// 407 ms for the 360,639 entries a million channels produced.
+    /// </summary>
+    private readonly BoundedChannelRegistry<AnomalyResult> _recentAnomalies;
 
     private readonly int _windowSize;
+
+    /// <summary>Channel ceiling when the caller does not pick one. 50,000 channels measured at 35 MB.</summary>
+    public const int DefaultMaxChannels = 50_000;
+
+    /// <summary>Ceiling on retained anomalies, which are read and sorted by the UI.</summary>
+    public const int DefaultMaxRecentAnomalies = 1_000;
 
     /// <summary>Sigma threshold at or above which a sample is flagged anomalous.</summary>
     public double ZScoreThreshold { get; set; } = 2.5;
@@ -78,17 +121,50 @@ public class TelemetryMlAnalyticsEngine
     /// <summary>Minimum samples required before statistics are considered meaningful.</summary>
     public int MinimumSamples { get; init; } = 5;
 
-    public TelemetryMlAnalyticsEngine(int windowSize = 50, double sampleRateHz = 20.0)
+    public TelemetryMlAnalyticsEngine(
+        int windowSize = 50,
+        double sampleRateHz = 20.0,
+        int maxChannels = DefaultMaxChannels,
+        int maxRecentAnomalies = DefaultMaxRecentAnomalies)
     {
         if (windowSize < 2) throw new ArgumentOutOfRangeException(nameof(windowSize), "Window must hold at least two samples.");
         if (sampleRateHz <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRateHz), "Sample rate must be positive.");
 
         _windowSize = windowSize;
         SampleRateHz = sampleRateHz;
+        _channels = new BoundedChannelRegistry<RollingChannelStatistics>(maxChannels);
+        _recentAnomalies = new BoundedChannelRegistry<AnomalyResult>(maxRecentAnomalies);
     }
 
-    /// <summary>Channel names seen so far.</summary>
+    /// <summary>Channels whose statistics are resident right now. Never exceeds <see cref="ChannelCapacity"/>.</summary>
+    /// <remarks>
+    /// This used to be the count of every channel name the engine had ever seen, which only ever
+    /// went up. It is now a live occupancy figure, so a reading below the ceiling means the engine
+    /// is holding everything it has been shown and a reading at the ceiling means it is not.
+    /// </remarks>
     public int TrackedChannelCount => _channels.Count;
+
+    /// <summary>The declared ceiling on resident channels.</summary>
+    public int ChannelCapacity => _channels.Capacity;
+
+    /// <summary>Channels whose statistics have been discarded to stay within the ceiling.</summary>
+    public long ChannelEvictions => _channels.Evictions;
+
+    /// <summary>Anomaly records dropped to stay within the retained-anomaly ceiling.</summary>
+    public long AnomalyEvictions => _recentAnomalies.Evictions;
+
+    /// <summary>Occupancy of the channel store, for an operator watching the limit approach.</summary>
+    public ChannelCardinalityReport ChannelCardinality => _channels.Report("analytics channels");
+
+    /// <summary>Occupancy of the retained-anomaly store.</summary>
+    public ChannelCardinalityReport AnomalyCardinality => _recentAnomalies.Report("retained anomalies");
+
+    /// <summary>Raised when a channel's statistics are discarded to stay within the ceiling.</summary>
+    public event EventHandler<string>? ChannelEvicted
+    {
+        add => _channels.Evicted += value;
+        remove => _channels.Evicted -= value;
+    }
 
     /// <summary>
     /// Stamped onto every verdict this engine issues, so a stored result can be traced back to the
@@ -112,7 +188,7 @@ public class TelemetryMlAnalyticsEngine
     /// so the returned report described telemetry the system had never seen.
     /// </remarks>
     public IReadOnlyList<AnomalyResult> RecentAnomalies =>
-        _recentAnomalies.Values.OrderByDescending(a => a.ZScore).ToList();
+        _recentAnomalies.Snapshot().OrderByDescending(a => a.ZScore).ToList();
 
     /// <summary>Clears the retained anomaly set.</summary>
     public void ClearRecentAnomalies() => _recentAnomalies.Clear();
@@ -120,7 +196,10 @@ public class TelemetryMlAnalyticsEngine
     public AnomalyResult AnalyzeChannel(string channelName, double newValue, double warningUpperThreshold = 95.0)
     {
         channelName ??= string.Empty;
-        var channel = _channels.GetOrAdd(channelName, _ => new RollingChannelStatistics(_windowSize));
+        var channel = _channels.GetOrAdd(
+            channelName,
+            _ => new RollingChannelStatistics(_windowSize),
+            out ChannelAdmission admission);
 
         lock (channel)
         {
@@ -135,6 +214,12 @@ public class TelemetryMlAnalyticsEngine
 
             if (channel.Count < MinimumSamples)
             {
+                // Warm-up. If this channel is one the ceiling threw away, say so rather than let a
+                // restarted series look like a newly connected sensor.
+                result.RestartedAfterEviction =
+                    admission == ChannelAdmission.ReadmittedAfterEviction
+                    || _channels.WasRecentlyEvicted(channelName);
+
                 // AnalyzerId stays null: there is no baseline yet, so there is no verdict to
                 // report. Leaving it unset is what lets callers distinguish "not judged" from
                 // "judged normal" instead of showing a reassuring 0.0 sigma to the operator.
@@ -151,16 +236,25 @@ public class TelemetryMlAnalyticsEngine
             result.AnalyzerId = AnalyzerId;
 
             // Trend is fitted per sample index, then converted to physical units per second.
-            double slopePerSample = channel.TrendSlopePerSample();
-            double slopePerSecond = slopePerSample * SampleRateHz;
+            TrendFit fit = channel.TrendFitOverWindow();
+            double slopePerSecond = fit.SlopePerSample * SampleRateHz;
             result.TrendPerSecond = slopePerSecond;
+            result.TrendRSquared = fit.RSquared;
 
-            result.PredictedValueIn60s = newValue + slopePerSecond * ForecastHorizonSec;
-            result.EstimatedTimeToBreachSec = EstimateBreachSeconds(newValue, slopePerSecond, warningUpperThreshold);
+            // No forecast unless the line actually describes the data. Extrapolating a slope fitted
+            // to scatter is how a page-size channel came to be predicted at a negative byte count.
+            result.HasForecast = fit.SupportsForecast;
+            result.PredictedValueIn60s = result.HasForecast
+                ? newValue + slopePerSecond * ForecastHorizonSec
+                : newValue;
+
+            result.EstimatedTimeToBreachSec = result.HasForecast
+                ? EstimateBreachSeconds(newValue, slopePerSecond, warningUpperThreshold)
+                : -1;
 
             if (result.IsAnomaly)
             {
-                _recentAnomalies[channelName] = result;
+                _recentAnomalies.Set(channelName, result);
             }
 
             return result;
@@ -168,7 +262,7 @@ public class TelemetryMlAnalyticsEngine
     }
 
     /// <summary>Discards the history of one channel.</summary>
-    public void ResetChannel(string channelName) => _channels.TryRemove(channelName ?? string.Empty, out _);
+    public void ResetChannel(string channelName) => _channels.Remove(channelName ?? string.Empty);
 
     /// <summary>Discards all channel history.</summary>
     public void Reset() => _channels.Clear();

@@ -69,6 +69,16 @@ public sealed class HostOptions
     public string? PluginDirectory { get; init; }
 
     /// <summary>
+    /// Directory of installed extensions, or null for <c>extensions/</c> beside the executable.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="PluginDirectory"/>, which is "load every DLL in here" and cannot
+    /// express an extension that is installed but switched off. This directory is managed by the
+    /// <c>extensions</c> subcommand and carries the enable/disable state alongside the files.
+    /// </remarks>
+    public string? ExtensionDirectory { get; init; }
+
+    /// <summary>
     /// URL or path of the extension catalogue index, or null to consult no catalogue.
     /// </summary>
     /// <remarks>
@@ -102,6 +112,27 @@ public sealed class HostOptions
     /// installs on its own is a remote code execution path into a plant network.
     /// </remarks>
     public string? UpdateRepository { get; init; }
+
+    /// <summary>Server-Sent Events endpoint to ingest from, or null for none.</summary>
+    /// <remarks>
+    /// A hub that can only read a serial cable is a hub tied to one building. Any SSE feed becomes
+    /// a source on equal terms: same routing, same scoring, same archive.
+    /// </remarks>
+    public string? SseEndpoint { get; init; }
+
+    /// <summary>HTTP endpoint to poll, or null for none.</summary>
+    /// <remarks>
+    /// Most public real-time data is request/response rather than a stream — open-data portals,
+    /// USGS, exchange REST APIs, most industrial gateways. A hub that only reads streams cannot
+    /// read any of them.
+    /// </remarks>
+    public string? PollEndpoint { get; init; }
+
+    /// <summary>How often <see cref="PollEndpoint"/> is asked.</summary>
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>Channel map projecting JSON documents onto channels, or null for none.</summary>
+    public string? ChannelMapPath { get; init; }
 
     /// <summary>Whether the operator asked for usage text.</summary>
     public bool ShowHelp { get; init; }

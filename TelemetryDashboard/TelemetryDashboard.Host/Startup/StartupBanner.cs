@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using TelemetryDashboard.Core.Cluster;
 using TelemetryDashboard.Core.Recording;
 using TelemetryDashboard.Host.Ingest;
 
@@ -43,6 +44,7 @@ public static class StartupBanner
         Console.WriteLine();
         PrintContent(console);
         Console.WriteLine();
+        PrintIdentity();
         PrintIngest(source);
         PrintRecording(recorder);
         Console.WriteLine();
@@ -93,6 +95,28 @@ public static class StartupBanner
             : $"  console page  {console.ClientFile}");
     }
 
+    /// <summary>
+    /// Says who this installation is, so data from it can be told apart from anyone else's.
+    /// </summary>
+    /// <remarks>
+    /// Printed because the failure it guards against is silent. If the directory is not writable
+    /// the identity cannot be persisted and a fresh one is generated on every launch, which splits
+    /// this node's history into a new series after each restart without ever raising an error. The
+    /// only symptom is a chart that starts empty when it should not, so the start-up line says it.
+    /// </remarks>
+    private static void PrintIdentity()
+    {
+        NodeIdentity identity = HostNode.Identity;
+        Console.WriteLine($"  node          {identity.DisplayName}");
+
+        if (identity.WasCreated)
+        {
+            Console.WriteLine("                First run for this installation, or the identity file could not");
+            Console.WriteLine("                be written. If it recurs every launch, this directory is read-only");
+            Console.WriteLine("                and each restart will look like a different machine.");
+        }
+    }
+
     private static void PrintIngest(ITelemetrySource? source)
     {
         switch (source)
@@ -106,9 +130,29 @@ public static class StartupBanner
                 Console.WriteLine("                every frame carries simulated=true and a 'SIM:' node prefix");
                 break;
 
+            case PollingTelemetrySource poll:
+                Console.WriteLine($"  ingest        polled -- {poll.Description}");
+                Console.WriteLine("                A poll samples what the endpoint says at that instant. Anything");
+                Console.WriteLine("                shorter than the interval is not observed, and is not claimed to be.");
+                break;
+
+            case SseTelemetrySource sse:
+                Console.WriteLine($"  ingest        network stream -- {sse.Description}");
+                Console.WriteLine("                Measured data from elsewhere: routed, scored and archived");
+                Console.WriteLine("                exactly like a device on a port.");
+                break;
+
+            // Anything attached that this switch does not recognise still gets described. The
+            // previous default reported NONE for every unknown type, so adding a source made the
+            // banner announce that nothing was attached while that source was already running --
+            // a start-up summary asserting the opposite of what the process was doing.
+            case not null:
+                Console.WriteLine($"  ingest        {source.Description}");
+                break;
+
             default:
-                Console.WriteLine("  ingest        NONE -- no serial port was supplied.");
-                Console.WriteLine("                The timeline stays empty until one is: --serial <port>.");
+                Console.WriteLine("  ingest        NONE -- no source was supplied.");
+                Console.WriteLine("                The timeline stays empty until one is: --serial, --sse or --simulate.");
                 Console.WriteLine("                No synthetic data is substituted; an empty stream is the");
                 Console.WriteLine("                truthful state of a hub with nothing attached.");
                 break;

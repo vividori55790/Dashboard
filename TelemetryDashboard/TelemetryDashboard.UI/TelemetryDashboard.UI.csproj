@@ -14,10 +14,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\..\Logo_Gemini.png">
+<!--
+      Resource, not Content. MainWindow.xaml uses this file as its window Icon and as an Image
+      source. WPF resolves a Content image through a ContentFilePart, which asks the assembly for
+      its directory on disk; a single-file publish has no such directory, so the lookup reached
+      Path.Combine(null, ...) and the application died with an XamlParseException before its first
+      window appeared, while every normal build ran perfectly. A Resource is compiled into the
+      assembly and resolved through the pack URI without touching the filesystem.
+    -->
+    <Resource Include="..\..\Logo_Gemini.png">
       <Link>Logo_Gemini.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    </Resource>
     <Content Include="..\..\Logo_Gemini.ico">
       <Link>Logo_Gemini.ico</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

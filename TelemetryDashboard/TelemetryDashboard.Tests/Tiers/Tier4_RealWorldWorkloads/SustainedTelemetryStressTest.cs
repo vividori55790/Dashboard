@@ -94,10 +94,17 @@ public class SustainedTelemetryStressTest
         int routedCount = 0;
         router.PacketRouted += (s, pkt) => routedCount++;
 
-        // Baseline GC memory
+        // Thread-local allocation, not process heap. GC.GetTotalMemory measures every object
+        // alive anywhere in the process, and xUnit runs collections in parallel, so this assertion
+        // used to be decided by whatever unrelated test happened to be running alongside it: it
+        // passed three times out of three in isolation and failed inside the full suite. A test
+        // that fails at random teaches people to ignore failures, which costs more than the bug it
+        // was meant to catch. GetAllocatedBytesForCurrentThread counts only what this thread
+        // allocated, so the number now answers the question the test is actually asking.
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
+        long initialAllocated = GC.GetAllocatedBytesForCurrentThread();
         long initialMemory = GC.GetTotalMemory(true);
 
         const int iterations = 100_000;
@@ -110,15 +117,23 @@ public class SustainedTelemetryStressTest
 
         routedCount.Should().Be(iterations);
 
-        // GC after stream workload
+        long allocatedDelta = GC.GetAllocatedBytesForCurrentThread() - initialAllocated;
+
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        long finalMemory = GC.GetTotalMemory(true);
+        long memoryDelta = GC.GetTotalMemory(true) - initialMemory;
 
-        long memoryDelta = finalMemory - initialMemory;
-        // Verify memory growth remains bounded (less than 20 MB for 100k packets)
-        memoryDelta.Should().BeLessThan(20 * 1024 * 1024);
+        // Allocation per packet is the deterministic figure: parsing one frame allocates a handful
+        // of short-lived strings, all of which the collector reclaims. 2 KB each is generous and
+        // still catches a routing path that starts retaining per-packet state.
+        (allocatedDelta / iterations).Should().BeLessThan(2048,
+            "routing one frame should allocate a few short-lived strings, not accumulate state");
+
+        // Retained heap is kept as a coarse backstop only. It is measured across the whole process,
+        // so the bound is loose on purpose rather than precise and flaky.
+        memoryDelta.Should().BeLessThan(64 * 1024 * 1024,
+            "a genuine leak over 100k packets would dwarf any noise from tests running in parallel");
     }
 
     [Fact]

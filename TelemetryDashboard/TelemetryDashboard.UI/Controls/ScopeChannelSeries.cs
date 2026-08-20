@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Media;
 
 namespace TelemetryDashboard.UI.Controls;
@@ -16,11 +17,18 @@ namespace TelemetryDashboard.UI.Controls;
 /// </remarks>
 public sealed class ScopeChannelSeries : INotifyPropertyChanged
 {
-    /// <summary>Palette cycled through as channels are discovered.</summary>
-    private static readonly string[] Palette =
+    /// <summary>
+    /// Palette cycled through as channels are discovered, named by theme key rather than by value.
+    /// </summary>
+    /// <remarks>
+    /// This used to be ten literal hex codes of its own — a second palette competing with the
+    /// application's, including a green and a red that read as "healthy" and "alarming" beside
+    /// controls where those colours mean exactly that. The series tokens are chosen to stay
+    /// distinguishable under the common forms of colour blindness, which an ad-hoc list is not.
+    /// </remarks>
+    private static readonly string[] PaletteKeys =
     {
-        "#FF5555", "#50FA7B", "#8BE9FD", "#BD93F9", "#FFB86C",
-        "#FF79C6", "#F1FA8C", "#66FCF1", "#00FF9D", "#FF2E63"
+        "Series1Brush", "Series2Brush", "Series3Brush", "Series4Brush", "Series5Brush"
     };
 
     private readonly Queue<double> _timestamps;
@@ -32,13 +40,31 @@ public sealed class ScopeChannelSeries : INotifyPropertyChanged
     {
         Name = name;
         DisplayName = name;
-        ColorHex = Palette[index % Palette.Length];
-        Brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(ColorHex));
+
+        Color colour = PaletteColour(index);
+        ColorHex = $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
+        Brush = new SolidColorBrush(colour);
         Brush.Freeze();
 
         _capacity = capacity;
         _timestamps = new Queue<double>(capacity);
         _values = new Queue<double>(capacity);
+    }
+
+    /// <summary>
+    /// Reads the series colour for a channel index out of the application's theme dictionary.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to a neutral grey only when there is no running application to ask — a unit test
+    /// or the designer. Inventing a colour there would put a value back in the code that the theme
+    /// is supposed to own.
+    /// </remarks>
+    private static Color PaletteColour(int index)
+    {
+        string key = PaletteKeys[Math.Abs(index) % PaletteKeys.Length];
+        return Application.Current?.TryFindResource(key) is SolidColorBrush themed
+            ? themed.Color
+            : Colors.Gray;
     }
 
     public string Name { get; }

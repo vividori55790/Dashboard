@@ -1,6 +1,29 @@
 using System;
+using System.Collections.Generic;
 
 namespace TelemetryDashboard.Core.Simulator;
+
+/// <summary>
+/// Channel ids the built-in simulator reads its setpoints under.
+/// </summary>
+/// <remarks>
+/// These are the names a <see cref="MonitoringProfile"/> uses to say which quantity a slider drives.
+/// Naming them once, here, is what lets a profile be data: the simulator looks up the ids it knows
+/// and ignores the rest, so a site can describe channels this model has never heard of without
+/// either side gaining a reference to the other.
+/// </remarks>
+public static class SimulatorChannelIds
+{
+    public const string GridVoltage = "grid.voltage";
+    public const string DabBusVoltage = "dab.bus_voltage";
+    public const string PsfbOutputVoltage = "psfb.output_voltage";
+    public const string ServerLoad = "server.load";
+
+    public const string AmbientTemperature = "ambient.temperature";
+    public const string AmbientHumidity = "ambient.humidity";
+    public const string MachineVibration = "machine.vibration";
+    public const string MachineSpeed = "machine.speed";
+}
 
 /// <summary>Operating scenario driven from the control panel or the web console.</summary>
 public enum PowerScenario
@@ -69,21 +92,55 @@ public sealed class PowerPlantSimulator
 
     public PowerScenario Scenario { get; set; } = PowerScenario.Normal;
 
-    public double GridVoltageSetpoint { get; set; } = 380.0;
-    public double DabBusVoltageSetpoint { get; set; } = 400.0;
-    public double PsfbVoltageSetpoint { get; set; } = 48.05;
-    public double ServerLoadSetpoint { get; set; } = 82.4;
+    /// <summary>
+    /// Operator setpoints keyed by <see cref="SimulatorChannelIds"/>. Absent means "use the model's
+    /// own resting value", which is why every read below carries its fallback: a profile that names
+    /// only two channels leaves the rest running exactly as they did before it was selected.
+    /// </summary>
+    private readonly Dictionary<string, double> _setpoints = new(StringComparer.OrdinalIgnoreCase);
+
+    public double GridVoltageSetpoint
+    {
+        get => Setpoint(SimulatorChannelIds.GridVoltage, 380.0);
+        set => SetSetpoint(SimulatorChannelIds.GridVoltage, value);
+    }
+
+    public double DabBusVoltageSetpoint
+    {
+        get => Setpoint(SimulatorChannelIds.DabBusVoltage, 400.0);
+        set => SetSetpoint(SimulatorChannelIds.DabBusVoltage, value);
+    }
+
+    public double PsfbVoltageSetpoint
+    {
+        get => Setpoint(SimulatorChannelIds.PsfbOutputVoltage, 48.05);
+        set => SetSetpoint(SimulatorChannelIds.PsfbOutputVoltage, value);
+    }
+
+    public double ServerLoadSetpoint
+    {
+        get => Setpoint(SimulatorChannelIds.ServerLoad, 82.4);
+        set => SetSetpoint(SimulatorChannelIds.ServerLoad, value);
+    }
 
     public double ElapsedSec { get; private set; }
+
+    /// <summary>Drives one channel. An id the model does not read is stored and simply not used.</summary>
+    public void SetSetpoint(string channelId, double value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(channelId);
+        _setpoints[channelId] = value;
+    }
+
+    /// <summary>The operator's value for a channel, or <paramref name="restingValue"/> if unset.</summary>
+    public double Setpoint(string channelId, double restingValue) =>
+        channelId is not null && _setpoints.TryGetValue(channelId, out double value) ? value : restingValue;
 
     /// <summary>Restores every setpoint and clears the active scenario.</summary>
     public void Reset()
     {
         Scenario = PowerScenario.Normal;
-        GridVoltageSetpoint = 380.0;
-        DabBusVoltageSetpoint = 400.0;
-        PsfbVoltageSetpoint = 48.05;
-        ServerLoadSetpoint = 82.4;
+        _setpoints.Clear();
     }
 
     /// <summary>Advances the model and returns the resulting instantaneous state.</summary>
@@ -153,10 +210,17 @@ public sealed class PowerPlantSimulator
             PsfbTemperature = psfbTemperature,
             ServerLoadPercent = ServerLoadSetpoint,
 
-            AmbientTemperature = 25.0 + 5.0 * Math.Sin(t * 0.8) + Noise(1.0),
-            AmbientHumidity = 50.0 + 10.0 * Math.Cos(t * 0.5) + Noise(1.0),
-            Vibration = Math.Abs(0.2 * Math.Sin(t * 3.0) + 0.05 * _random.NextDouble()),
-            Rpm = 1200.0 + 150.0 * Math.Sin(t * 1.5) + Noise(10.0)
+            // The generic profile's four channels. Each resting value is the constant this model
+            // has always used, so an unselected channel behaves exactly as it did before profiles
+            // existed, and a slider that is moved genuinely moves the measurement.
+            AmbientTemperature = Setpoint(SimulatorChannelIds.AmbientTemperature, 25.0)
+                + 5.0 * Math.Sin(t * 0.8) + Noise(1.0),
+            AmbientHumidity = Setpoint(SimulatorChannelIds.AmbientHumidity, 50.0)
+                + 10.0 * Math.Cos(t * 0.5) + Noise(1.0),
+            Vibration = Math.Abs(Setpoint(SimulatorChannelIds.MachineVibration, 0.2) * Math.Sin(t * 3.0)
+                + 0.05 * _random.NextDouble()),
+            Rpm = Setpoint(SimulatorChannelIds.MachineSpeed, 1200.0)
+                + 150.0 * Math.Sin(t * 1.5) + Noise(10.0)
         };
     }
 

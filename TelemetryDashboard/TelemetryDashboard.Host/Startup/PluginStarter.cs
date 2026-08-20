@@ -18,12 +18,18 @@ namespace TelemetryDashboard.Host.Startup;
 internal static class PluginStarter
 {
     /// <summary>Initialises <paramref name="plugin"/> and registers it with the router on success.</summary>
+    /// <returns>Null when the plugin started, or the reason it did not.</returns>
     /// <remarks>
     /// Registration follows initialisation, never precedes it. A plugin registered first would
     /// receive packets through <see cref="IPlugin.OnPacketReceived"/> and
     /// <see cref="IPlugin.TryCustomParse"/> before it had been given a context to handle them with.
+    /// <para>
+    /// The reason is returned as well as printed, so a caller that knows which installed extension
+    /// this plugin came from can record it against that extension. The console line alone would
+    /// leave the extension report saying "loaded" for something that never initialised.
+    /// </para>
     /// </remarks>
-    internal static void Start(PluginManager manager, IPlugin plugin, DataRouter? router)
+    internal static string? Start(PluginManager manager, IPlugin plugin, DataRouter? router)
     {
         try
         {
@@ -32,11 +38,12 @@ internal static class PluginStarter
         catch (Exception ex)
         {
             Console.Error.WriteLine($"  [plugin-host] {Identify(plugin)} failed to initialise: {ex.Message}");
-            return;
+            return $"{Identify(plugin)} failed to initialise: {ex.Message}";
         }
 
         router?.RegisterPlugin(plugin);
         Console.WriteLine($"                {Identify(plugin),-24}{Name(plugin)}");
+        return null;
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using TelemetryDashboard.Core.Streaming;
 using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Query;
 
 namespace TelemetryDashboard.Core.Streaming;
 
@@ -20,7 +21,7 @@ namespace TelemetryDashboard.Core.Streaming;
 /// <c>/api/status</c>, <c>/api/dvr/replay</c>, <c>/api/dvr/report</c>, plus static assets.
 /// Visualisation lives in the client; this server's contract is to deliver frames and files.
 /// </remarks>
-public class TelemetryStreamingServer : IAsyncDisposable
+public partial class TelemetryStreamingServer : IAsyncDisposable
 {
     private readonly HttpListener _listener = new();
     private readonly TelemetryBroadcastHub _hub = new();
@@ -91,6 +92,7 @@ public class TelemetryStreamingServer : IAsyncDisposable
 
         foreach (string prefix in prefixes) _listener.Prefixes.Add(prefix);
         BoundPrefixes = prefixes;
+        SeriesQuery = new SeriesQueryService(Series);
     }
 
     /// <summary>Registers an additional directory whose files may be served.</summary>
@@ -122,6 +124,7 @@ public class TelemetryStreamingServer : IAsyncDisposable
         }
 
         IsRunning = true;
+        StartPump();
         _acceptLoop = Task.Run(() => AcceptClientsAsync(_cts.Token));
     }
 
@@ -135,6 +138,7 @@ public class TelemetryStreamingServer : IAsyncDisposable
         _cts.Cancel();
         try { _listener.Stop(); } catch (ObjectDisposedException) { }
 
+        await StopPumpAsync().ConfigureAwait(false);
         await _hub.DisposeAsync().ConfigureAwait(false);
 
         if (_acceptLoop is not null)
@@ -151,13 +155,26 @@ public class TelemetryStreamingServer : IAsyncDisposable
         _listener.Close();
     }
 
-    /// <summary>Records the frame on the DVR timeline and fans it out to every subscriber.</summary>
+    /// <summary>
+    /// Records the frame on the DVR timeline and in the series store, then fans it out to every
+    /// subscriber that has not asked for something narrower.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole-frame path, and it costs one JSON serialisation plus one parse per
+    /// sample. It is kept because existing producers use it and because a client that never
+    /// subscribes still expects the raw feed, but it does not scale: at a million samples a second
+    /// it is roughly 220 MB/s on the wire for every connected browser. Producers at that rate
+    /// should call <see cref="PublishSample"/> and let viewers subscribe.
+    /// </remarks>
     public void BroadcastTelemetry(object telemetryPacket)
     {
         if (telemetryPacket is null) return;
 
         string json = JsonSerializer.Serialize(telemetryPacket);
-        TelemetryFrameRecorder.Record(DvrPlayer, json);
+
+        // One parse feeds both timelines. The DVR keeps its own epoch; the series store is stamped
+        // in Unix seconds because that is what a browser plots against.
+        TelemetryFrameRecorder.Record(DvrPlayer, json, TelemetryFrameRecorder.DefaultAnomalyThreshold, Series);
 
         if (!IsRunning) return;
 
@@ -232,7 +249,7 @@ public class TelemetryStreamingServer : IAsyncDisposable
 
         try
         {
-            await ReceiveCommandsAsync(wsContext.WebSocket, token).ConfigureAwait(false);
+            await ReceiveCommandsAsync(wsContext.WebSocket, subscriber.Id, token).ConfigureAwait(false);
         }
         finally
         {
@@ -241,7 +258,12 @@ public class TelemetryStreamingServer : IAsyncDisposable
     }
 
     /// <summary>Reads upstream commands, reassembling messages that span multiple frames.</summary>
-    private async Task ReceiveCommandsAsync(WebSocket socket, CancellationToken token)
+    /// <remarks>
+    /// A subscription message is applied here and consumed. Anything else reaches
+    /// <see cref="CommandReceived"/> exactly as before, so the application command channel is
+    /// unchanged for every producer that was already using it.
+    /// </remarks>
+    private async Task ReceiveCommandsAsync(WebSocket socket, string subscriberId, CancellationToken token)
     {
         var buffer = new byte[4096];
         var message = new MemoryStream();
@@ -268,7 +290,11 @@ public class TelemetryStreamingServer : IAsyncDisposable
 
             if (message.Length > 0)
             {
-                CommandReceived?.Invoke(this, Encoding.UTF8.GetString(message.ToArray()));
+                string text = Encoding.UTF8.GetString(message.ToArray());
+                if (!TryApplySubscription(subscriberId, text))
+                {
+                    CommandReceived?.Invoke(this, text);
+                }
             }
             message.SetLength(0);
         }

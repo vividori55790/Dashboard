@@ -10,27 +10,72 @@ public partial class DataTopologyOverlay : UserControl
 {
     public event Action<string>? OnNodeSelected;
 
+    /// <summary>The stage the operator last clicked, so its marker can be cleared.</summary>
+    private Border? _selectedNode;
+
     public DataTopologyOverlay()
     {
         InitializeComponent();
     }
 
-    public void UpdateTopologyStatus(string sourceInfo, double packetRateHz, bool isSimulating)
+    /// <summary>
+    /// Reports what the pipeline is carrying: a description of the source, and the measured sample
+    /// rate, or nothing when no rate has been measured yet.
+    /// </summary>
+    /// <remarks>
+    /// The previous signature took a rate and an <c>isSimulating</c> flag, and its only caller
+    /// passed the constants <c>50</c> and <c>true</c> on every tick — so the panel reported a
+    /// simulated 50 Hz stream whatever the source was doing. A rate the caller has not measured is
+    /// now expressed as no rate rather than as a plausible number.
+    /// </remarks>
+    public void UpdateTopologyStatus(string sourceInfo, double? samplesPerSecond)
     {
         Dispatcher.Invoke(() =>
         {
             SourceDetailsText.Text = sourceInfo;
-            ThroughputText.Text = $"Data Stream: {(isSimulating ? "Simulating" : "Active")} ({packetRateHz:F0} Hz)";
-            StatusLed.Fill = isSimulating ? new SolidColorBrush(Color.FromRgb(255, 179, 0)) : new SolidColorBrush(Color.FromRgb(0, 230, 118));
+
+            if (samplesPerSecond is double rate)
+            {
+                ThroughputText.Text = $"{rate:N0} samples/s, average over the run";
+                SetLed("SuccessBrush");
+            }
+            else
+            {
+                ThroughputText.Text = "No data received yet";
+                SetLed("TextTertiaryBrush");
+            }
         });
     }
 
+    /// <summary>Colours the flow indicator from a theme token.</summary>
+    private void SetLed(string brushKey)
+    {
+        if (TryFindResource(brushKey) is Brush brush)
+        {
+            StatusLed.Fill = brush;
+        }
+    }
+
+    /// <summary>
+    /// Marks the clicked stage and tells whoever is listening which one it was.
+    /// </summary>
+    /// <remarks>
+    /// The previous handler opened a modal dialog announcing that it highlighted the channels
+    /// flowing through that stage. Nothing was highlighted and no channel was touched, so the only
+    /// honest feedback available is that the stage is now the selected one — which is what it does.
+    /// </remarks>
     private void Node_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is Border border && border.Name is string name)
+        if (sender is not Border border || border.Name is not string name) return;
+
+        _selectedNode?.ClearValue(Border.BorderBrushProperty);
+        _selectedNode = border;
+
+        if (TryFindResource("AccentBrush") is Brush accent)
         {
-            OnNodeSelected?.Invoke(name);
-            MessageBox.Show($"[유기적 데이터 파이프라인 노드 선택]\n노드: {name}\n이 노드에서 수신/파싱/연산되는 데이터 채널을 하이라이트합니다.", "Topology Node Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+            border.BorderBrush = accent;
         }
+
+        OnNodeSelected?.Invoke(name);
     }
 }

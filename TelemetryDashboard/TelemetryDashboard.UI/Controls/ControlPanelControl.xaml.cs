@@ -31,6 +31,17 @@ public class EventLogEntry
     public string Value { get; set; } = NoValue;
     public string ZScore { get; set; } = NoValue;
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Value and z-score as one right-aligned figure for the log row, or nothing at all when the
+    /// entry carries no measurement.
+    /// </summary>
+    /// <remarks>
+    /// Rendering "- -" on every plain log line would fill the column with placeholders; an entry
+    /// that measured nothing shows nothing, and only a real reading occupies the space.
+    /// </remarks>
+    public string Reading =>
+        Value == NoValue && ZScore == NoValue ? string.Empty : $"{Value}  {ZScore}";
 }
 
 public partial class ControlPanelControl : UserControl
@@ -54,8 +65,12 @@ public partial class ControlPanelControl : UserControl
     {
         InitializeComponent();
         DgEventLog.ItemsSource = _eventLogEntries;
-        LogMessage("SYSTEM", "Control panel initialized with structured DataGrid & Z-Score breakdown. Ready.");
+        LogMessage("SYSTEM", "Control panel ready.");
     }
+
+    /// <summary>Resolves a theme brush, or null outside a running application.</summary>
+    private static Brush? ThemeBrush(FrameworkElement scope, string key) =>
+        scope.TryFindResource(key) as Brush;
 
     public void LogMessage(string tag, string message)
     {
@@ -207,14 +222,15 @@ public partial class ControlPanelControl : UserControl
         _totalPackets++;
         _bytesSinceRateReset += EstimatedPacketBytes;
 
-        TxtPacketCount.Text = $"{_totalPackets:N0} pkts";
+        // Units live in the tile caption, so the value stays a number and the column stays narrow.
+        TxtPacketCount.Text = $"{_totalPackets:N0}";
 
         // Throughput over the elapsed interval. The old readout divided the cumulative packet
         // count by 1024 and labelled it KB/s, so the "rate" only ever climbed.
         double elapsed = (DateTime.Now - _rateWindowStart).TotalSeconds;
         if (elapsed >= 1.0)
         {
-            TxtDataRate.Text = $"{_bytesSinceRateReset / 1024.0 / elapsed:F1} KB/s";
+            TxtDataRate.Text = $"{_bytesSinceRateReset / 1024.0 / elapsed:F1}";
             _bytesSinceRateReset = 0;
             _rateWindowStart = DateTime.Now;
         }
@@ -233,8 +249,8 @@ public partial class ControlPanelControl : UserControl
     {
         if (!analysis.HasVerdict)
         {
-            target.Text = $"— [{analysis.SampleCount} samples, no baseline yet]";
-            target.Foreground = new SolidColorBrush(Color.FromRgb(136, 146, 176));
+            target.Text = $"—  no baseline yet ({analysis.SampleCount} samples)";
+            Recolour(target, "TextTertiaryBrush");
             return;
         }
 
@@ -246,25 +262,44 @@ public partial class ControlPanelControl : UserControl
     {
         if (zScore >= 3.5)
         {
-            target.Text = $"{zScore:F1}σ [CRITICAL]";
-            target.Foreground = new SolidColorBrush(Color.FromRgb(255, 46, 99));
+            target.Text = $"{zScore:F1}σ  Critical";
+            Recolour(target, "DangerBrush");
         }
         else if (zScore >= 2.0)
         {
-            target.Text = $"{zScore:F1}σ [WARNING]";
-            target.Foreground = new SolidColorBrush(Color.FromRgb(255, 234, 0));
+            target.Text = $"{zScore:F1}σ  Warning";
+            Recolour(target, "WarningBrush");
         }
         else
         {
-            target.Text = $"{zScore:F1}σ [NORMAL]";
-            target.Foreground = new SolidColorBrush(Color.FromRgb(0, 230, 118));
+            target.Text = $"{zScore:F1}σ  Normal";
+            Recolour(target, "SuccessBrush");
+        }
+    }
+
+    /// <summary>
+    /// Paints a reading with a status token. Colour here reports a verdict the analytics engine
+    /// produced, which is the only thing the status palette is for.
+    /// </summary>
+    private static void Recolour(TextBlock target, string brushKey)
+    {
+        if (ThemeBrush(target, brushKey) is Brush brush)
+        {
+            target.Foreground = brush;
         }
     }
 
     private void DrawSparkline()
     {
         CanvasSparkline.Children.Clear();
-        if (_sparklineBuffer.Count < 2) return;
+        if (_sparklineBuffer.Count < 2)
+        {
+            // An empty plot area otherwise reads as a flat line at zero.
+            TxtSparklineEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        TxtSparklineEmpty.Visibility = Visibility.Collapsed;
 
         double width = CanvasSparkline.ActualWidth > 0 ? CanvasSparkline.ActualWidth : 350;
         double height = CanvasSparkline.ActualHeight > 0 ? CanvasSparkline.ActualHeight : 45;
@@ -274,11 +309,11 @@ public partial class ControlPanelControl : UserControl
         if (min == max) { min -= 1.0; max += 1.0; }
 
         double stepX = width / (_sparklineBuffer.Count - 1);
-        Polyline polyline = new Polyline
+        Polyline polyline = new Polyline { StrokeThickness = 1.5 };
+        if (ThemeBrush(this, "Series1Brush") is Brush stroke)
         {
-            Stroke = new SolidColorBrush(Color.FromRgb(102, 252, 241)),
-            StrokeThickness = 1.5
-        };
+            polyline.Stroke = stroke;
+        }
 
         for (int i = 0; i < _sparklineBuffer.Count; i++)
         {
@@ -295,7 +330,7 @@ public partial class ControlPanelControl : UserControl
         if (sender is ToggleButton btn)
         {
             bool state = btn.IsChecked == true;
-            btn.Content = $"Node COM3 (DAB): {(state ? "ON" : "OFF")}";
+            btn.Content = $"Node COM3 (DAB): {(state ? "On" : "Off")}";
             SendCommand($"NODE_POWER COM3 {(state ? "ON" : "OFF")}");
         }
     }
@@ -305,7 +340,7 @@ public partial class ControlPanelControl : UserControl
         if (sender is ToggleButton btn)
         {
             bool state = btn.IsChecked == true;
-            btn.Content = $"Node COM4 (PSFB): {(state ? "ON" : "OFF")}";
+            btn.Content = $"Node COM4 (PSFB): {(state ? "On" : "Off")}";
             SendCommand($"NODE_POWER COM4 {(state ? "ON" : "OFF")}");
         }
     }
@@ -321,7 +356,9 @@ public partial class ControlPanelControl : UserControl
         if (sender is ToggleButton btn)
         {
             bool state = btn.IsChecked == true;
-            btn.Content = state ? "⚡ 1000Hz BURST ACTIVE" : "⚡ 1000Hz Burst";
+            // The caption states the rate now in force rather than the one the button would set,
+            // so it agrees with the command that was actually sent below.
+            btn.Content = state ? "Burst: 1000 Hz" : "Burst: 1 Hz";
             SendCommand($"BURST_MODE {(state ? "1000HZ" : "1HZ")}");
         }
     }
@@ -355,11 +392,29 @@ public partial class ControlPanelControl : UserControl
     private void SendCommand(string cmd)
     {
         LogMessage("TX", $"Sending command: {cmd}");
+
+        // The footer used to read "System Status: Ready" forever, because nothing ever wrote to it.
+        // It now reports the one thing this panel actually knows about the system.
+        TxtSystemStatus.Text = $"Last command sent {DateTime.Now:HH:mm:ss} — {cmd}";
         OnCommandSent?.Invoke(cmd);
     }
 
     private void BtnClearLog_Click(object sender, RoutedEventArgs e)
     {
         _eventLogEntries.Clear();
+    }
+
+    /// <summary>Keeps the event log's auto-scroll inside the event log.</summary>
+    /// <remarks>
+    /// <see cref="ListBox.ScrollIntoView"/> works by asking the newest row to bring itself into
+    /// view, and that request keeps bubbling after the list has scrolled. Every ScrollViewer above
+    /// it then answers the same request by scrolling the log into view too — so at the telemetry
+    /// rate the panel crept downward on its own and settled part-way through its own content, with
+    /// the live readings and the node controls above the fold. The list has already done what was
+    /// asked by the time the event reaches here, so nothing above it needs to act on it.
+    /// </remarks>
+    private void DgEventLog_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
+    {
+        e.Handled = true;
     }
 }

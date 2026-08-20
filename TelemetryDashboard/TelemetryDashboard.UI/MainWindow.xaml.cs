@@ -89,25 +89,29 @@ public partial class MainWindow : Window
         {
             Dispatcher.Invoke(() =>
             {
+                // No emoji in a log line. The event log renders these through the panel's text
+                // styles, and an emoji comes from a colour font that ignores Foreground entirely —
+                // so the one character in the row that the palette cannot reach was the one drawing
+                // most of the attention.
                 if (cmd.Contains("OUTAGE", StringComparison.OrdinalIgnoreCase))
                 {
                     _simulator.Scenario = PowerScenario.GridOutage;
-                    ControlPanel.LogMessage("SCENARIO", "⚡ [C# SIMULATOR] Grid Outage triggered! DAB UPS Battery Discharge mode active.");
+                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: 계통 정전 시나리오 적용 — DAB UPS 배터리 방전 모드");
                 }
                 else if (cmd.Contains("DAB_ANOMALY", StringComparison.OrdinalIgnoreCase))
                 {
                     _simulator.Scenario = PowerScenario.DabOvercurrent;
-                    ControlPanel.LogMessage("SCENARIO", "🔥 [C# SIMULATOR] DAB 배터리 과전류 주입 — Z-Score는 실측 기반으로 산출됩니다.");
+                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: DAB 배터리 과전류 주입 — Z-Score는 실측 기반으로 산출됩니다.");
                 }
                 else if (cmd.Contains("PSFB_ANOMALY", StringComparison.OrdinalIgnoreCase))
                 {
                     _simulator.Scenario = PowerScenario.PsfbUnderVoltage;
-                    ControlPanel.LogMessage("SCENARIO", "📉 [C# SIMULATOR] PSFB 48V 전압 강하 주입 — Z-Score는 실측 기반으로 산출됩니다.");
+                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: PSFB 48V 전압 강하 주입 — Z-Score는 실측 기반으로 산출됩니다.");
                 }
                 else if (cmd.Contains("NORMAL", StringComparison.OrdinalIgnoreCase))
                 {
                     _simulator.Scenario = PowerScenario.Normal;
-                    ControlPanel.LogMessage("SCENARIO", "✅ [C# SIMULATOR] Restored normal Grid Online & Standby mode.");
+                    ControlPanel.LogMessage("SCENARIO", "가상 MCU: 정상 운전(계통 연계·대기)으로 복귀");
                 }
             });
         };
@@ -249,8 +253,8 @@ public partial class MainWindow : Window
     }
 
     private void UpdateRecordingStatus() =>
-        StatusPacketText.Text =
-            $"Rx Packets: {_csvRecorder.RecordedPacketCount:N0} | REC: {_csvRecorder.FileSizeBytes / 1024:N0} KB";
+        StatusRecordingText.Text =
+            $"녹화 중 · {_csvRecorder.RecordedPacketCount:N0}건 · {_csvRecorder.FileSizeBytes / 1024:N0} KB";
 
     /// <summary>Logs a periodic sample, and every genuine anomaly the detector reports.</summary>
     private void MaybeLogSimulationSample(PowerPlantState state, ScoredPowerFrame frame)

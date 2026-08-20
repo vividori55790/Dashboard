@@ -1,74 +1,205 @@
+<!--
+    Peer discovery over the local network segment.
+
+    The grid used to be filled with three invented hubs at invented addresses reporting invented
+    sub-millisecond latencies, on a mesh listener that was never started. Every row is now a peer
+    that sent this host an authenticated datagram, and the columns are limited to what the transport
+    actually knows: there is no latency measurement anywhere in the mesh, so no latency is shown.
+-->
 <Window x:Class="TelemetryDashboard.UI.Dialogs.MeshClusterDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="🌐 Multi-Hub P2P Cluster Mesh &amp; WebRTC Hub" 
-        Height="540" Width="820"
+        Title="클러스터 메시"
+        Height="600" Width="880" MinHeight="480" MinWidth="700"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0E14"
-        Foreground="#F0F6FC">
-    <Grid Margin="16">
+        Background="{StaticResource CanvasBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        Closed="Window_Closed">
+
+    <Window.Resources>
+        <Style x:Key="MeshGridHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridColumnHeader">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                            </Border>
+                            <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right"
+                                   Width="6" Opacity="0" Cursor="SizeWE"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MeshGridCell" TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSubtleBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Header -->
-            <RowDefinition Height="*"/>    <!-- Discovered Peer Hubs -->
-            <RowDefinition Height="Auto"/> <!-- WebRTC Peer Signaling Card -->
-            <RowDefinition Height="Auto"/> <!-- Footer -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,12">
-            <StackPanel DockPanel.Dock="Left">
-                <TextBlock Text="🌐 Multi-Hub P2P Distributed Cluster Mesh" Foreground="#00F0FF" FontSize="18" FontWeight="Bold"/>
-                <TextBlock Text="Decentralized peer-to-peer sync of telemetry snapshots, node status, and critical anomaly alarms" Foreground="#8B949E" FontSize="12" Margin="0,2,0,0"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Content="📡 브로드캐스트 하트비트 전송" Padding="10,6" Background="#00FF9D" Foreground="#0B0E14" FontWeight="Bold" Margin="0,0,6,0" Click="BtnBroadcast_Click"/>
-                <Button Content="🔄 피어 재검색" Padding="10,6" Click="BtnRefresh_Click"/>
-            </StackPanel>
-        </DockPanel>
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Style="{StaticResource TitleText}" Text="클러스터 메시 (Cluster mesh)"/>
+            <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="같은 네트워크 구간의 다른 TelemetryDashboard 허브를 UDP 브로드캐스트로 찾고, 텔레메트리 스냅샷과 경보를 주고받습니다."/>
+        </StackPanel>
 
-        <!-- Peer Hubs DataGrid -->
-        <Border Grid.Row="1" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+        <!-- Discovery. Nothing below is populated until this listener is running. -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SubtitleText}" Text="탐색"/>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Style="{StaticResource LabelText}" Margin="0,0,12,0"
+                               Text="수신 포트"/>
+                    <TextBox Grid.Column="1" x:Name="TxtListenPort" Text="9090" MinWidth="80" Margin="0,0,20,0"/>
+
+                    <TextBlock Grid.Column="2" Style="{StaticResource LabelText}" Margin="0,0,12,0"
+                               Text="클러스터 암호구절"/>
+                    <TextBox Grid.Column="3" x:Name="TxtClusterPassphrase" Margin="0,0,12,0"/>
+
+                    <Button Grid.Column="4" x:Name="BtnToggleDiscovery" Content="탐색 시작"
+                            MinWidth="110" Click="BtnToggleDiscovery_Click"/>
+                </Grid>
+
+                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Text="암호구절은 클러스터의 모든 허브에서 같아야 하며, 탐색을 시작하기 전에 입력해야 적용됩니다. 비워 두면 프레임이 평문으로 오가고 아무나 위조한 피어를 주입할 수 있습니다."/>
+
+                <Border x:Name="SecurityBanner" Background="{StaticResource WarningSubtleBrush}"
+                        BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource RadiusS}" Padding="10,8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="SecurityIcon" Style="{StaticResource IconText}"
+                                   Text="&#xE7BA;" Foreground="{StaticResource WarningBrush}" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="TxtSecurityState" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"
+                                   Text="암호구절 없음 — 메시 프레임이 암호화·인증되지 않습니다."/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Discovered peers. One row per host that authenticated to this listener. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <TextBlock Text="📡 DISCOVERED TELEMETRY HUBS (P2P MESH)" Foreground="#66FCF1" FontWeight="Bold" FontSize="11" Margin="0,0,0,8"/>
-                <DataGrid Grid.Row="1" x:Name="DgPeers" Background="#0E131A" Foreground="#F0F6FC"
+
+                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <TextBlock Style="{StaticResource SubtitleText}" Margin="0" VerticalAlignment="Center"
+                               Text="발견된 허브"/>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Style="{StaticResource SubtleButton}"
+                            Content="다시 읽기" Click="BtnRefresh_Click"/>
+                </DockPanel>
+
+                <DataGrid Grid.Row="1" x:Name="DgPeers"
+                          Background="{StaticResource InsetBrush}"
+                          Foreground="{StaticResource TextPrimaryBrush}"
+                          BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                          RowBackground="Transparent" AlternatingRowBackground="Transparent"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="{StaticResource BorderSubtleBrush}"
                           AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
-                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#283548"
-                          RowBackground="#0E131A" AlternatingRowBackground="#141B24" FontSize="11">
+                          CanUserAddRows="False" SelectionMode="Single"
+                          FontFamily="{StaticResource UiFont}"
+                          FontSize="{StaticResource FontSizeBody}"
+                          ColumnHeaderStyle="{StaticResource MeshGridHeader}"
+                          CellStyle="{StaticResource MeshGridCell}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Peer ID" Binding="{Binding PeerId}" Width="90"/>
-                        <DataGridTextColumn Header="Hub Name" Binding="{Binding HubName}" Width="150"/>
-                        <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="130"/>
-                        <DataGridTextColumn Header="Port" Binding="{Binding Port}" Width="70"/>
-                        <DataGridTextColumn Header="Latency" Binding="{Binding Latency}" Width="80"/>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*"/>
+                        <DataGridTextColumn Header="피어 ID" Binding="{Binding PeerId}" Width="Auto" MinWidth="90"/>
+                        <DataGridTextColumn Header="허브 이름" Binding="{Binding HubName}" Width="Auto" MinWidth="140"/>
+                        <DataGridTextColumn Header="주소" Binding="{Binding Endpoint}" Width="Auto" MinWidth="150"/>
+                        <DataGridTextColumn Header="마지막 수신" Binding="{Binding LastSeen}" Width="Auto" MinWidth="110"/>
+                        <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="*" MinWidth="120"/>
                     </DataGrid.Columns>
                 </DataGrid>
+
+                <TextBlock Grid.Row="2" x:Name="TxtPeerSummary" Style="{StaticResource CaptionText}"
+                           Margin="0,8,0,0" TextWrapping="Wrap" Text="—"/>
             </Grid>
         </Border>
 
-        <!-- WebRTC Peer Signaling Card -->
-        <Border Grid.Row="2" Background="#121720" BorderBrush="#283548" BorderThickness="1" CornerRadius="8" Padding="12">
+        <!-- WebRTC signalling. Producing an offer is not a connection, and does not claim to be. -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,16">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="⚡ WebRTC Ultra-Low Latency Peer Streaming Bridge" Foreground="#BA68C8" FontWeight="Bold" FontSize="12"/>
-                    <TextBlock Text="DataChannel active for mobile &amp; browser clients at 60 FPS zero-jitter telemetry" Foreground="#8B949E" FontSize="11" Margin="0,2,0,0"/>
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Style="{StaticResource SubtitleText}" Margin="0,0,0,2"
+                               Text="WebRTC 데이터 채널"/>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                               Text="브라우저·모바일 클라이언트용 SDP 오퍼를 만들어 클립보드에 넣습니다. 상대가 응답(answer)을 돌려주기 전까지 채널은 열리지 않습니다."/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="📋 WebRTC SDP 오퍼 생성 및 복사" Padding="12,6" Background="#1E2636" Click="BtnCopyWebRtcOffer_Click"/>
+                <Button Grid.Column="1" VerticalAlignment="Center" MinWidth="150"
+                        Click="BtnCopyWebRtcOffer_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource IconText}" Text="&#xE8C8;" Margin="0,0,8,0"/>
+                        <TextBlock Text="SDP 오퍼 복사"/>
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 
-        <!-- Footer -->
-        <DockPanel Grid.Row="3" Margin="0,12,0,0">
-            <TextBlock x:Name="TxtMeshStatus" Text="Mesh Status: Listening on UDP Port 9090 | 3 Peers Connected" Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
-            <Button Content="닫기" HorizontalAlignment="Right" Padding="12,6" Click="BtnClose_Click"/>
+        <DockPanel Grid.Row="4">
+            <TextBlock x:Name="TxtMeshStatus" Style="{StaticResource CaptionText}"
+                       DockPanel.Dock="Left" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Text="탐색이 시작되지 않았습니다."/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnBroadcast" Content="하트비트 브로드캐스트" Margin="0,0,8,0"
+                        IsEnabled="False" Click="BtnBroadcast_Click"/>
+                <Button Content="닫기" IsCancel="True" Click="BtnClose_Click"/>
+            </StackPanel>
         </DockPanel>
     </Grid>
 </Window>

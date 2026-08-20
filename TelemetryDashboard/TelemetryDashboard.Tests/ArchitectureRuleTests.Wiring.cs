@@ -55,9 +55,10 @@ public partial class ArchitectureRuleTests
         "DvrFrameEventArgs",
         "EmergencyMcuController",
         "EventLogEntry",
-        // The host lists a catalogue and installs nothing, so a registry it would then discard
-        // would be wiring for its own sake. It becomes reachable when installing does.
-        "ExtensionRegistry",
+        // ExtensionRegistry retired from this baseline: installing exists now, so the host has
+        // something to register. ExtensionLoader fills it from the extension store and asks it
+        // GetCompatibleExtensions(hostApiVersion) to decide what may load, which is the one place
+        // that rule is applied — the entry has stopped exempting anything.
         "FailureSnapshotExtractor",
         "FftAnalyzerService",
         "FunctionCallNode",
@@ -82,6 +83,10 @@ public partial class ArchitectureRuleTests
         // IronPython; keeping two entry points to one interpreter is the thing to fix, not to wire.
         "PythonNetAdapter",
         "ReplayRowItem",
+        // Bound from XAML only, which this rule's tokeniser cannot see: a command referenced as
+        // {Binding Save} appears nowhere as a type name. Listed rather than "fixed", because the
+        // honest statement is that the rule is blind here, not that the type is dead.
+        "RelayCommand",
         "SampleTelemetryPlugin",
         "SamplingChannelRow",
         "ScopeViewModel",

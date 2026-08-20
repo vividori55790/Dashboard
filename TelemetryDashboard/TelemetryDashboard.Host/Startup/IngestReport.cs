@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TelemetryDashboard.Core.Cluster;
 using TelemetryDashboard.Core.Records;
 using TelemetryDashboard.Host.Ingest;
 
@@ -58,12 +59,36 @@ public static class IngestReport
         string? guard = pump.Guard.Summary();
         if (guard is not null) lines.Add("           " + guard);
 
+        lines.AddRange(CoverageLines(pump));
+
         if (source is SerialTelemetrySource serial && serial.FaultCount > 0)
         {
             lines.Add($"           serial link dropped {serial.FaultCount} time(s), recovered {serial.RecoveryCount}.");
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// Which reporting nodes were seen, and which stopped part way through.
+    /// </summary>
+    /// <remarks>
+    /// A node that went quiet at minute three of an hour-long run contributed data the whole way
+    /// through the averages, so nothing downstream looks wrong. This is the only line in the report
+    /// that can tell an operator it happened.
+    /// </remarks>
+    private static IEnumerable<string> CoverageLines(TelemetryIngestPump pump)
+    {
+        CoverageSnapshot coverage = pump.Coverage.Snapshot();
+        if (coverage.Nodes.Count == 0) yield break;
+
+        yield return "           " + coverage.Describe();
+
+        foreach (NodeCoverage node in coverage.Missing)
+        {
+            yield return $"             {node.NodeId,-24} last heard {node.LastHeard:HH:mm:ss}, "
+                         + $"{node.Samples:N0} samples";
+        }
     }
 
     private static IEnumerable<string> UnparsedLines(TelemetryIngestPump pump)

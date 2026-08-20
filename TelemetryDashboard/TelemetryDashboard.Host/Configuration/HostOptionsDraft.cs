@@ -24,12 +24,17 @@ internal sealed class HostOptionsDraft
         RecordingDirectory = defaults.RecordingDirectory;
         Simulate = defaults.Simulate;
         PluginDirectory = defaults.PluginDirectory;
+        ExtensionDirectory = defaults.ExtensionDirectory;
         ExtensionCatalogue = defaults.ExtensionCatalogue;
         SlackWebhook = defaults.SlackWebhook;
         MqttBrokerHost = defaults.MqttBrokerHost;
         MqttBrokerPort = defaults.MqttBrokerPort;
         MqttTopicPrefix = defaults.MqttTopicPrefix;
         UpdateRepository = defaults.UpdateRepository;
+        SseEndpoint = defaults.SseEndpoint;
+        ChannelMapPath = defaults.ChannelMapPath;
+        PollEndpoint = defaults.PollEndpoint;
+        PollInterval = defaults.PollInterval;
     }
 
     public int Port;
@@ -40,12 +45,17 @@ internal sealed class HostOptionsDraft
     public string? RecordingDirectory;
     public bool Simulate;
     public string? PluginDirectory;
+    public string? ExtensionDirectory;
     public string? ExtensionCatalogue;
     public string? SlackWebhook;
     public string? MqttBrokerHost;
     public int MqttBrokerPort;
     public string MqttTopicPrefix;
     public string? UpdateRepository;
+    public string? SseEndpoint;
+    public string? ChannelMapPath;
+    public string? PollEndpoint;
+    public TimeSpan PollInterval;
 
     public HostOptions Build() => new()
     {
@@ -57,11 +67,16 @@ internal sealed class HostOptionsDraft
         RecordingDirectory = RecordingDirectory,
         Simulate = Simulate,
         PluginDirectory = PluginDirectory,
+        ExtensionDirectory = ExtensionDirectory,
         ExtensionCatalogue = ExtensionCatalogue,
         SlackWebhook = SlackWebhook,
         MqttBrokerHost = MqttBrokerHost,
         MqttBrokerPort = MqttBrokerPort,
         MqttTopicPrefix = MqttTopicPrefix,
-        UpdateRepository = UpdateRepository
+        UpdateRepository = UpdateRepository,
+        SseEndpoint = SseEndpoint,
+        ChannelMapPath = ChannelMapPath,
+        PollEndpoint = PollEndpoint,
+        PollInterval = PollInterval
     };
 }
