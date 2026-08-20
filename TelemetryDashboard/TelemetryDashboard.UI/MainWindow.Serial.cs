@@ -76,6 +76,12 @@ public partial class MainWindow
                 if (ok)
                 {
                     _isConnected = true;
+
+                    // Explicit rather than assumed. The two sources share one router, and a stale
+                    // simulated flag would stamp real measurements as synthetic — the mirror image
+                    // of the defect this marking exists to prevent, and just as misleading.
+                    _dataRouter.SourceIsSimulated = false;
+
                     ShowConnected(portName, baudRate);
                     ControlPanel.LogMessage("SYSTEM", $"하드웨어 포트 {portName} @ {baudRate} baud 연결됨.");
 
@@ -115,6 +121,12 @@ public partial class MainWindow
                 {
                     var ml = _mlEngine.AnalyzeChannel($"{pkt.NodeId}.{pkt.Variable}", pkt.Value);
 
+                    // Before the dispatcher hop, and through the same call the simulated stream
+                    // uses. Hardware readings previously reached the CSV but never the durable
+                    // archive, so the MATLAB export -- which reads only the archive -- returned
+                    // nothing for every deployment that had actual hardware attached.
+                    PersistSample(pkt, ml);
+
                     Dispatcher.Invoke(() =>
                     {
                         // Plot only the channel that actually arrived. The previous code padded the
@@ -124,11 +136,7 @@ public partial class MainWindow
                         ScopeControl.PushChannel(pkt.Variable, pkt.Value);
                         ControlPanel.UpdateChannelStats(pkt.NodeId, pkt.Variable, pkt.Value, ml);
 
-                        if (_csvRecorder.IsRecording)
-                        {
-                            _csvRecorder.RecordSample(pkt.NodeId, pkt.Variable, pkt.Value, ml.ZScore, ml.IsAnomaly, ml.PredictedValueIn60s);
-                            UpdateRecordingStatus();
-                        }
+                        if (_csvRecorder.IsRecording) UpdateRecordingStatus();
 
                         ControlPanel.LogTelemetryEvent(pkt.NodeId, pkt.Variable, pkt.Value, ml.ZScore,
                             $"{pkt.Value:F2}{pkt.Unit} received from hardware");
@@ -169,6 +177,30 @@ public partial class MainWindow
         return packets.Count > 0 ? packets : AutoParseRawPayload(rawPacket);
     }
 
+    /// <summary>Ports whose payload has already been reported as unrecognised.</summary>
+    private readonly HashSet<string> _unroutedPorts = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Last resort for a payload no routing rule matched.
+    /// </summary>
+    /// <remarks>
+    /// It parses numbers out of a line and gives them positional names, because that is genuinely
+    /// all it knows. What it used to do was name them from a fixed list — the first number was
+    /// <c>Temperature</c>, the second <c>Humidity</c>, then <c>Vibration</c>, <c>RPM</c>,
+    /// <c>Voltage</c> — and stamp the port as the node.
+    /// <para>
+    /// That was not a cosmetic problem. A bare number carries no evidence of what it measures, so
+    /// the list was asserting a quantity nobody had reported: a pressure reading was charted,
+    /// alarmed on and written into the archive as a temperature, under a heading an operator has
+    /// every reason to trust. This shell reached that path for every frame it received, because it
+    /// registered no routing rules at all — which is why the fix is both to register them and to
+    /// stop this function from claiming to know what it is looking at.
+    /// </para>
+    /// <para>
+    /// <c>Field_1</c> is not a good channel name. It is an honest one, and it tells the operator
+    /// there is a routing rule to write.
+    /// </para>
+    /// </remarks>
     private List<TelemetryPacket> AutoParseRawPayload(RawPacket raw)
     {
         var list = new List<TelemetryPacket>();
@@ -206,18 +238,16 @@ public partial class MainWindow
 
         // 2. CSV / Tab / Space separated Numbers Auto-Parse
         string[] tokens = payload.Split(new[] { ',', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        string[] defaultVarNames = new[] { "Temperature", "Humidity", "Vibration", "RPM", "Voltage", "Current", "Power" };
 
         int varIdx = 0;
         foreach (var t in tokens)
         {
             if (double.TryParse(t, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double val))
             {
-                string varName = varIdx < defaultVarNames.Length ? defaultVarNames[varIdx] : $"Channel_{varIdx + 1}";
                 list.Add(new TelemetryPacket
                 {
                     NodeId = raw.PortName,
-                    Variable = varName,
+                    Variable = $"Field_{varIdx + 1}",
                     Value = val,
                     Timestamp = raw.Timestamp
                 });
@@ -225,6 +255,23 @@ public partial class MainWindow
             }
         }
 
+        if (list.Count > 0) ReportUnroutedPayload(raw);
+
         return list;
+    }
+
+    /// <summary>Says once per port that its payload is being read positionally.</summary>
+    /// <remarks>
+    /// Once, not per packet: at telemetry rates the same sentence twenty times a second is how a
+    /// log stops being read. The operator needs to know that the names on their chart came from
+    /// position rather than from the device, and they need to know it while they can still act.
+    /// </remarks>
+    private void ReportUnroutedPayload(RawPacket raw)
+    {
+        if (!_unroutedPorts.Add(raw.PortName)) return;
+
+        Dispatcher.Invoke(() => ControlPanel.LogMessage("WARN",
+            $"[{raw.PortName}] 수신 데이터와 일치하는 라우팅 규칙이 없어 숫자를 순서대로 " +
+            "Field_1, Field_2 … 로 표시합니다. 실제 채널 이름을 보려면 라우팅 규칙을 설정하세요."));
     }
 }

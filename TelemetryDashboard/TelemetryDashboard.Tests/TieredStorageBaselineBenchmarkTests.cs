@@ -17,6 +17,18 @@ namespace TelemetryDashboard.Tests;
 /// <para>
 /// Run with: <c>dotnet test --filter "FullyQualifiedName~TieredStorageBaseline" --logger "console;verbosity=detailed"</c>
 /// </para>
+/// <para>
+/// <b>The million-row case takes minutes, not seconds</b> — around seven on the machine this was
+/// written on, which is longer than the other 899 tests put together. Every case here carries
+/// <c>Category=Benchmark</c> so a routine run can exclude them:
+/// <c>dotnet test --filter "Category!=Benchmark"</c>.
+/// </para>
+/// <para>
+/// Stated because the alternative is expensive. A run of the whole suite under a two-minute
+/// inactivity watchdog reported this as a hung test host and wrote a crash dump, and the suite
+/// before that reported "test run aborted" — both were a slow benchmark being cut off, and both
+/// looked exactly like a deadlock in the code under test.
+/// </para>
 /// </remarks>
 public sealed class TieredStorageBaselineBenchmarkTests
 {

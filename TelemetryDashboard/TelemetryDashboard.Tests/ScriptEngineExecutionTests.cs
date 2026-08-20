@@ -86,6 +86,51 @@ public class ScriptEngineExecutionTests : IDisposable
         clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(20));
     }
 
+    [Fact]
+    public void JavaScript_RunawayLoop_IsStoppedWithoutHelpFromTheClock()
+    {
+        // The test above is named for the statement limit but hands the engine a 300 ms deadline as
+        // well, so either guard could have been the one that fired. This one removes the clock from
+        // the argument: an hour is longer than any test would wait, so if the call returns at all,
+        // the statement ceiling is what returned it.
+        //
+        // Worth pinning, because the wall-clock timeout was raised from 2 s to 10 s after a valid
+        // one-line filter failed to load on a busy machine. That change is only defensible if the
+        // load-independent guard genuinely holds on its own.
+        string path = WriteScript("spin2.js", "function spin(ctx) { while (true) { } }");
+        using IScriptModule? module = new JavaScriptEngine
+        {
+            ExecutionTimeout = TimeSpan.FromHours(1)
+        }.Load(path);
+
+        module.Should().NotBeNull();
+
+        var clock = Stopwatch.StartNew();
+        bool invoked = module!.TryInvoke("spin", Context(), out _);
+        clock.Stop();
+
+        invoked.Should().BeFalse("a runaway filter has to be refused, not awaited");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30),
+            "the statement ceiling is deterministic and does not depend on how busy the machine is");
+    }
+
+    [Fact]
+    public void JavaScript_AValidScriptThatLoadsSlowly_IsNotReportedAsBroken()
+    {
+        // The failure this guards against: a plugin that is fine, on a machine that is busy. Jint
+        // raised a timeout, Load returned null, and LastError read like a syntax error — so the
+        // operator was pointed at a file with nothing wrong in it.
+        string path = WriteScript("slow.js", "function f(ctx) { return 1; }");
+
+        // One tick forces the timeout deterministically, without needing a busy machine to borrow.
+        var engine = new JavaScriptEngine { ExecutionTimeout = TimeSpan.FromTicks(1) };
+
+        engine.Load(path).Should().BeNull();
+        engine.LastError.Should().Contain("limit on time",
+            "a timeout is not a fault in the script, and saying so is the difference between "
+            + "retrying and hunting for a bug that does not exist");
+    }
+
     // ---------------- Python ----------------
 
     [Fact]

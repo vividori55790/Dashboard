@@ -153,6 +153,13 @@ public partial class MainWindow
         ControlPanel.LogMessage("SYSTEM", "Theme toggled.");
     }
 
+    /// <summary>Starts or stops the CSV recording, and says which of those actually happened.</summary>
+    /// <remarks>
+    /// Recording captures the readings that arrive through ingest, so with no source running there
+    /// is nothing to capture. That used to be untrue in one direction only: the display tick wrote
+    /// six fixed rows of the bundled demo whether or not anything was streaming, so a recording
+    /// always filled up and always described the same converter.
+    /// </remarks>
     private void BtnToggleRecord_Click(object sender, RoutedEventArgs e)
     {
         if (!_csvRecorder.IsRecording)
@@ -160,28 +167,55 @@ public partial class MainWindow
             string path = _csvRecorder.StartRecording();
             ShowRecording(true);
             ControlPanel.LogMessage("DATA", $"[REC START] Writing real CSV disk file: {path}");
-        }
-        else
-        {
-            long count = _csvRecorder.RecordedPacketCount;
-            long size = _csvRecorder.FileSizeBytes;
-            string path = _csvRecorder.StopRecording();
-            ShowRecording(false);
-            ControlPanel.LogMessage("DATA", $"[REC STOP] Real file saved -> {path} ({count} rows, {size / 1024} KB)");
 
-            var result = MessageBox.Show(this,
-                $"CSV 텔레메트리 데이터가 실제 디스크 파일로 저장 완료되었습니다!\n\n" +
-                $"• 저장 위치: {path}\n" +
-                $"• 총 기록 행 수: {count:N0} 행\n" +
-                $"• 파일 크기: {size / 1024:N0} KB\n\n" +
-                $"저장된 로그 폴더를 지금 여시겠습니까?",
-                "CSV 파일 영구 저장 완료", MessageBoxButton.YesNo, MessageBoxImage.Information);
-
-            if (result == MessageBoxResult.Yes)
+            // Said at the moment it can still be acted on. Finding out at the end that an hour of
+            // recording holds nothing is the same information delivered uselessly late.
+            if (!_isSimulating && !_isConnected)
             {
-                OpenLogsFolder(path);
+                ControlPanel.LogMessage("WARN",
+                    "수신 중인 소스가 없어 녹화 파일에 기록될 데이터가 없습니다. " +
+                    "하드웨어를 연결하거나 가상 MCU 스트림을 시작하세요.");
             }
+
+            return;
         }
+
+        long count = _csvRecorder.RecordedPacketCount;
+        long size = _csvRecorder.FileSizeBytes;
+        string saved = _csvRecorder.StopRecording();
+        ShowRecording(false);
+        ControlPanel.LogMessage("DATA", $"[REC STOP] Real file saved -> {saved} ({count} rows, {size / 1024} KB)");
+        ReportRecordingResult(saved, count, size);
+    }
+
+    /// <summary>Reports a finished recording, distinguishing a full file from an empty one.</summary>
+    /// <remarks>
+    /// An empty recording used to be announced with the same congratulatory dialog as a full one —
+    /// "저장 완료되었습니다!" over a row count of zero. The file is real either way, so the fact
+    /// worth telling the operator is whether anything is in it.
+    /// </remarks>
+    private void ReportRecordingResult(string path, long count, long size)
+    {
+        if (count == 0)
+        {
+            MessageBox.Show(this,
+                $"녹화를 중지했습니다. 기록된 행이 없어 파일에는 헤더만 있습니다.\n\n"
+                + $"• 저장 위치: {path}\n\n"
+                + "녹화 중에 수신된 텔레메트리가 없었습니다. 하드웨어 연결 또는 "
+                + "가상 MCU 스트림을 시작한 뒤 다시 녹화하세요.",
+                "녹화 종료 — 데이터 없음", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        MessageBoxResult result = MessageBox.Show(this,
+            $"CSV 텔레메트리 데이터를 디스크에 저장했습니다.\n\n"
+            + $"• 저장 위치: {path}\n"
+            + $"• 총 기록 행 수: {count:N0} 행\n"
+            + $"• 파일 크기: {size / 1024:N0} KB\n\n"
+            + "저장된 로그 폴더를 지금 여시겠습니까?",
+            "CSV 저장 완료", MessageBoxButton.YesNo, MessageBoxImage.Information);
+
+        if (result == MessageBoxResult.Yes) OpenLogsFolder(path);
     }
 
     private void BtnOpenLogsFolder_Click(object sender, RoutedEventArgs e)

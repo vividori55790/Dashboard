@@ -33,6 +33,7 @@ internal sealed class HostOptionsDraft
         UpdateRepository = defaults.UpdateRepository;
         SseEndpoint = defaults.SseEndpoint;
         ChannelMapPath = defaults.ChannelMapPath;
+        ProfileId = defaults.ProfileId;
         PollEndpoint = defaults.PollEndpoint;
         PollInterval = defaults.PollInterval;
     }
@@ -54,6 +55,7 @@ internal sealed class HostOptionsDraft
     public string? UpdateRepository;
     public string? SseEndpoint;
     public string? ChannelMapPath;
+    public string? ProfileId;
     public string? PollEndpoint;
     public TimeSpan PollInterval;
 
@@ -76,6 +78,7 @@ internal sealed class HostOptionsDraft
         UpdateRepository = UpdateRepository,
         SseEndpoint = SseEndpoint,
         ChannelMapPath = ChannelMapPath,
+        ProfileId = ProfileId,
         PollEndpoint = PollEndpoint,
         PollInterval = PollInterval
     };

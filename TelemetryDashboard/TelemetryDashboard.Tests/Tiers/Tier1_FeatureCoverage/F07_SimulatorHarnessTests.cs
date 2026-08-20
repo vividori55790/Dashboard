@@ -3,11 +3,24 @@ using TelemetryDashboard.Core.Models;
 
 namespace TelemetryDashboard.Tests.Tiers.Tier1_FeatureCoverage;
 
-public class F07_DualMcuSimulatorTests
+/// <summary>
+/// The mock serial device the simulator tests are built on.
+/// </summary>
+/// <remarks>
+/// Named for the dual-MCU simulator until that engine was retired, which made the file name
+/// describe a class that no longer exists — and it never tested that class anyway. What it covers
+/// is <c>MockSerialDevice</c>: connect, disconnect, push, read back. That is worth keeping, because
+/// several other suites trust this double to behave, and a double that quietly stops working makes
+/// every test built on it pass for the wrong reason.
+/// <para>
+/// The profile-driven simulator itself is covered in <c>ProfileSimulatorTests</c>.
+/// </para>
+/// </remarks>
+public class F07_SimulatorHarnessTests
 {
     [Fact]
     [Trait("Category", "Tier1")]
-    public void Simulator_Start_InitializesMockPorts()
+    public void TwoDevicesOpenIndependently()
     {
         var deviceCom3 = new MockSerialDevice("COM3", 115200);
         var deviceCom4 = new MockSerialDevice("COM4", 115200);
@@ -21,7 +34,7 @@ public class F07_DualMcuSimulatorTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public async Task Simulator_GeneratesSyntheticThermalAndVibrationData()
+    public async Task TheDoubleProducesTheLinesItWasAskedFor()
     {
         var device = new MockSerialDevice("COM3", 115200);
         device.Connect();
@@ -35,7 +48,7 @@ public class F07_DualMcuSimulatorTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void Simulator_GeneratesHexDataFrames()
+    public void APushedLineComesBackVerbatim()
     {
         var device = new MockSerialDevice("COM3", 115200);
         device.Connect();
@@ -47,22 +60,15 @@ public class F07_DualMcuSimulatorTests
         lines.Should().Contain(rawHex);
     }
 
-    [Fact]
-    [Trait("Category", "Tier1")]
-    public void Simulator_SynthesizesNoiseWaveform()
-    {
-        var random = new Random(42);
-        double signal = 50.0;
-        double noiseAmp = 2.5;
-
-        double noisyValue = signal + (random.NextDouble() * 2 - 1) * noiseAmp;
-
-        noisyValue.Should().BeInRange(47.5, 52.5);
-    }
+    // Removed: a test that built a noisy value from System.Random inside its own body and asserted
+    // the result was in range. It exercised no line of this repository -- it asserted that
+    // Random.NextDouble returns something between 0 and 1 -- so it could never fail for a reason
+    // anyone would want to know about. Bounded generation is covered where it is actually
+    // implemented, in ProfileSimulatorTests.EveryValueStaysInsideTheRangeTheProfileDeclared.
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void Simulator_Stop_TerminatesStream()
+    public void DisconnectClosesThePort()
     {
         var device = new MockSerialDevice("COM3", 115200);
         device.Connect();

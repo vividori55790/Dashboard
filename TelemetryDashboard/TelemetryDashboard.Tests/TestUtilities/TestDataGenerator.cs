@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
+using TelemetryDashboard.Core.Parsers;
+
 namespace TelemetryDashboard.Tests.TestUtilities;
 
 /// <summary>
@@ -15,15 +17,16 @@ public static class TestDataGenerator
     /// <summary>
     /// Computes NMEA-style XOR checksum byte over characters in string.
     /// </summary>
-    public static byte CalculateXorChecksum(string input)
-    {
-        byte checksum = 0;
-        foreach (char c in input)
-        {
-            checksum ^= (byte)c;
-        }
-        return checksum;
-    }
+    /// <summary>Checksum of a frame body, computed the way the wire does.</summary>
+    /// <remarks>
+    /// Delegates to the production routine rather than reimplementing it. The copy that used to
+    /// live here folded in <c>(byte)c</c> per character, which is the arithmetic the parser itself
+    /// used to do — so a test frame carrying a degree sign or a Korean channel name was built with
+    /// one wrong checksum, validated against the same wrong checksum, and passed. Both sides being
+    /// wrong in the same way is the one failure a hand-rolled test helper cannot detect.
+    /// </remarks>
+    public static byte CalculateXorChecksum(string input) =>
+        XorChecksum.Calculate(System.Text.Encoding.UTF8.GetBytes(input ?? string.Empty));
 
     /// <summary>
     /// Creates a valid PREFIX telemetry frame.

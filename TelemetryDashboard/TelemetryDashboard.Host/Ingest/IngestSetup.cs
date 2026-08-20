@@ -1,8 +1,10 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Ingest;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Simulator;
 using TelemetryDashboard.Host.Configuration;
 
 namespace TelemetryDashboard.Host.Ingest;
@@ -50,7 +52,31 @@ public static class IngestSetup
             return null;
         }
 
-        return options.Simulate ? new SimulatedTelemetrySource() : null;
+        if (!options.Simulate) return null;
+
+        MonitoringProfileSet profiles = MonitoringProfileStore.Load(AppContext.BaseDirectory);
+
+        if (profiles.Status == ProfileSourceStatus.Invalid)
+        {
+            // Said out loud, then carried on with the built-ins. A profile file that failed to parse
+            // and one that was never written produce the same set of profiles, and only the first is
+            // a mistake somebody needs to hear about.
+            Console.Error.WriteLine($"telemetry-host: {profiles.Message}");
+        }
+
+        if (options.ProfileId is null) return new SimulatedTelemetrySource(profiles.Profiles.FirstOrDefault());
+
+        MonitoringProfile? named = profiles.Profiles
+            .FirstOrDefault(p => string.Equals(p.Id, options.ProfileId, StringComparison.OrdinalIgnoreCase));
+
+        if (named is not null) return new SimulatedTelemetrySource(named);
+
+        // Refused rather than defaulted. Generating a different machine's channels than the one
+        // asked for, under a name the operator chose, is precisely what profiles exist to stop.
+        Console.Error.WriteLine(
+            $"telemetry-host: no profile with id '{options.ProfileId}'. Available: "
+            + string.Join(", ", profiles.Profiles.Select(p => p.Id)));
+        return null;
     }
 
     /// <summary>

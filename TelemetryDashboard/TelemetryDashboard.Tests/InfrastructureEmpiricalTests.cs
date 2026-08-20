@@ -226,18 +226,33 @@ public class InfrastructureEmpiricalTests
             mre.Set();
         };
 
+        // No sleep between messages. The property under test is that a burst inside one debounce
+        // window produces a single event, and a burst is precisely what arrives with no gap. The
+        // Thread.Sleep(2) that used to be here made the test's own premise a timing assumption:
+        // ten sleeps that each ran long — a GC pause, a loaded machine — pushed the burst past the
+        // 200 ms window, the debouncer correctly emitted twice, and the failure was reported
+        // against the debouncer rather than against the assumption that had actually broken.
         bool handled = false;
+        var burst = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 10; i++)
         {
             hook.WndProc(IntPtr.Zero, Win32Native.WM_DEVICECHANGE, (IntPtr)Win32Native.DBT_DEVICEARRIVAL, IntPtr.Zero, ref handled);
-            Thread.Sleep(2); // Burst within debounce period (200ms)
         }
+        burst.Stop();
 
-        bool signaled = mre.Wait(1000); // Wait up to 1 second for timer to fire
+        // Checked rather than assumed, so a machine slow enough to break the premise says so
+        // instead of failing on the count below and blaming the code under test.
+        burst.ElapsedMilliseconds.Should().BeLessThan(DebounceWindowMs,
+            "the messages have to land inside one debounce window for the assertion below to mean anything");
+
+        bool signaled = mre.Wait(TimeSpan.FromSeconds(5));
 
         signaled.Should().BeTrue();
         eventCount.Should().Be(1);
     }
+
+    /// <summary>Mirrors <c>Win32HotPlugHook.DebounceMs</c>, which is private to the hook.</summary>
+    private const int DebounceWindowMs = 200;
 
     #endregion
 

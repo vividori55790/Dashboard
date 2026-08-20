@@ -60,3 +60,6 @@ publish_single/
 
 # Working notes from agent runs. Process, not product.
 .agents/
+
+# Blame/hang dumps from `dotnet test --blame`; multi-hundred-MB and machine-specific.
+TestResults/

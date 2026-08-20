@@ -18,7 +18,22 @@ namespace TelemetryDashboard.Host.Ingest;
 /// </remarks>
 public sealed class SimulatedTelemetrySource : ITelemetrySource
 {
-    private readonly DualMcuVirtualSimulatorEngine _engine = new();
+    private readonly ProfileSimulatorEngine _engine;
+
+    /// <summary>Builds a source for the named profile, or the default when none is named.</summary>
+    /// <remarks>
+    /// The engine this replaces was one customer's rig in code — two nodes on COM3 and COM4, four
+    /// channels named for their hardware. Every installation ran their machine with different
+    /// captions on it. What is generated now follows whichever profile the operator selected.
+    /// </remarks>
+    public SimulatedTelemetrySource(MonitoringProfile? profile = null)
+    {
+        Profile = profile ?? MonitoringProfileSet.Default;
+        _engine = new ProfileSimulatorEngine(Profile);
+    }
+
+    /// <summary>The profile whose channels this source is producing.</summary>
+    public MonitoringProfile Profile { get; }
 
     /// <inheritdoc />
     public string Origin => "SIMULATED";
@@ -27,7 +42,8 @@ public sealed class SimulatedTelemetrySource : ITelemetrySource
     public bool IsSimulated => true;
 
     /// <inheritdoc />
-    public string Description => "DualMcuVirtualSimulatorEngine -- synthetic waveforms, not measurements";
+    public string Description =>
+        $"{Profile.DisplayName} -- {Profile.Channels.Count} synthetic channel(s), not measurements";
 
     /// <inheritdoc />
     public IAsyncEnumerable<RawPacket> ReadAsync(CancellationToken cancellationToken)

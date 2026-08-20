@@ -120,6 +120,16 @@ public sealed class HostOptions
     /// </remarks>
     public string? SseEndpoint { get; init; }
 
+    /// <summary>
+    /// Id of the monitoring profile the simulator should produce, or null for the default.
+    /// </summary>
+    /// <remarks>
+    /// Only meaningful with <see cref="Simulate"/>. Naming a profile that no file declares is an
+    /// error rather than a fallback: silently running a different machine's channels than the one
+    /// asked for is the defect profiles exist to remove.
+    /// </remarks>
+    public string? ProfileId { get; init; }
+
     /// <summary>HTTP endpoint to poll, or null for none.</summary>
     /// <remarks>
     /// Most public real-time data is request/response rather than a stream — open-data portals,

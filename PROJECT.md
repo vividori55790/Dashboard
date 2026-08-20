@@ -190,6 +190,73 @@ A `Numeric` record projects losslessly onto `TelemetryPacket` (`TelemetryPacketP
 
 Non-numeric domains gain anomaly detection through `DerivedNumericProjection`, which stamps everything it emits with the projection that produced it. `M6UniversalRecordTests` demonstrates the case end to end: a clinic appointment book carrying only `Instant` values is scored above 3σ by the same `TelemetryMlAnalyticsEngine` that watches a power converter — no change to the engine, no value invented.
 
+### M7 — the profile decides, all the way to disk
+The simulator, the recorder and the archive each used to carry one customer's rig in code. Selecting
+a different profile changed the sliders and the captions while the data underneath stayed theirs, so
+an operator watching a kiln read a battery converter with new labels on it. `ProfileSimulatorEngine`
+replaces `DualMcuVirtualSimulatorEngine`, and recording moved from the display tick onto the ingest
+path, so what reaches the CSV and the durable archive is whatever actually arrived.
+
+What it produces is **shapes, not physics**. It has no model of any machine: each channel wanders
+around its setpoint inside the range the profile declares, and channels stay independent, because
+inventing a correlation would be fabricating a relationship — the same defect as a fabricated
+reading, one level up, and harder to notice because a plausible correlation is what a reader expects.
+
+Driving the finished application through its own UI, rather than asserting in a unit test, found
+four defects a green suite had not:
+
+| Defect | Why it mattered |
+|---|---|
+| The desktop shell registered **no routing rules at all** | Every frame missed the router and fell to a fallback that named the first number in the line `Temperature`, the second `Humidity`, and so on. A pressure reading was charted, alarmed on and archived as a temperature, under a heading an operator has every reason to trust. |
+| `XorChecksum.Calculate(char)` truncated each char to its low byte | The generated firmware macro XORs *bytes*. `°C` is one char and two UTF-8 bytes, so the two sides disagreed and the frame was dropped as corrupt — silently, since a checksum failure is indistinguishable from line noise. The default profile ships a channel measured in °C. |
+| Real hardware never reached the durable archive | The MATLAB export reads only the archive, so it worked in the demo and returned an empty file for every deployment with actual hardware attached. |
+| Simulated readings were archived with no mark | `SIM:` prefix and the `Simulated` flag are now set at the router, so the store cannot be mistaken for a record of the real machine. |
+
+The checksum defect had been invisible because the test helper reimplemented the same truncation it
+was meant to check. Both sides wrong in the same way is the one failure a hand-rolled test copy
+cannot detect; `CalculateXorChecksum` now delegates to the production routine.
+
+Verified by automation against the running binary: selecting the generic profile records
+`SIM:generic-machine.{ambient.temperature, ambient.humidity, machine.vibration, machine.speed}`;
+selecting the bundled UPS example records `SIM:COM3.{grid.voltage, dab.bus_voltage,
+psfb.output_voltage, server.load}` — four different channels, in the CSV and in SQLite, with every
+forecast stating the horizon it can actually support (2 s where supportable, 0 where not).
+
+Two measurements in that work were wrong, and both are worth recording because each cost more than
+the defect it was chasing.
+
+A UIA `FindAll(Descendants)` runs **inside** the target process, so probing the window during a run
+made the app appear to burn 3.4 CPU cores. Measured without the probe it uses **0.15 cores while
+streaming**. The instrument was the load — the same lesson `capture_ui.ps1` already carries about
+DPI-unaware screenshots.
+
+And `TieredStorageBaselineBenchmarkTests` takes around seven minutes for its million-row case,
+longer than the other 899 tests together. Under a two-minute inactivity watchdog it was reported as
+a hung test host, complete with a crash dump; the run before that simply said "test run aborted".
+Both looked exactly like a deadlock. The benchmarks now carry `Category=Benchmark`, so a routine run
+is `dotnet test --filter "Category!=Benchmark"` and the full number is a deliberate choice.
+
+Chasing those intermittent failures found a third product defect, and this one would have reached an
+operator. `JavaScriptEngine` gave a plugin **two seconds of wall clock** to load. Loading a one-line
+filter took eleven seconds while a storage benchmark ran alongside it, so Jint raised a timeout,
+`Load` returned null, and the sandbox moved to the next module — a valid plugin was simply absent,
+and `LastError` read like a syntax error, pointing the operator at a file with nothing wrong in it.
+
+Wall time was the wrong instrument: it measures how busy the machine is as much as what the script
+does. `MaxStatements` is the guard that actually bounds a runaway plugin and does so identically
+everywhere. `JavaScript_RunawayLoop_IsStoppedWithoutHelpFromTheClock` pins that — it hands the engine
+a **one-hour** deadline and a `while(true)`, and the call still returns — so raising the wall-clock
+backstop to ten seconds costs nothing that was protecting anybody. A timeout now says it is a limit
+on time rather than a fault in the script.
+
+**Suite: 970 passing, 0 failing** (902 portable + 68 desktop) — 6 m 16 s for everything, 1 m 14 s
+with `--filter "Category!=Benchmark"`. The intermittent
+failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two
+tests were fixed at the cause rather than loosened — the JavaScript load timeout above, and
+`Win32HotPlugHook_RapidMessages_DebouncesToSingleEvent`, which slept between messages so a stalled
+machine pushed its own burst outside the 200 ms window it was testing. It now sends the burst with
+no gap and checks that premise before asserting on it.
+
 ## Interface Contracts
 ### Data Ingestion & Safety (M1)
 - `RingBuffer<T>` — thread-safe ring buffer; overflow is counted, never silent

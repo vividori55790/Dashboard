@@ -25,7 +25,7 @@ The `TelemetryDashboard` test suite is constructed adhering strictly to **opaque
 | **F04** | 1-Second Automatic Reconnect Engine & Resync | Infrastructure.Serial | R1 | 5 | 5 | Covered | 10+ |
 | **F05** | Packet Routers (PREFIX, JSON, COLUMNS) & Checksum | Core.Parsers / Services | R1 | 5 | 5 | Tier 3 | 10+ |
 | **F06** | Dynamic Algebraic Link Formula Engine (AST) | Core.Services | R1 | 5 | 5 | Covered | 10+ |
-| **F07** | Dual-MCU Virtual Simulator Mode | Core.Simulator | R1 | 5 | 5 | Tier 3, Tier 4 | 10+ |
+| **F07** | Profile-Driven Virtual Simulator | Core.Simulator | R1 | 5 | 5 | Tier 3, Tier 4 | 10+ |
 | **F08** | C/C++ Firmware Code Generator | Core.Services | R1 | 5 | 5 | Covered | 10+ |
 | **F09** | Zero-Config Auto-Baud Rate & Format Scanner | Infrastructure.Serial | R2 | 5 | 5 | Tier 4 | 10+ |
 | **F10** | Windows 11 Fluent UI (Mica/Acrylic & Theme Switch) | UI.Styles | R2 | 5 | 5 | Tier 4 | 10+ |

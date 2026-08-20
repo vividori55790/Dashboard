@@ -32,7 +32,16 @@ public partial class MainWindow : Window
     private readonly DragDropHandler _dragDropHandler = new();
     private readonly LanguageService _languageService = new();
     private readonly PasswordLockService _passwordLockService = new();
-    private readonly DualMcuVirtualSimulatorEngine _simulatorEngine = new();
+    /// <summary>
+    /// The synthetic source, rebuilt whenever the operator selects a different profile.
+    /// </summary>
+    /// <remarks>
+    /// Not readonly and not created here, because what it generates depends on a choice made after
+    /// construction. The engine it replaces was fixed at two nodes and four channels named for one
+    /// customer's hardware, so selecting another profile changed the sliders and the captions while
+    /// the stream underneath stayed theirs.
+    /// </remarks>
+    private ProfileSimulatorEngine? _simulatorEngine;
 
     private readonly TelemetryMlAnalyticsEngine _mlEngine = new();
     private readonly AdaptiveSamplingController _samplingController = new();
@@ -48,16 +57,12 @@ public partial class MainWindow : Window
     /// <summary>Simulation cadence: 20 Hz.</summary>
     private const double SimulationIntervalSec = 0.05;
 
-    /// <summary>Emit a routine sample line every N ticks so the event log stays readable.</summary>
-    private const int SimLogEveryNTicks = 20;
-
     private readonly PowerPlantSimulator _simulator = new();
     private readonly PowerTelemetryFrameBuilder _frameBuilder;
 
     private DispatcherTimer? _simTimer;
     private bool _isSimulating = false;
     private bool _isConnected = false;
-    private int _simLogCounter;
     private string _htmlClientPath = string.Empty;
 
     public MainWindow()
@@ -73,6 +78,7 @@ public partial class MainWindow : Window
         _themeService.ApplyMicaBackdrop(this);
 
         ResolveHtmlClientPath();
+        RegisterDefaultRoutingRules();
         StartStreamingServer();
         PopulatePortAndBaud();
         RegisterDefaultCommands();
@@ -95,6 +101,25 @@ public partial class MainWindow : Window
         // Control Panel command callback: actually transmit. Previously this only wrote
         // "transmitted to serial port" into the log while nothing left the machine.
         ControlPanel.OnCommandSent += async (cmd) => await TransmitCommandAsync(cmd);
+    }
+
+    /// <summary>
+    /// Teaches the router this repository's own frame format.
+    /// </summary>
+    /// <remarks>
+    /// The shell constructed a router and registered nothing in it, so <c>Route</c> returned no
+    /// packets for every line it was ever given and each one fell through to the raw fallback —
+    /// which read the numbers positionally and named the first one <c>Temperature</c>. Both halves
+    /// of that were wrong and they hid each other: the router looked fine because something always
+    /// came out the other end, and the fallback looked fine because it always produced plausible
+    /// names. The same rules the console host uses are registered here, from the one definition.
+    /// </remarks>
+    private void RegisterDefaultRoutingRules()
+    {
+        foreach (RoutingRule rule in DefaultRoutingRules.Create())
+        {
+            _dataRouter.RegisterRule(rule);
+        }
     }
 
     /// <summary>
@@ -262,64 +287,27 @@ public partial class MainWindow : Window
         _streamingServer.BroadcastTelemetry(_frameBuilder.BuildAmbientFrame(state, frame.Ambient));
         _streamingServer.BroadcastTelemetry(frame.WireFrame);
 
-        if (_csvRecorder.IsRecording)
-        {
-            RecordSimulationSamples(state, frame);
-            UpdateRecordingStatus();
-        }
+        if (_csvRecorder.IsRecording) UpdateRecordingStatus();
 
         StreamingControl.UpdateMetrics();
-        MaybeLogSimulationSample(state, frame);
-    }
-
-    private void RecordSimulationSamples(PowerPlantState state, ScoredPowerFrame frame)
-    {
-        _csvRecorder.RecordSample("COM3", "Temperature", state.AmbientTemperature,
-            frame.Ambient.ZScore, frame.Ambient.IsAnomaly, frame.Ambient.PredictedValueIn60s);
-        _csvRecorder.RecordSample("COM3", "Humidity", state.AmbientHumidity, 0.0, false, state.AmbientHumidity);
-        _csvRecorder.RecordSample("COM3", "Vibration", state.Vibration,
-            frame.Vibration.ZScore, frame.Vibration.IsAnomaly, frame.Vibration.PredictedValueIn60s);
-        _csvRecorder.RecordSample("COM3", "RPM", state.Rpm, 0.0, false, state.Rpm);
-        _csvRecorder.RecordSample("DAB_CONVERTER", "BatteryCurrent", state.DabBatteryCurrent,
-            frame.Dab.ZScore, frame.Dab.IsAnomaly, frame.Dab.PredictedValueIn60s);
-        _csvRecorder.RecordSample("PSFB_CONVERTER", "ServerVoltage", state.PsfbOutputVoltage,
-            frame.Psfb.ZScore, frame.Psfb.IsAnomaly, frame.Psfb.PredictedValueIn60s);
-
-        // Same samples into the durable archive, which is what the MATLAB export reads.
-        ArchiveSimulationSamples(state);
     }
 
     private void UpdateRecordingStatus() =>
         StatusRecordingText.Text =
             $"녹화 중 · {_csvRecorder.RecordedPacketCount:N0}건 · {_csvRecorder.FileSizeBytes / 1024:N0} KB";
 
-    /// <summary>Logs a periodic sample, and every genuine anomaly the detector reports.</summary>
-    private void MaybeLogSimulationSample(PowerPlantState state, ScoredPowerFrame frame)
-    {
-        if (frame.HasAlarm)
-        {
-            AnomalyResult worst = frame.Dab.ZScore >= frame.Psfb.ZScore ? frame.Dab : frame.Psfb;
-            ControlPanel.LogTelemetryEvent(
-                worst == frame.Dab ? "DAB_CONVERTER" : "PSFB_CONVERTER",
-                worst == frame.Dab ? "BatteryCurrent" : "ServerVoltage",
-                worst.CurrentValue, worst.ZScore,
-                $"{frame.Severity} anomaly detected by Z-score analysis");
-            return;
-        }
-
-        if (++_simLogCounter % SimLogEveryNTicks != 0) return;
-
-        ControlPanel.LogTelemetryEvent("COM3", "Temperature",
-            state.AmbientTemperature, frame.Ambient.ZScore,
-            $"TEMP={state.AmbientTemperature:F2}C HUM={state.AmbientHumidity:F1}% " +
-            $"VIB={state.Vibration:F3}g RPM={state.Rpm:F0}");
-    }
+    // Removed: MaybeLogSimulationSample. It logged an alarm as coming from DAB_CONVERTER or
+    // PSFB_CONVERTER whichever profile was selected, and a heartbeat line reading
+    // "TEMP=.. HUM=.. VIB=.. RPM=.." that described the demo's four quantities and nothing else.
+    // Both are now written by the ingest consumer, which knows the channel a reading actually came
+    // from. The heartbeat is gone rather than generalised: a line every second saying that nothing
+    // is wrong is what teaches an operator to stop reading the log.
 
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
         _streamingServer.Stop();
-        _simulatorEngine.StopSimulation();
+        _simulatorEngine?.StopSimulation();
         ShutdownArchive();
     }
 }

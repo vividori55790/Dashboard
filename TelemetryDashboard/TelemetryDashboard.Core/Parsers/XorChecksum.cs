@@ -1,18 +1,54 @@
+using System.Buffers;
+using System.Text;
+
 namespace TelemetryDashboard.Core.Parsers;
 
 public static class XorChecksum
 {
     /// <summary>
-    /// Calculates XOR checksum over a char span without heap allocations.
+    /// XOR checksum of the UTF-8 bytes these characters represent.
     /// </summary>
+    /// <remarks>
+    /// The checksum covers what goes on the wire, which is bytes. The firmware header this project
+    /// generates says so in one line — <c>cs ^= ((const uint8_t*)(b))[i]</c> — and a device has no
+    /// notion of a UTF-16 char to fold in instead.
+    /// <para>
+    /// This used to be <c>checksum ^= (byte)span[i]</c>, truncating each char to its low byte. For
+    /// ASCII that is the same arithmetic, which is why it survived: every frame anyone had looked
+    /// at was ASCII. A degree sign is not. U+00B0 truncates to one byte 0xB0 while the wire carries
+    /// two, 0xC2 0xB0, so the two sides computed different checksums and the frame was rejected as
+    /// corrupt — silently, because a failed checksum is indistinguishable from line noise. The
+    /// default profile ships a channel whose unit is °C, so this was reachable by selecting it.
+    /// </para>
+    /// <para>
+    /// The ASCII path is unchanged and still allocation-free; the encoding below runs only once a
+    /// character above U+007F appears, and borrows its buffer rather than allocating one.
+    /// </para>
+    /// </remarks>
     public static byte Calculate(ReadOnlySpan<char> span)
     {
         byte checksum = 0;
-        for (int i = 0; i < span.Length; i++)
+        int i = 0;
+
+        for (; i < span.Length; i++)
         {
+            if (span[i] > 0x7F) break;
             checksum ^= (byte)span[i];
         }
-        return checksum;
+
+        if (i == span.Length) return checksum;
+
+        ReadOnlySpan<char> rest = span[i..];
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(rest));
+        try
+        {
+            int written = Encoding.UTF8.GetBytes(rest, buffer);
+            return (byte)(checksum ^ Calculate(buffer.AsSpan(0, written)));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     public static byte Calculate(ReadOnlySpan<byte> span)

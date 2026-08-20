@@ -26,12 +26,32 @@ namespace TelemetryDashboard.Infrastructure.Plugins;
 public sealed class JavaScriptEngine : IScriptEngine
 {
     /// <summary>Wall-clock ceiling for one script evaluation or function call.</summary>
-    public TimeSpan ExecutionTimeout { get; init; } = TimeSpan.FromSeconds(2);
+    /// <remarks>
+    /// A backstop, not the primary guard. <see cref="MaxStatements"/> is what actually bounds a
+    /// runaway plugin, and it does so deterministically — the same script hits the same limit on
+    /// every machine. Wall time does not: it measures how busy the computer is as much as what the
+    /// script does.
+    /// <para>
+    /// This was two seconds, which was short enough for an ordinary machine to trip it. Loading a
+    /// one-line filter took eleven seconds while the test suite was running a storage benchmark
+    /// alongside it; Jint raised a timeout, <see cref="Load"/> returned null, and the sandbox moved
+    /// on. From the operator's side a perfectly valid plugin was simply absent, for a reason that
+    /// had nothing to do with the plugin. Ten seconds is still a ceiling no reasonable filter
+    /// approaches, and it is far enough above ordinary scheduling noise that tripping it means
+    /// something.
+    /// </para>
+    /// </remarks>
+    public TimeSpan ExecutionTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Memory ceiling for one engine instance.</summary>
     public long MemoryLimitBytes { get; init; } = 8L * 1024 * 1024;
 
     /// <summary>Statement ceiling, which catches a tight loop the timeout would only catch later.</summary>
+    /// <remarks>
+    /// The load-independent half of the sandbox. A <c>while(true)</c> reaches two hundred thousand
+    /// statements in well under a second whatever else the machine is doing, so this fires first on
+    /// the case that matters and fires identically everywhere.
+    /// </remarks>
     public int MaxStatements { get; init; } = 200_000;
 
     public string Name => "javascript";
@@ -85,7 +105,16 @@ public sealed class JavaScriptEngine : IScriptEngine
             // A syntax error, a throw at top level, or a limit hit while loading. Report it and
             // return null: the sandbox then moves to the next module rather than holding a
             // half-initialised engine that would fail unpredictably on first call.
-            LastError = $"{Path.GetFileName(filePath)}: {ex.Message}";
+            //
+            // A timeout says so in as many words, because it is the one failure here that is not
+            // about the script. Reporting "filter.js: The operation has timed out" alongside the
+            // syntax errors invites the operator to go looking for a fault in a file that does not
+            // have one.
+            LastError = ex is TimeoutException
+                ? $"{Path.GetFileName(filePath)}: took longer than {ExecutionTimeout.TotalSeconds:0.#}s to load. "
+                  + "This is a limit on time, not a fault in the script; retrying on a less busy machine may load it."
+                : $"{Path.GetFileName(filePath)}: {ex.Message}";
+
             engine.Dispose();
             return null;
         }

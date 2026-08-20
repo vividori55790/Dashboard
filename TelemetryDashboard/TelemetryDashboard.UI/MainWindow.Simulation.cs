@@ -267,9 +267,18 @@ public partial class MainWindow
         _isSimulating = true;
         _simTimer?.Start();
 
+        // Every packet from here is synthetic, and has to say so where it is stored as well as
+        // where it is displayed. Without this the durable archive held simulated readings under
+        // ordinary node names with no flag set — a file that an operator, or the MATLAB export
+        // reading it months later, has no way to tell from a record of the real machine.
+        _dataRouter.SourceIsSimulated = true;
+
         // Consume the virtual MCU stream through the same parser -> router -> ML path the real
         // hardware uses. Previously the engine was started and its packets thrown away, so the
         // simulator exercised none of the ingest pipeline it exists to exercise.
+        // Built here rather than at construction so it follows the profile actually selected.
+        _simulatorEngine?.Dispose();
+        _simulatorEngine = new ProfileSimulatorEngine(_activeProfile ?? MonitoringProfileSet.Default);
         _simulatorEngine.StartSimulation();
         _simulatorReadCts = new CancellationTokenSource();
         _ = Task.Run(() => ConsumeSimulatedPacketsAsync(_simulatorReadCts.Token));
@@ -282,13 +291,57 @@ public partial class MainWindow
     {
         _isSimulating = false;
         _simTimer?.Stop(); // the tick timer kept running and kept broadcasting simulated frames
+        _dataRouter.SourceIsSimulated = false;
 
         _simulatorReadCts?.Cancel();
         _simulatorReadCts = null;
-        _simulatorEngine.StopSimulation();
+        _simulatorEngine?.StopSimulation();
 
         BtnToggleSimulator.Content = "가상 MCU 스트림 시작";
         ControlPanel.LogMessage("SIMULATOR", "가상 MCU 스트림 정지.");
+    }
+
+    /// <summary>Channels currently reading anomalous, so a run of them logs once rather than 40 times a second.</summary>
+    private readonly HashSet<string> _channelsInAnomaly = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Logs a channel entering or leaving its anomalous state, and nothing in between.
+    /// </summary>
+    /// <remarks>
+    /// The event this replaces named DAB_CONVERTER or PSFB_CONVERTER regardless of the selected
+    /// profile, so the log attributed every alarm to one customer's converters. It now reports the
+    /// channel the reading actually came from.
+    /// <para>
+    /// Edges only. A channel that stays out of range for a minute is one event, not two thousand
+    /// four hundred, and the recovery is worth a line for the same reason the onset is: a log that
+    /// shows an alarm and never shows it clearing reads like an alarm that never cleared.
+    /// </para>
+    /// </remarks>
+    private void LogAnomalyTransition(TelemetryPacket packet, AnomalyResult analysis)
+    {
+        string key = $"{packet.NodeId}.{packet.Variable}";
+
+        if (analysis.IsAnomaly)
+        {
+            lock (_channelsInAnomaly)
+            {
+                if (!_channelsInAnomaly.Add(key)) return;
+            }
+
+            ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
+                packet.Value, analysis.ZScore,
+                $"{packet.Value:F3}{packet.Unit} — 검출기가 이상으로 판정 (z={analysis.ZScore:F2})");
+            return;
+        }
+
+        lock (_channelsInAnomaly)
+        {
+            if (!_channelsInAnomaly.Remove(key)) return;
+        }
+
+        ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
+            packet.Value, analysis.ZScore,
+            $"{packet.Value:F3}{packet.Unit} — 정상 범위로 복귀");
     }
 
     /// <summary>
@@ -299,12 +352,22 @@ public partial class MainWindow
     {
         try
         {
-            await foreach (RawPacket raw in _simulatorEngine.StreamSimulatedPackets(token))
+            ProfileSimulatorEngine? engine = _simulatorEngine;
+            if (engine is null) return;
+
+            await foreach (RawPacket raw in engine.StreamSimulatedPackets(token))
             {
                 foreach (TelemetryPacket packet in ResolvePackets(raw))
                 {
                     AnomalyResult analysis = _mlEngine.AnalyzeChannel(
                         $"{packet.NodeId}.{packet.Variable}", packet.Value);
+
+                    // Recorded here rather than on the display tick, so what lands in the CSV and
+                    // the archive is whatever the selected profile actually produced. Both stores
+                    // are safe to write from this thread: the recorder enqueues and the archive is
+                    // a bounded channel.
+                    PersistSample(packet, analysis);
+                    LogAnomalyTransition(packet, analysis);
 
                     await Dispatcher.InvokeAsync(() =>
                     {

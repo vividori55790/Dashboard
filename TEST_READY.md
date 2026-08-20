@@ -45,7 +45,7 @@ dotnet test TelemetryDashboard/TelemetryDashboard.Tests/TelemetryDashboard.Tests
 | **F04** | 1-Second Automatic Reconnect Engine & Resync | PASSED (5/5) | PASSED (5/5) | Covered | Lifecycle | **PASSED** |
 | **F05** | Packet Routers (PREFIX, JSON, COLUMNS) & Checksum | PASSED (5/5) | PASSED (5/5) | Serial->Storage->Scope | High Throughput Stress | **PASSED** |
 | **F06** | Dynamic Algebraic Link Formula Engine (AST) | PASSED (5/5) | PASSED (5/5) | Covered | Lifecycle | **PASSED** |
-| **F07** | Dual-MCU Virtual Simulator Mode | PASSED (5/5) | PASSED (5/5) | Sim->Kestrel->Web | Lifecycle | **PASSED** |
+| **F07** | Profile-Driven Virtual Simulator | PASSED (5/5) | PASSED (5/5) | Sim->Kestrel->Web | Lifecycle | **PASSED** |
 | **F08** | C/C++ Firmware Code Generator | PASSED (5/5) | PASSED (5/5) | Covered | Lifecycle | **PASSED** |
 | **F09** | Zero-Config Auto-Baud Rate & Format Scanner | PASSED (5/5) | PASSED (5/5) | Covered | Lifecycle | **PASSED** |
 | **F10** | Windows 11 Fluent UI (Mica/Acrylic & Light/Dark) | PASSED (5/5) | PASSED (5/5) | Covered | Lifecycle | **PASSED** |

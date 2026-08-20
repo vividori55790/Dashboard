@@ -132,6 +132,11 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                case "--profile":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawProfile)) return ArgumentCursor.MissingValue(argument);
+                    draft.ProfileId = rawProfile;
+                    break;
+
                 case "--poll":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawPoll)) return ArgumentCursor.MissingValue(argument);
                     if (!Uri.TryCreate(rawPoll, UriKind.Absolute, out Uri? pollUri)
@@ -162,6 +167,13 @@ public static class CommandLineParser
 
         // Both sources at once would mean broadcasting synthetic and measured frames on one
         // channel, with nothing downstream able to separate them again.
+        // Naming a profile without asking for the simulator does nothing, and doing nothing
+        // quietly is how an operator concludes the flag worked.
+        if (draft.ProfileId is not null && !draft.Simulate)
+        {
+            return ArgumentCursor.Fail("--profile only applies to --simulate; a profile describes what to generate, not how to read a device.");
+        }
+
         if (draft.PollEndpoint is not null && (draft.SseEndpoint is not null || draft.SerialPort is not null || draft.Simulate))
         {
             return ArgumentCursor.Fail("--poll cannot be combined with another source: one host reads one source.");

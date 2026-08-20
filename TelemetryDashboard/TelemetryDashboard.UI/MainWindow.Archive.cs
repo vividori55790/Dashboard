@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Simulator;
@@ -30,33 +31,66 @@ public partial class MainWindow
     private static string LogsDirectory =>
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
 
-    /// <summary>Queues one tick of simulator output into the durable archive.</summary>
+    /// <summary>
+    /// Persists one scored reading: the CSV recording if one is running, and the durable archive.
+    /// </summary>
     /// <remarks>
-    /// Measurements only. A score persisted beside the value it came from is a second copy that can
-    /// disagree with the engine after any change to the detector.
+    /// The single place either store is written, and it is deliberately fed by whatever arrived
+    /// rather than by a list of channels written here. What it replaces was two separate paths that
+    /// had each drifted:
+    /// <list type="bullet">
+    /// <item>Simulation wrote a fixed six rows — <c>COM3.Temperature</c>, <c>DAB_CONVERTER</c>,
+    /// <c>PSFB_CONVERTER</c> — whichever profile was selected, so an operator monitoring a kiln
+    /// recorded a file describing a converter they do not own.</item>
+    /// <item>Real hardware wrote CSV and never reached the archive at all. Since the archive is
+    /// what the MATLAB export reads, an hour of recorded hardware exported as an empty file, and
+    /// the only configuration where the export worked was the demo.</item>
+    /// </list>
+    /// Measurements go to the archive; the score does not. A score stored beside the value it came
+    /// from is a second copy that silently disagrees with the engine after any change to the
+    /// detector, and the archive is read long after anyone remembers which build wrote it.
     /// </remarks>
-    private void ArchiveSimulationSamples(PowerPlantState state)
+    private void PersistSample(TelemetryPacket packet, AnomalyResult analysis)
     {
-        EnsureArchiveStarted();
-        if (_archiveRing is null) return;
+        // Both stores follow the recording, and the archive follows it too rather than filling
+        // whenever anything happens to be streaming. A dashboard left open for a week at forty
+        // samples a second writes some hundreds of megabytes a day, and an operator who never
+        // pressed Record has no reason to expect a growing database — nor any obvious place to
+        // look when the disk fills. Record means persist; not recording means nothing accumulates.
+        if (!_csvRecorder.IsRecording) return;
 
-        DateTime now = DateTime.UtcNow;
-        Enqueue("COM3", "Temperature", state.AmbientTemperature, "C", now);
-        Enqueue("COM3", "Humidity", state.AmbientHumidity, "%", now);
-        Enqueue("COM3", "Vibration", state.Vibration, "g", now);
-        Enqueue("COM3", "RPM", state.Rpm, "rpm", now);
-        Enqueue("DAB_CONVERTER", "BatteryCurrent", state.DabBatteryCurrent, "A", now);
-        Enqueue("PSFB_CONVERTER", "ServerVoltage", state.PsfbOutputVoltage, "V", now);
+        _csvRecorder.RecordSample(
+            packet.NodeId, packet.Variable, packet.Value,
+            analysis.ZScore, analysis.IsAnomaly,
+            analysis.PredictedValueIn60s, "OK", analysis.ForecastHorizonSec);
+
+        EnsureArchiveStarted();
+        _archiveRing?.TryEnqueue(packet);
     }
 
-    private void Enqueue(string nodeId, string variable, double value, string unit, DateTime timestamp) =>
-        _archiveRing?.TryEnqueue(new TelemetryPacket(nodeId, variable, value, unit, timestamp));
+    /// <summary>Guards first-open. Two ingest threads can now reach it at the same moment.</summary>
+    /// <remarks>
+    /// Unsynchronised while only the display tick wrote here, and a latent race the moment anything
+    /// else did: two threads both find no drain, both open the same SQLite file, and one of the two
+    /// loggers is overwritten while its ring keeps accepting packets that will never be drained.
+    /// The double-check inside keeps the cost to one uncontended read per sample.
+    /// </remarks>
+    private readonly object _archiveGate = new();
 
-    /// <summary>Opens the archive on first use. A failure disables archiving without killing the tick.</summary>
+    /// <summary>Opens the archive on first use. A failure disables archiving without killing ingest.</summary>
     private void EnsureArchiveStarted()
     {
         if (_archiveDrain is not null || _archiveFailed) return;
 
+        lock (_archiveGate)
+        {
+            if (_archiveDrain is not null || _archiveFailed) return;
+            OpenArchive();
+        }
+    }
+
+    private void OpenArchive()
+    {
         try
         {
             Directory.CreateDirectory(LogsDirectory);
