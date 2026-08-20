@@ -278,8 +278,9 @@ public partial class MainWindow : Window
         PowerPlantState state = _simulator.Advance(SimulationIntervalSec);
         ScoredPowerFrame frame = _frameBuilder.Build(state);
 
-        PushProfileChannelsToScope(state);
-
+        // The scope is not fed here. It is fed by the ingest consumer, which is the path a real
+        // device takes; feeding it from this tick as well put every quantity on the chart twice,
+        // under two names, from two different generators. See MainWindow.Simulation.cs.
         ControlPanel.UpdateTelemetryStats(
             state.AmbientTemperature, state.AmbientHumidity, state.Vibration, state.Rpm,
             frame.Ambient, frame.Vibration);

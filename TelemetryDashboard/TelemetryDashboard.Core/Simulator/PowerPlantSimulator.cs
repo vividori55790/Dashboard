@@ -71,40 +71,10 @@ public sealed class PowerPlantState
     public double Rpm { get; init; }
 }
 
-/// <summary>
-/// Reads the measured value of a profile channel out of a simulated instant.
-/// </summary>
-/// <remarks>
-/// The setpoint direction of the profile contract was already there — a slider writes a value under
-/// a channel id and the model reads it. This is the return path, and it exists so a chart can plot
-/// whichever channels the selected profile declares instead of a fixed four.
-/// <para>
-/// The failure mode is the point. An id this model does not measure returns false and is plotted by
-/// nobody. A profile may perfectly legitimately name a quantity the built-in demo model has never
-/// heard of, and the honest response to that is an absent trace, never a substituted or scaled one.
-/// </para>
-/// </remarks>
-public static class SimulatorChannelReadings
-{
-    /// <summary>The value this model computed for a channel, if it computes that channel at all.</summary>
-    public static bool TryRead(PowerPlantState state, string channelId, out double value)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-
-        switch (channelId)
-        {
-            case SimulatorChannelIds.GridVoltage: value = state.GridVoltage; return true;
-            case SimulatorChannelIds.DabBusVoltage: value = state.DabBusVoltage; return true;
-            case SimulatorChannelIds.PsfbOutputVoltage: value = state.PsfbOutputVoltage; return true;
-            case SimulatorChannelIds.ServerLoad: value = state.ServerLoadPercent; return true;
-            case SimulatorChannelIds.AmbientTemperature: value = state.AmbientTemperature; return true;
-            case SimulatorChannelIds.AmbientHumidity: value = state.AmbientHumidity; return true;
-            case SimulatorChannelIds.MachineVibration: value = state.Vibration; return true;
-            case SimulatorChannelIds.MachineSpeed: value = state.Rpm; return true;
-            default: value = 0.0; return false;
-        }
-    }
-}
+// Removed: SimulatorChannelReadings, a switch mapping a profile channel id onto a field of this
+// model. Its only caller fed the scope from the display tick, which was retired once the ingest
+// consumer became the single path to the chart, and nothing else ever read it. The wiring rule
+// found it the moment the caller went, which is what that rule is for.
 
 /// <summary>
 /// Deterministic physical model of the UPS power chain used by the built-in demo.

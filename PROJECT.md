@@ -211,6 +211,7 @@ four defects a green suite had not:
 | `XorChecksum.Calculate(char)` truncated each char to its low byte | The generated firmware macro XORs *bytes*. `°C` is one char and two UTF-8 bytes, so the two sides disagreed and the frame was dropped as corrupt — silently, since a checksum failure is indistinguishable from line noise. The default profile ships a channel measured in °C. |
 | Real hardware never reached the durable archive | The MATLAB export reads only the archive, so it worked in the demo and returned an empty file for every deployment with actual hardware attached. |
 | Simulated readings were archived with no mark | `SIM:` prefix and the `Simulated` flag are now set at the router, so the store cannot be mistaken for a record of the real machine. |
+| The scope was fed by **two** paths at once | The display tick pushed each profile channel's *label* from the built-in physics model while the ingest consumer pushed the same channel's *id* from the profile simulator, so every quantity appeared twice under two names carrying different numbers — the same sensor disagreeing with itself. Verified after the fix by driving the app: four toggles, `ambient.temperature`, `ambient.humidity`, `machine.vibration`, `machine.speed`. |
 
 The checksum defect had been invisible because the test helper reimplemented the same truncation it
 was meant to check. Both sides wrong in the same way is the one failure a hand-rolled test copy

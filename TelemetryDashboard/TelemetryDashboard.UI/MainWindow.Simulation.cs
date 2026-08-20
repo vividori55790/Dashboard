@@ -36,13 +36,6 @@ public partial class MainWindow
 
     private MonitoringProfile? _activeProfile;
 
-    /// <summary>Channel ids named by a profile that the built-in model does not measure.</summary>
-    /// <remarks>
-    /// Kept so the explanation is written once per channel rather than twenty times a second. The
-    /// channel is left off the chart either way; this only governs how often that is said.
-    /// </remarks>
-    private readonly HashSet<string> _unmeasuredChannels = new(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// Loads the profile set, reports how that went, and selects the neutral built-in profile.
     /// </summary>
@@ -120,7 +113,6 @@ public partial class MainWindow
 
         MonitoringProfile? previous = _activeProfile;
         _activeProfile = profile;
-        _unmeasuredChannels.Clear();
 
         // Clearing first means a channel the previous profile drove stops being driven, rather
         // than lingering as a setpoint nothing on screen can see or reset.
@@ -155,6 +147,12 @@ public partial class MainWindow
     /// discovered from the incoming packet stream, and those belong to the hardware rather than to
     /// the selection — hiding them because the operator changed profile would blank out live traces
     /// that never stopped arriving.
+    /// <para>
+    /// Matched on <see cref="ProfileChannel.Id"/>, which is what the simulator puts in the frame
+    /// and therefore what arrives as the series name. It matched on <c>Label</c> while a second,
+    /// now-removed path pushed labels straight from the display tick; against ids that comparison
+    /// matched nothing, so switching profiles left every outgoing channel on the chart.
+    /// </para>
     /// </remarks>
     private void RetireScopeChannels(MonitoringProfile? previous, MonitoringProfile current)
     {
@@ -162,10 +160,8 @@ public partial class MainWindow
 
         foreach (ScopeChannelSeries series in ScopeControl.Channels)
         {
-            bool wasProfileChannel = previous.Channels.Any(
-                c => string.Equals(c.Label, series.Name, StringComparison.OrdinalIgnoreCase));
-            bool stillWanted = current.Channels.Any(
-                c => string.Equals(c.Label, series.Name, StringComparison.OrdinalIgnoreCase));
+            bool wasProfileChannel = previous.Channels.Any(c => NamesChannel(c, series.Name));
+            bool stillWanted = current.Channels.Any(c => NamesChannel(c, series.Name));
 
             if (!wasProfileChannel || stillWanted) continue;
 
@@ -174,35 +170,27 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Feeds the scope the channels the active profile declares, at their measured values.
-    /// </summary>
+    /// <summary>Whether a series name refers to this channel.</summary>
     /// <remarks>
-    /// This used to push a fixed four — temperature, humidity, vibration and a figure labelled RPM
-    /// that was the model's rpm divided by a hundred — so the chart described the same four
-    /// quantities whichever system had been selected, and one of the four was a number nothing had
-    /// computed. A channel the built-in model does not measure is now left off the chart and named
-    /// in the log, because an absent trace is honest and a substituted one is not.
+    /// The id is what travels in the frame, but the simulator replaces the frame's delimiters
+    /// before sending, so a channel whose id contains a comma arrives under the sanitised form.
+    /// Comparing both is what keeps such a channel from surviving a profile switch unnoticed.
     /// </remarks>
-    private void PushProfileChannelsToScope(PowerPlantState state)
-    {
-        if (_activeProfile is null) return;
+    private static bool NamesChannel(ProfileChannel channel, string seriesName) =>
+        string.Equals(channel.Id, seriesName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(channel.Label, seriesName, StringComparison.OrdinalIgnoreCase);
 
-        foreach (ProfileChannel channel in _activeProfile.Channels)
-        {
-            if (SimulatorChannelReadings.TryRead(state, channel.Id, out double value))
-            {
-                ScopeControl.PushChannel(channel.Label, value);
-                continue;
-            }
-
-            if (_unmeasuredChannels.Add(channel.Id))
-            {
-                ControlPanel.LogMessage("WARN",
-                    $"채널 '{channel.Label}' ({channel.Id}) 은 내장 시뮬레이터가 계산하지 않아 스코프에 표시하지 않습니다.");
-            }
-        }
-    }
+    // Removed: PushProfileChannelsToScope. It fed the scope the active profile's channels from the
+    // built-in physics model on the 20 Hz display tick, under each channel's Label. The ingest
+    // consumer also feeds the scope, under each channel's Id, from the profile simulator — so
+    // while the virtual stream ran, every quantity appeared twice, once as "온도" and once as
+    // "ambient.temperature", carrying two different sets of numbers from two different generators.
+    // An operator comparing them would have found the same sensor disagreeing with itself.
+    //
+    // The ingest path is the one that survives, because it is the one that is real: it goes
+    // through the parser, the routing rules and the anomaly engine exactly as hardware does. The
+    // cost is that the scope is empty until a source is started, which is the honest picture of an
+    // application that is not receiving anything.
 
     /// <summary>
     /// Applies one scenario: its setpoints, then whatever fault it names.
