@@ -489,6 +489,7 @@ public partial class ArchitectureRuleTests
         // the record shape plus the account of what each field is allowed to claim.
         "TelemetryDashboard.Core/Streaming/IncidentEndpoint.cs",                   // 162 lines
         "TelemetryDashboard.Core/Streaming/ComputedEndpoint.cs",                   // 180 lines — reply shape already split into ComputedEndpointModels.cs
+        "TelemetryDashboard.Core/Streaming/ControlEndpoint.cs",                    // 163 lines — reply shape already split into ControlEndpointModels.cs
         "TelemetryDashboard.Core/Analytics/LimitMonitor.cs",                       // 190 lines — state records already split into LimitMonitorState.cs
         "TelemetryDashboard.Host/Configuration/UsageText.cs",                      // 158 lines — one help screen, one flag per entry
         "TelemetryDashboard.Host/Ingest/IngestSetup.cs",                           // 151 lines — one source-selection decision per branch

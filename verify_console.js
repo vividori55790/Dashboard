@@ -121,6 +121,10 @@ check('the chip follows the socket',
 
 // Variables that arrived marked derived, so the label check knows what to look for.
 const derivedByVariable = new Set();
+// The node each variable arrived under. This console keys a card by node *and*
+// variable, so a probe sent without one lands in a new card instead of the card it
+// was meant to test -- which is what the first version of the check below did.
+const nodeByVariable = new Map();
 const breachedByVariable = new Set();
 const seen = new Set();
 const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
@@ -135,6 +139,7 @@ const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
             let p; try { p = JSON.parse(line.slice(6)); } catch { continue; }
             if (typeof p.variable !== 'string') continue;
             if (p.derived === true) derivedByVariable.add(p.variable);
+            nodeByVariable.set(p.variable, p.nodeId);
             if (p.limitBreach === true) breachedByVariable.add(p.variable);
             seen.add(p.variable);
             dataCb(p);
@@ -161,35 +166,6 @@ function afterStream() {
     check('the synthetic-data banner is raised for a simulated stream',
         elements.get('sim-banner').style.display === 'block');
 
-    // Each card must hold its own reading. The console this replaces wrote one device's value
-    // under another's name whenever only one had reported.
-    const values = [...seen].map(v => {
-        const el = [...elements.entries()].find(([k]) => k.startsWith('v-c') && k.includes(v.replace(/[^a-zA-Z0-9]/g, '-')));
-        return el ? el[1].innerHTML : null;
-    }).filter(Boolean);
-
-    check('every card carries a reading of its own',
-        values.length === seen.size && new Set(values).size === values.length,
-        values.join(' | '));
-
-    // A derived channel must be labelled where a reader will see it. The general console
-    // discovers whatever arrives and drew every channel identically, so an efficiency computed
-    // from four measurements looked exactly like a fifth measurement.
-    const cardMarkup = elements.get('grid').children.map(c => String(c.innerHTML));
-    const derivedCards = cardMarkup.filter(m => m.includes('class="derived"'));
-    const derivedStreamed = [...seen].filter(v => derivedByVariable.has(v));
-
-    if (derivedStreamed.length === 0) {
-        check('a derived channel reached the stream, without which this check tests nothing',
-            false,
-            'rerun the host with --computed, or with a profile that declares computed channels');
-    } else {
-        check('every derived channel is labelled as computed, and no measurement is',
-            derivedCards.length === derivedStreamed.length
-            && derivedStreamed.every(v => cardMarkup.some(m => m.includes('class="derived"') && m.includes(v))),
-            `${derivedCards.length} labelled for ${derivedStreamed.length} derived: ${derivedStreamed.join(', ')}`);
-    }
-
     // A limit breach must be visible, and visibly not the same thing as an anomaly. The z-score
     // cannot raise this alarm at all: a channel sitting steadily outside a hard limit is not
     // unusual for itself, which is exactly why the limit exists.
@@ -215,6 +191,51 @@ function afterStream() {
         check('a channel outside its limit is labelled as such rather than as an anomaly',
             labelled.length >= 1 && breachedVars.every(v => labelled.some(m => m.includes(v))),
             `${labelled.length} card(s) labelled for ${breachedVars.length} breached: ${breachedVars.join(', ')}`);
+    }
+
+    // After the limit check, and that order is load-bearing: these probe packets carry no
+    // limitBreach, so injecting them first repaints every card as healthy and the check
+    // above finds nothing labelled -- a harness destroying the state it is about to assert on.
+    // Each card must hold its own reading. The console this replaces wrote one device's value
+    // under another's name whenever only one had reported.
+    //
+    // Written first as "every displayed value is distinct", which is a coincidence and not a
+    // property: two unrelated channels rounding to the same number failed a page that was working,
+    // and it did — 396.0 V on both a grid and a bus. The same mistake had already been found and
+    // fixed in verify_dab_console.js and was still here. Distinct injected values test the routing
+    // itself and cannot collide.
+    const cardValue = v => {
+        const el = [...elements.entries()]
+            .find(([k]) => k.startsWith('v-c') && k.includes(v.replace(/[^a-zA-Z0-9]/g, '-')));
+        return el ? String(el[1].innerHTML) : null;
+    };
+
+    const measured = [...seen].filter(v => !derivedByVariable.has(v));
+    measured.forEach((v, i) => dataCb({
+        nodeId: nodeByVariable.get(v), variable: v, value: 1000 + i, unit: 'X', simulated: true
+    }));
+
+    check('every card carries a reading of its own',
+        measured.length > 0
+        && measured.every((v, i) => (cardValue(v) ?? '').startsWith(String(1000 + i))),
+        measured.map((v, i) => `${v}=${cardValue(v)} (sent ${1000 + i})`).join(' | '));
+
+    // A derived channel must be labelled where a reader will see it. The general console
+    // discovers whatever arrives and drew every channel identically, so an efficiency computed
+    // from four measurements looked exactly like a fifth measurement.
+    const cardMarkup = elements.get('grid').children.map(c => String(c.innerHTML));
+    const derivedCards = cardMarkup.filter(m => m.includes('class="derived"'));
+    const derivedStreamed = [...seen].filter(v => derivedByVariable.has(v));
+
+    if (derivedStreamed.length === 0) {
+        check('a derived channel reached the stream, without which this check tests nothing',
+            false,
+            'rerun the host with --computed, or with a profile that declares computed channels');
+    } else {
+        check('every derived channel is labelled as computed, and no measurement is',
+            derivedCards.length === derivedStreamed.length
+            && derivedStreamed.every(v => cardMarkup.some(m => m.includes('class="derived"') && m.includes(v))),
+            `${derivedCards.length} labelled for ${derivedStreamed.length} derived: ${derivedStreamed.join(', ')}`);
     }
 
     // The endpoints the console calls, exercised for real.

@@ -33,7 +33,7 @@ namespace TelemetryDashboard.Core.Simulator;
 /// It is for exercising the ingest path, the charts and the alarms without hardware. Every frame it
 /// emits is marked synthetic upstream and stays marked; nothing here is a measurement.
 /// </remarks>
-public sealed class ProfileSimulatorEngine : ISimulatorEngine
+public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimulatedControl
 {
     private readonly MonitoringProfile _profile;
     private readonly ConcurrentDictionary<string, double> _setpoints = new(StringComparer.Ordinal);

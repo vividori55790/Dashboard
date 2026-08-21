@@ -63,6 +63,14 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     public IReadOnlyList<Analytics.ComputedChannel> Computed { get; set; } =
         Array.Empty<Analytics.ComputedChannel>();
 
+    /// <summary>What this host may be commanded to change, or null when nothing.</summary>
+    /// <remarks>
+    /// Null on a host reading a real device, and that is the enforcement: there is no object to
+    /// command rather than a check that refuses. Moving real hardware from a browser is not a
+    /// setting this endpoint withholds, it is a different feature with its own arming.
+    /// </remarks>
+    public Interfaces.ISimulatedControl? Control { get; set; }
+
     /// <summary>Engineering limits in force on this host, or null when none were declared.</summary>
     /// <remarks>
     /// Null rather than an empty monitor, so <c>/api/limits</c> can distinguish "this host is not

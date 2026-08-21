@@ -108,7 +108,7 @@ public static class Program
         }
 
         // Before the pump: the publisher reads the limit monitor when it is constructed.
-        HostFeatureSetup.Attach(options, console.Server);
+        HostFeatureSetup.Attach(options, console.Server, source);
 
         TelemetryIngestPump? pump = source is null
             ? null

@@ -38,6 +38,7 @@ Two portability details that were silently broken and are now explicit:
 | 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`; published live by `Host.Ingest.ComputedChannelPump` | M2 | Built |
 | 2c | Engineering Limits | `Core.Analytics.ChannelLimit` + `LimitMonitor` via `/api/limits`, declared by profile or `--limit` | M3 | Built |
 | 12b | Loopback Serial Port | `Host.Ingest.LoopbackSerialManager` over `Core.Simulator.MockSerialPort`, via `--serial loopback` | M3 | Built |
+| 12c | Operator Control | `Core.Streaming.ControlEndpoint` via `/api/control`, generated sources only | M3 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -810,7 +811,55 @@ hand back the CSV rows it read, it **rebuilds each one as the device frame it ca
 included, so a replay runs the parser and the checksum check exactly as a live port does. The first
 version of the test parsed CSV columns and failed on a checksum suffix.
 
-**Suite: 1,129 passing, 0 failing** (1,061 portable + 68 desktop) — about 2 m 35 s with
+### The cross-platform product could not be told anything
+The streaming server has raised a `CommandReceived` event for text arriving on the WebSocket since
+M2. **Nothing anywhere subscribed to it.** A command sent from a console was raised and dropped —
+a control that appears to work and changes nothing, which is worse than one that is visibly absent.
+`ProfileSimulatorEngine` had accepted setpoints and scenarios since M1 and only the WPF shell could
+reach it, so on Linux, macOS or a browser the product was read-only: watch, query, be alerted,
+change nothing.
+
+What that costs is **commissioning**. An engineer installing this has to prove the alarm fires and
+the interlock trips before trusting either, and with no way to put a channel at a chosen value the
+only proof available is over-volting real hardware.
+
+`/api/control` closes it. `GET` lists what may be moved and where each channel currently sits;
+`POST` moves one. The same three commands arrive over the WebSocket in the shape a console already
+sends. Verified end to end on the release binary, one HTTP command driving the whole chain:
+
+```
+POST cmd=setpoint&channel=dab.bus_voltage&value=440   applied 440 V
+  /api/limits          Breached, 111 breaching samples
+  interlock            3 dispatches
+  loopback port        SAFE_MODE written
+  Slack                "Outside limit ... 434 is above the 420 ceiling"
+POST cmd=reset
+  Slack                "Limit cleared ... back inside at 394 V"
+```
+
+**Offered only for a generated source, and the enforcement is that there is no object to command.**
+A host reading a real device gets null, not a check that refuses. Moving that machine is a command
+to the machine, which is the emergency interlock's job and is armed separately, deliberately, and
+never from a browser.
+
+**A clamped setpoint is reported as clamped.** Ask for 999 on a channel the profile bounds at 450
+and the reply says `requested 999, applied 450, clamped true` with the reason. A caller told only
+"Success" would believe the bus went to 999 — and on a commissioning run that belief is the
+difference between "the alarm did not fire" and "the alarm was never given the chance".
+
+One platform detail worth writing down: `HttpListener` sits on Windows' HTTP.SYS, which answers
+**411 Length Required** to a POST with no `Content-Length` before this host sees the request.
+Browsers send `Content-Length: 0`; `curl` needs `-d ""`. The help text says so.
+
+The harnesses found two of their own defects. `verify_console.js` still asserted that every
+displayed value is distinct — a coincidence rather than a property, already found and fixed in the
+DAB harness in an earlier cycle and still present here; it failed a working page on two channels
+reading 396.0 V. Replacing it with injected distinct values then broke the limit-breach check,
+because those probe packets carry no `limitBreach` and repainted every card as healthy: a harness
+destroying the state it was about to assert on. The probe now runs last, and the ordering is
+written down where it matters.
+
+**Suite: 1,150 passing, 0 failing** (1,082 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

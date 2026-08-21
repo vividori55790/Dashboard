@@ -35,6 +35,13 @@ public sealed class SimulatedTelemetrySource : ITelemetrySource
     /// <summary>The profile whose channels this source is producing.</summary>
     public MonitoringProfile Profile { get; }
 
+    /// <summary>What an operator may move on this source.</summary>
+    /// <remarks>
+    /// Exposed so /api/control has something to command. The engine has accepted setpoints since
+    /// M1 and only the WPF shell could reach it, which left the cross-platform product read-only.
+    /// </remarks>
+    public Core.Interfaces.ISimulatedControl Control => _engine;
+
     /// <inheritdoc />
     public string Origin => "SIMULATED";
 

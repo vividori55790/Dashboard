@@ -76,6 +76,16 @@ public static class UsageText
                                 by the end of the week. Unlike the sigma threshold, this fires
                                 during warm-up: a reading outside a hard limit is outside it
                                 before any baseline exists.
+                                A generated run also serves /api/control, which is the one place
+                                this product is not read-only: GET lists the channels and
+                                scenarios that may be moved, POST moves one. It exists so an
+                                engineer can prove the alarm fires and the interlock trips without
+                                over-volting real hardware. A POST must carry a Content-Length,
+                                even a zero one -- Windows' HTTP stack answers 411 before this
+                                host sees the request. Browsers do this; curl needs -d "".
+                                  curl -X POST -d "" ".../api/control?cmd=setpoint&channel=dab.bus_voltage&value=440"
+                                A host reading a real device offers none of it: acting on that
+                                machine is the emergency interlock's job, armed separately.
               --limit <decl>    Enforce an engineering limit, written as
                                 "channel[unit] in lo..hi", or a channel followed by >, >=, <
                                 or <= and a number. Repeatable. This is the alarm a rolling

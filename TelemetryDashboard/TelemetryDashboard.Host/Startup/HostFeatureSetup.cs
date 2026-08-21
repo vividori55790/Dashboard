@@ -21,8 +21,11 @@ namespace TelemetryDashboard.Host.Startup;
 /// </remarks>
 public static class HostFeatureSetup
 {
-    /// <summary>Attaches derived channels and engineering limits. Call before building the pump.</summary>
-    public static void Attach(HostOptions options, TelemetryStreamingServer server)
+    /// <summary>
+    /// Attaches derived channels, engineering limits and the control surface. Call before the pump.
+    /// </summary>
+    public static void Attach(
+        HostOptions options, TelemetryStreamingServer server, Ingest.ITelemetrySource? source)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(server);
@@ -33,5 +36,6 @@ public static class HostFeatureSetup
 
         ComputedChannelSetup.Attach(options, server, profile);
         LimitSetup.Attach(options, server, profile);
+        ControlSetup.Attach(server, source);
     }
 }

@@ -53,6 +53,9 @@ public sealed class LoopbackTelemetrySource : ITelemetrySource
     public string Description =>
         $"loopback port {DefaultPortName} -- {Profile.DisplayName}, {Profile.Channels.Count} synthetic channel(s)";
 
+    /// <summary>What an operator may move on this source.</summary>
+    public Core.Interfaces.ISimulatedControl Control => _engine;
+
     /// <summary>The manager holding the in-memory port, for the interlock and for plugins.</summary>
     public ISerialManager SerialManager => _manager;
 

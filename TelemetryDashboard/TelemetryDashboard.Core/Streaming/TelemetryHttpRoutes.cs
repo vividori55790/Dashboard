@@ -88,6 +88,15 @@ public static class TelemetryHttpRoutes
                     ).ConfigureAwait(false);
                 return;
 
+            // POST to change, GET to see what may be changed. A GET that moved a setpoint would
+            // let a link, a prefetch or a browser's history do it.
+            case "/api/control":
+                await WriteJsonAsync(response,
+                    string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase)
+                        ? ControlEndpoint.Apply(server.Control, context.Request.QueryString)
+                        : ControlEndpoint.Describe(server.Control)).ConfigureAwait(false);
+                return;
+
             case "/api/limits":
                 await WriteJsonAsync(response, LimitsEndpoint.Query(server.Limits)).ConfigureAwait(false);
                 return;
@@ -145,7 +154,7 @@ public static class TelemetryHttpRoutes
                 fault = counters.FaultMessage
             }
             : null,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/control", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>
