@@ -135,7 +135,15 @@ public partial class ArchitectureRuleTests
         // to a broker (--mqtt) and checks a release feed at start-up (--check-updates). Before
         // this the host had no outbound path at all, so the retry-on-429 work done on these
         // clients was correctness applied to code no user could reach.
-        "SqliteIndexRepository",      // no caller indexes archives yet; the DVR reads files directly
+        // SqliteIndexRepository left this baseline by being deleted, which is the other way an
+        // unreachable type stops being one. It described itself as a fast lookup of "which file
+        // and offset holds a channel at a given moment" and could not answer that: byte_offset
+        // was declared in its schema and never written, and the archive column it did write had
+        // no method that reads it. What it actually did was store a second, narrower copy of
+        // every sample with no way to read the rows back -- SqliteDataLogger with the query
+        // removed. The need it named is already met by wiring that exists: --replay <csv>
+        // --archive <db> plays a recording through the pipeline and into the durable store,
+        // measured at 990 CSV rows in and 990 samples queryable out.
         "SseStreamHandler",
         // RecordPipeline, NumericPacketStage, StageActivity and TelemetryCircuitBreaker retired
         // from this baseline: TelemetryIngestPump now routes every arrival through the record path,

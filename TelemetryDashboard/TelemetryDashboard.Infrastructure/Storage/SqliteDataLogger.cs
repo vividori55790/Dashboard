@@ -15,10 +15,9 @@ namespace TelemetryDashboard.Infrastructure.Storage;
 /// </summary>
 /// <remarks>
 /// Nothing here catches <see cref="SqliteException"/>. A full disk, a read-only volume or a corrupt
-/// file raises out of the write or query that hit it, on the same principle as
-/// <see cref="SqliteIndexRepository"/>: a recording that silently stopped persisting looks exactly
-/// like a recording with nothing to say, and the operator finds out when they go looking for the
-/// data and it is not there.
+/// file raises out of the write or query that hit it: a recording that silently stopped persisting
+/// looks exactly like a recording with nothing to say, and the operator finds out when they go
+/// looking for the data and it is not there.
 /// <para>
 /// A connection is opened per operation and closed again, so the process holds no handle on the
 /// file between calls and the database can be moved or deleted while the application runs.

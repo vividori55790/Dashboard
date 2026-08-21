@@ -191,8 +191,11 @@ public class F25_F34_ExtensionStorageBoundaryTests
 
         try
         {
-            var repo = new SqliteIndexRepository(tempDb);
-            Action act = () => repo.InitializeSchema();
+            // Moved off SqliteIndexRepository, which is gone: it was a second, unreadable copy of
+            // the durable store. The property is worth keeping and belongs on the class that
+            // ships -- quietly replacing a database the operator believes holds history is worse
+            // than refusing to open it.
+            Action act = () => new SqliteDataLogger(tempDb);
             act.Should().Throw<Exception>();
         }
         finally

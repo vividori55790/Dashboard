@@ -777,7 +777,40 @@ and a bare "is outside" cannot express a recovery at all. And the limit clause m
 `Describe()`, where it had landed between the reading and the timestamp: *"2.62 sigma) OUTSIDE
 LIMIT: grid.voltage[V] < 300 at 2026-08-21"* reads as though the limit had a time on it.
 
-**Suite: 1,126 passing, 0 failing** (1,058 portable + 68 desktop) — about 2 m 35 s with
+### Deleting the one that could not do what it said
+`SqliteIndexRepository` had sat on the unwired baseline since the rule was written, described as a
+fast lookup of "which file and offset holds a channel at a given moment, without scanning the
+archives themselves". Read closely, it could not answer that. `byte_offset` was declared in its
+schema and **never written**; the `archive` column it did write had **no method that reads it**. It
+had no member returning a file name or an offset at all. What it actually did was keep a second,
+narrower copy of every sample — `SqliteDataLogger` with the query removed.
+
+So the choice was not "wire it or leave it". Wiring it would have added a duplicate of every row in
+a table nothing can read, which is worse than leaving it alone. **Deletion is the other way an
+unreachable type stops being one**, and it is only honest if the need it named is met.
+
+The need is real: a CSV transcript cannot be queried, so "what did this channel do last Tuesday"
+has no answer if all you kept was `--record`. Existing wiring already answers it — `--replay` plays
+a recording through the same pipeline a live source feeds, and `--archive` is on the far end of
+that pipeline. Measured end to end on the release binary:
+
+```
+CSV rows:  990
+archived:  990        queryable by channel, node and time window
+```
+
+No new code, and a better answer than the index would have given: the archive holds the values
+rather than pointers into files that may since have moved. That path existed and appeared in no
+help text, so nobody would have found it; `--archive` now says what pairing it with `--replay` is
+for. The corrupt-file property the deleted class was tested for — refuse rather than silently
+recreate a database an operator believes holds history — moved onto the class that ships.
+
+Writing the test for it found that the replay source is better than the test assumed: it does not
+hand back the CSV rows it read, it **rebuilds each one as the device frame it came from**, checksum
+included, so a replay runs the parser and the checksum check exactly as a live port does. The first
+version of the test parsed CSV columns and failed on a checksum suffix.
+
+**Suite: 1,129 passing, 0 failing** (1,061 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two
