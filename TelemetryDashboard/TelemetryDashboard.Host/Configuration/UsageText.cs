@@ -50,6 +50,14 @@ public static class UsageText
                                 afterwards at /api/history by node, channel and time window. A CSV
                                 recording is a transcript; this is a store you can ask questions of,
                                 and it is the only thing here that outlives the process.
+              --computed <decl> Serve a channel computed from others, written as
+                                "id[unit] = expression". Repeatable. Every input is aligned to one
+                                instant before the expression runs, and no value is published
+                                unless all of them answer that instant -- a power multiplied from a
+                                voltage now and a current from 300 ms ago was never drawn. Example:
+                                --computed "psfb.efficiency[%] = 100 * psfb.output_voltage *
+                                psfb.output_current / (dab.bus_voltage * dab.input_current)"
+                                Served at /api/computed, and always marked derived.
               --replay <file>   Play a recorded CSV back through the live pipeline instead of
                                 reading a source. Routing, analytics, the console, the spectrum
                                 and the DVR all behave as they do live; every frame says REPLAY,

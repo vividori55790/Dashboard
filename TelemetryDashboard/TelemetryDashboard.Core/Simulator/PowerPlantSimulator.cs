@@ -19,6 +19,13 @@ public static class SimulatorChannelIds
     public const string PsfbOutputVoltage = "psfb.output_voltage";
     public const string ServerLoad = "server.load";
 
+    // The current on each side of the chain. Without these the example profile could show four
+    // voltages and not one watt: power is V*I, efficiency is a ratio of powers, and a converter is
+    // judged by its efficiency. A rig that reports only voltages cannot answer the question it
+    // exists to answer.
+    public const string DabInputCurrent = "dab.input_current";
+    public const string PsfbOutputCurrent = "psfb.output_current";
+
     public const string AmbientTemperature = "ambient.temperature";
     public const string AmbientHumidity = "ambient.humidity";
     public const string MachineVibration = "machine.vibration";

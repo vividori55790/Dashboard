@@ -53,6 +53,16 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// </remarks>
     public Interfaces.IDataLogger? Archive { get; set; }
 
+    /// <summary>Expressions this host serves from <c>/api/computed</c>.</summary>
+    /// <remarks>
+    /// Declared by the host rather than by a request, so a computed channel is a property of the
+    /// installation and not of whoever opened a browser. An expression accepted from a query string
+    /// would let any viewer name any channel and get an answer nobody configured — and two viewers
+    /// would then disagree about what "efficiency" means on the same machine.
+    /// </remarks>
+    public IReadOnlyList<Analytics.ComputedChannel> Computed { get; set; } =
+        Array.Empty<Analytics.ComputedChannel>();
+
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>
     public event EventHandler<string>? CommandReceived;
 

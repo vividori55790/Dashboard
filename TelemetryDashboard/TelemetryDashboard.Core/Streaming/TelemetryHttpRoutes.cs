@@ -76,6 +76,18 @@ public static class TelemetryHttpRoutes
                     ).ConfigureAwait(false);
                 return;
 
+            case "/api/computed":
+                await WriteJsonAsync(response, ComputedEndpoint.Compute(
+                    server.Series,
+                    server.Computed,
+                    ReadNullableDouble(context.Request.QueryString["at"])
+                        ?? SeriesClock.UtcNowSec() - ReadDouble(context.Request.QueryString["ago"], 1.0),
+                    ReadDouble(context.Request.QueryString["windowSec"], AlignedEndpoint.DefaultWindowSec),
+                    (context.Request.QueryString["ids"] ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    ).ConfigureAwait(false);
+                return;
+
             case "/api/spectrum":
                 await WriteJsonAsync(response, SpectrumEndpoint.Compute(
                     server.Series,
@@ -111,7 +123,7 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>

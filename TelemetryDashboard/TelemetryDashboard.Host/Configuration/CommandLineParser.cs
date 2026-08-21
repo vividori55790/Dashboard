@@ -133,6 +133,22 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                // Parsed here rather than accepted verbatim, so a malformed expression stops the
+                // start. A host that accepted it would serve that channel as permanently
+                // unavailable, which is indistinguishable from a sensor that has gone quiet.
+                case "--computed":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawComputed)) return ArgumentCursor.MissingValue(argument);
+                    try
+                    {
+                        TelemetryDashboard.Core.Analytics.ComputedChannel.Parse(rawComputed);
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ArgumentCursor.Fail($"--computed {rawComputed}: {ex.Message}");
+                    }
+                    draft.Computed.Add(rawComputed);
+                    break;
+
                 case "--archive":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawArchive)) return ArgumentCursor.MissingValue(argument);
                     draft.ArchivePath = Path.GetFullPath(rawArchive);

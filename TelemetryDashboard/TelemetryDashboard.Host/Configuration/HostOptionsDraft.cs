@@ -36,6 +36,7 @@ internal sealed class HostOptionsDraft
         ProfileId = defaults.ProfileId;
         DashboardExportPath = defaults.DashboardExportPath;
         ArchivePath = defaults.ArchivePath;
+        Computed = new List<string>(defaults.Computed);
         ReplayPath = defaults.ReplayPath;
         ReplaySpeed = defaults.ReplaySpeed;
         EmergencyStop = defaults.EmergencyStop;
@@ -49,6 +50,7 @@ internal sealed class HostOptionsDraft
     public int Port;
     public int BaudRate;
     public List<string> ContentRoots;
+    public List<string> Computed;
     public string? ClientFile;
     public string? SerialPort;
     public string? RecordingDirectory;
@@ -97,6 +99,7 @@ internal sealed class HostOptionsDraft
         ProfileId = ProfileId,
         DashboardExportPath = DashboardExportPath,
         ArchivePath = ArchivePath,
+        Computed = Computed,
         ReplayPath = ReplayPath,
         ReplaySpeed = ReplaySpeed,
         EmergencyStop = EmergencyStop,

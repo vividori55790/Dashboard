@@ -139,6 +139,31 @@ public sealed class HostOptions
     /// </remarks>
     public string? ArchivePath { get; init; }
 
+    /// <summary>Whether this run asked for a telemetry source at all.</summary>
+    /// <remarks>
+    /// A host with no source is a legitimate configuration — it serves the console and waits — but
+    /// a host that <em>was</em> given one and could not open it is a failure, and the two used to be
+    /// the same outcome for everything except serial. <c>--simulate --profile does-not-exist</c>
+    /// printed the error and then ran with an empty timeline and exit code 0, which looks exactly
+    /// like a rig that has not been plugged in yet.
+    /// <para>
+    /// Poll and SSE endpoints are absent here because constructing those sources cannot fail; they
+    /// report a bad address once they try to reach it, which is the right moment for a network.
+    /// </para>
+    /// </remarks>
+    public bool SourceRequested => SerialPort is not null || ReplayPath is not null || Simulate;
+
+    /// <summary>
+    /// Derived channels declared on the command line, as <c>id[unit] = expression</c>.
+    /// </summary>
+    /// <remarks>
+    /// Added to whatever the profile declares rather than replacing it, because the two answer
+    /// different questions: the profile describes the rig, and these describe what this particular
+    /// run wants to watch. A declaration here that repeats an id from the profile replaces that
+    /// one, so an operator can override without editing the profile file.
+    /// </remarks>
+    public IReadOnlyList<string> Computed { get; init; } = Array.Empty<string>();
+
     /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
     /// <remarks>
     /// Everything downstream behaves exactly as it does live, because from its side nothing is

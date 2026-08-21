@@ -41,7 +41,13 @@ public partial class ArchitectureRuleTests
         "AlertUXService",
         "AnomalyEngine",              // superseded by TelemetryMlAnalyticsEngine on the live path
         "AppTheme",
-        "AstNode",
+        // AstNode retired from this baseline: ComputedChannel holds one and asks it what
+        // channels it reads, which is what /api/computed needs before it can align them. The
+        // expression engine had been reachable only from a WPF dialog and from DataRouter's
+        // formula rules, so the headless product -- the cross-platform half -- could not
+        // compute anything at all. Wiring it meant giving the tree a way to say "no value":
+        // its resolver returned double, so a channel that had never reported and a channel
+        // reading zero volts were the same answer, and an unknown function name was 0.0.
         // AutoReconnectEngine retired from this baseline: SerialTelemetrySource starts it when a
         // port opens, so a dropped cable is now retried instead of ending the run. Making it work
         // needed a real fix first -- the read loop swallowed the failure, leaving the port marked

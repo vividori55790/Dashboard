@@ -105,6 +105,18 @@ public sealed class MonitoringProfile
 
     public IReadOnlyList<ProfileScenario> Scenarios { get; init; } = [];
 
+    /// <summary>
+    /// Quantities derived from the channels, declared as <c>id[unit] = expression</c>.
+    /// </summary>
+    /// <remarks>
+    /// A profile is the right place for these because they are a property of the system being
+    /// watched rather than of the viewer: efficiency means one thing on a DAB/PSFB chain and
+    /// another on a pump, and both of those are decided by whoever described the rig -- not by
+    /// whoever opened a browser. Held as text so a profile arriving as JSON can carry them, and
+    /// parsed by the one parser in <see cref="Analytics.ComputedChannel"/>.
+    /// </remarks>
+    public IReadOnlyList<string> Computed { get; init; } = [];
+
     /// <summary>The name an operator would use for this profile.</summary>
     /// <remarks>
     /// The picker draws its rows through a display path, so the visible text was always right — but

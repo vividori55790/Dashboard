@@ -47,6 +47,9 @@ internal static class MonitoringProfileReader
         List<ProfileScenario>? scenarios = ReadScenarios(dto, name, channels, problems);
         if (scenarios is null) return null;
 
+        List<string>? computed = ReadComputed(dto, name, channels, problems);
+        if (computed is null) return null;
+
         return new MonitoringProfile
         {
             Id = dto.Id!,
@@ -54,8 +57,54 @@ internal static class MonitoringProfileReader
             Summary = dto.Summary ?? string.Empty,
             Nodes = nodes,
             Channels = channels,
-            Scenarios = scenarios
+            Scenarios = scenarios,
+            Computed = computed
         };
+    }
+
+    /// <summary>
+    /// Reads the derived quantities, checking each one parses and reads channels that exist.
+    /// </summary>
+    /// <remarks>
+    /// Both checks happen here rather than at the first request, because a computed channel that
+    /// names a misspelled input is permanently unavailable and there is no later moment at which
+    /// anyone finds that out: the endpoint would answer "that input has reported nothing", which is
+    /// exactly what it says about a sensor that has genuinely gone quiet.
+    /// </remarks>
+    private static List<string>? ReadComputed(
+        ProfileDto dto, string name, List<ProfileChannel> channels, List<string> problems)
+    {
+        var accepted = new List<string>();
+        if (dto.Computed is not { Count: > 0 }) return accepted;
+
+        var known = new HashSet<string>(channels.Select(c => c.Id), StringComparer.Ordinal);
+
+        foreach (string declaration in dto.Computed)
+        {
+            Analytics.ComputedChannel parsed;
+            try
+            {
+                parsed = Analytics.ComputedChannel.Parse(declaration);
+            }
+            catch (FormatException ex)
+            {
+                problems.Add($"'{name}' — 계산 채널 '{declaration}': {ex.Message}");
+                continue;
+            }
+
+            string[] missing = parsed.Inputs.Where(i => !known.Contains(i)).ToArray();
+            if (missing.Length > 0)
+            {
+                problems.Add(
+                    $"'{name}' — 계산 채널 '{parsed.Id}' 이(가) 이 프로파일에 없는 채널을 읽습니다: " +
+                    string.Join(", ", missing));
+                continue;
+            }
+
+            accepted.Add(declaration);
+        }
+
+        return accepted;
     }
 
     /// <summary>

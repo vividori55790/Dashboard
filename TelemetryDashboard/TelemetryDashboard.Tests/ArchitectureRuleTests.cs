@@ -488,6 +488,7 @@ public partial class ArchitectureRuleTests
         // do over a span, and what was everything doing around this instant -- and the length is
         // the record shape plus the account of what each field is allowed to claim.
         "TelemetryDashboard.Core/Streaming/IncidentEndpoint.cs",                   // 162 lines
+        "TelemetryDashboard.Core/Streaming/ComputedEndpoint.cs",                   // 180 lines — reply shape already split into ComputedEndpointModels.cs
     };
 
     [Fact]

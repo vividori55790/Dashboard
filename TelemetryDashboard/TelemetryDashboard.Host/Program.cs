@@ -69,10 +69,13 @@ public static class Program
         }
 
         ITelemetrySource? source = await IngestSetup.OpenSourceAsync(options, shutdown.Token).ConfigureAwait(false);
-        if (options.SerialPort is not null && source is null)
+        if (source is null && options.SourceRequested)
         {
+            // IngestSetup has already said what went wrong. What matters here is that the run ends:
+            // continuing would serve a console over an empty timeline under an exit code that says
+            // the host started normally.
             await console.DisposeAsync().ConfigureAwait(false);
-            return ExitSerialFailed;
+            return options.SerialPort is not null ? ExitSerialFailed : ExitUsage;
         }
 
         TelemetryCsvRecorder? recorder = IngestSetup.StartRecording(options);
@@ -103,6 +106,8 @@ public static class Program
             Console.WriteLine($"  archive       {archive.DatabasePath}");
             Console.WriteLine("                queryable at /api/history?channel=<id>&from=<iso>&to=<iso>");
         }
+
+        ComputedChannelSetup.Attach(options, console.Server);
 
         TelemetryIngestPump? pump = source is null
             ? null

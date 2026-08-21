@@ -35,6 +35,7 @@ Two portability details that were silently broken and are now explicit:
 |---|---------|----------------|-----------|-------|
 | 1 | Auto-Healing & RingBuffer | `Infrastructure.Serial.AutoReconnectEngine`, `Core.Collections.RingBuffer<T>`, `Serial.ZeroLossPacketBuffer` | M1 | Built |
 | 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` via `/api/aligned` | M1 | Built |
+| 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`, declared by profile or `--computed` | M2 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -557,7 +558,65 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 1,028 passing, 0 failing** (960 portable + 68 desktop) — about 2 m 35 s with
+### The number a converter is judged by, which nothing reports
+Every quantity this product showed was something a device had said. For a DC-DC converter that is a
+real gap: the figure of merit is efficiency, and no converter has an efficiency pin. It is
+`Pout / Pin` — four measurements multiplied and divided, arriving from two MCUs at two rates and
+never at the same moment. The bundled example profile could not even express the halves, because it
+declared four voltages and no current at all.
+
+`/api/computed` serves expressions declared by the host, evaluated over `/api/aligned` rather than
+over the latest value of each input. That distinction is the whole feature: multiplying a voltage
+from now by a current from 300 ms ago gives a power that was never drawn, and it prints like any
+other number. Measured against a live host, at an instant just past the last sample:
+
+```
+dab.p_in  Unavailable  'dab.bus_voltage' has no reading at this instant; the nearest is
+                        10.58s away (HeldAfter), and holding it would describe a different moment
+          inputs: dab.bus_voltage = 403 V (HeldAfter), dab.input_current = 24.49 A (HeldAfter)
+```
+
+Both values were available. The naive implementation multiplies them and reports 9,869 W.
+
+**Wiring it meant giving the expression tree a way to say "no value".** `AstNode.Evaluate` took a
+resolver returning `double`, so a channel that had never reported and a channel reading zero volts
+were the same answer — the defect `AlignedSample` exists to remove from the alignment path, present
+again one layer up and worse here, because arithmetic hides it: a missing denominator makes a ratio
+infinite and a missing numerator makes it exactly zero. Three more inventions came out with it: an
+unknown function name evaluated to `0.0`, so `power(v, i)` read as zero watts forever; `min(x)` with
+one argument answered `x`; and a division by zero returned infinity. All four are now refusals, and
+the two that are decidable from the text — an unknown name, the wrong number of arguments — are
+refused when the host starts rather than once per sample.
+
+**Efficiency is deliberately not declared on the bundled profile.** Declared there it measured
+116.1% on a live run, correctly computed from inputs that do not constrain each other: the simulator
+wanders every channel independently, on purpose, so it never invents a correlation nobody put there
+— and efficiency is a claim about the relationship between the two sides of a converter, which is
+exactly the relationship the simulator refuses to model. Narrowing the current ranges until the
+quotient looked plausible would have fixed the appearance and not the meaning. What the profile does
+declare is safe on any inputs, because each name states an operation rather than a physical
+relationship: `dab.p_in`, `psfb.p_out`, `psfb.conversion_ratio`. On hardware the inputs are
+correlated by physics, and efficiency belongs on the command line where the operator states it about
+their own rig.
+
+**An unqualified channel name is resolved against what has actually arrived.** A profile calls a
+channel `dab.bus_voltage`; the store keys it `SIM:COM3.dab.bus_voltage`, because the same quantity
+from two converters has to stay two series. Both names are right and neither can be changed to match
+the other. When two nodes report the same channel the request is refused and both keys are named,
+because choosing one would compute a converter's efficiency from another converter's current and the
+answer would look correct.
+
+Two more defects surfaced while wiring this. `--simulate --profile does-not-exist` printed its error
+and then ran with an empty timeline under exit code 0, which is indistinguishable from a rig nobody
+has plugged in yet; a requested source that cannot be opened now ends the run. And `verify_dab_console.js`
+was itself unreliable in two ways: it waited on the HTTP response but not on the page's own
+`fetch().then(json).then(render)` chain, so it passed against a warm host and reported an empty panel
+against a fresh one; and it asserted that three live voltages differ, which is a coincidence rather
+than a property — the grid and DC bus ranges overlap, so two unrelated channels rounding to the same
+integer failed a page that was working. Both are fixed at the cause, the second by injecting three
+distinct values and checking each lands in its own card.
+
+**Suite: 1,067 passing, 0 failing** (999 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

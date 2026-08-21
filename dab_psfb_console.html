@@ -142,6 +142,13 @@
         border-radius: var(--radius);
         padding: 16px 18px;
     }
+    #derived-panel { margin-top: 16px; }
+    .derived-note { font-size: 12px; line-height: 1.7; color: var(--text-3); margin: 0 0 14px; }
+    .derived-note em { color: var(--text-2); font-style: normal; border-bottom: 1px dotted var(--text-3); }
+    #derived-table td.val { font-variant-numeric: tabular-nums; }
+    #derived-table td.expr { font-size: 11px; color: var(--text-3); word-break: break-all; }
+    #derived-table tr.unavailable td.val { color: var(--text-3); }
+
     .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 12px; font-weight: 600; }
 
     table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -186,6 +193,19 @@
             <div id="log"><div class="empty">아직 상태 변화가 없습니다.</div></div>
         </div>
     </div>
+
+    <div class="panel" id="derived-panel">
+        <h2>계산 채널 &mdash; 측정값이 아니라 계산된 값입니다</h2>
+        <p class="derived-note">
+            전력도 효율도 어떤 장비가 보고하는 값이 아닙니다. 여러 채널을 <em>한 시점으로 맞춘 뒤</em>
+            계산한 것이고, 입력 중 하나라도 그 시점의 값이 없으면 값을 내지 않습니다 &mdash;
+            지금 전압에 300 ms 전 전류를 곱한 전력은 실제로 흐른 적이 없는 전력이기 때문입니다.
+        </p>
+        <table id="derived-table">
+            <thead><tr><th>채널</th><th>값</th><th>식</th><th>상태</th></tr></thead>
+            <tbody><tr><td colspan="4" class="empty">/api/computed 를 읽는 중…</td></tr></tbody>
+        </table>
+    </div>
 </main>
 
 <script src="telemetry-client.js"></script>
@@ -200,6 +220,8 @@
         { id: 'grid.voltage',        name: '계통 전압',      unit: 'V', min: 0,   max: 440, dp: 0 },
         { id: 'dab.bus_voltage',     name: 'DAB 버스 전압',  unit: 'V', min: 350, max: 450, dp: 0 },
         { id: 'psfb.output_voltage', name: 'PSFB 출력 전압', unit: 'V', min: 38,  max: 54,  dp: 2 },
+        { id: 'dab.input_current',   name: 'DAB 입력 전류',  unit: 'A', min: 0,   max: 40,  dp: 2 },
+        { id: 'psfb.output_current', name: 'PSFB 출력 전류', unit: 'A', min: 0,   max: 260, dp: 1 },
         { id: 'server.load',         name: '서버 부하',      unit: '%', min: 10,  max: 100, dp: 1 }
     ];
 
@@ -382,6 +404,53 @@
             document.getElementById('stage-' + k).classList.toggle('stale', now - st.at > STALE_MS);
         });
     }, 1000);
+
+    // ---- 계산 채널 -------------------------------------------------------
+    // 스트림으로 오지 않습니다. 계산 채널은 여러 채널을 한 시점으로 맞춘 뒤에야 값이 생기고,
+    // 그 정렬은 호스트가 합니다. 여기서 최신값끼리 곱해 버리면 화면마다 다른 효율이 나옵니다.
+    function renderDerived(payload) {
+        var body = document.querySelector('#derived-table tbody');
+        body.innerHTML = '';
+
+        if (!payload || payload.Status !== 'Success') {
+            var why = (payload && payload.Reason) || '/api/computed 에 닿지 못했습니다';
+            body.innerHTML = '<tr><td colspan="4" class="empty">' + why + '</td></tr>';
+            return;
+        }
+
+        var rows = payload.Channels || [];
+        if (rows.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="empty">선언된 계산 채널이 없습니다.</td></tr>';
+            return;
+        }
+
+        rows.forEach(function (c) {
+            var tr = document.createElement('tr');
+            var has = c.Value !== null && c.Value !== undefined;
+            if (!has) tr.className = 'unavailable';
+
+            // 값이 없을 때 0 이나 마지막 값을 넣지 않습니다. 그 둘은 읽는 사람에게
+            // 측정값과 구별되지 않습니다.
+            var shown = has ? (Math.round(c.Value * 10000) / 10000) + (c.Unit ? ' ' + c.Unit : '') : '—';
+
+            tr.innerHTML =
+                '<td class="mono">' + c.Id + '</td>' +
+                '<td class="mono val">' + shown + '</td>' +
+                '<td class="mono expr">' + c.Expression + '</td>' +
+                '<td class="' + (has ? '' : 'empty') + '">' + (has ? '계산됨' : (c.Reason || '값 없음')) + '</td>';
+            body.appendChild(tr);
+        });
+    }
+
+    function pollDerived() {
+        fetch('/api/computed')
+            .then(function (r) { return r.json(); })
+            .then(renderDerived)
+            .catch(function (e) { renderDerived(null); });
+    }
+
+    pollDerived();
+    setInterval(pollDerived, 2000);
 
     // ---- 연결 -----------------------------------------------------------
     var PORT = new URLSearchParams(location.search).get('port')

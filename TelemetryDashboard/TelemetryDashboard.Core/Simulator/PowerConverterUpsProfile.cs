@@ -58,7 +58,44 @@ internal static class PowerConverterUpsProfile
                 Id = SimulatorChannelIds.ServerLoad,
                 Label = "서버 부하", Unit = "%",
                 Minimum = 10, Maximum = 100, Nominal = 82.4, Decimals = 1
+            },
+            new ProfileChannel
+            {
+                Id = SimulatorChannelIds.DabInputCurrent,
+                Label = "DAB 입력 전류", Unit = "A",
+                Minimum = 0, Maximum = 40, Nominal = 25, Decimals = 2
+            },
+            new ProfileChannel
+            {
+                Id = SimulatorChannelIds.PsfbOutputCurrent,
+                Label = "PSFB 출력 전류", Unit = "A",
+                Minimum = 0, Maximum = 260, Nominal = 190, Decimals = 1
             }
+        ],
+        // 400 V x 25 A in, 48 V x 190 A out: a 10 kW battery converter feeding a 9 kW server rail.
+        //
+        // Efficiency is deliberately NOT declared here, and it is the number this chain is judged
+        // by. It would be wrong on this profile specifically: the simulator wanders every channel
+        // independently, on purpose, so that it never invents a correlation nobody put there --
+        // and efficiency is a claim about the relationship between the two sides of a converter,
+        // which is exactly the relationship the simulator refuses to model. Declared here, it
+        // measured 116.1% on a live run, correctly computed from inputs that do not constrain each
+        // other. Narrowing the current ranges until the quotient looked plausible would have fixed
+        // the appearance and not the meaning.
+        //
+        // On hardware the inputs are correlated by physics, and the declaration belongs on the
+        // command line where the operator states it about their own rig:
+        //   --computed "psfb.efficiency[%] = 100 * psfb.output_voltage * psfb.output_current
+        //                                    / (dab.bus_voltage * dab.input_current)"
+        //
+        // What is declared below is safe on any inputs, because each name states an operation
+        // rather than a physical relationship: a product of two channels is that product whatever
+        // the channels are doing.
+        Computed =
+        [
+            "dab.p_in[W] = dab.bus_voltage * dab.input_current",
+            "psfb.p_out[W] = psfb.output_voltage * psfb.output_current",
+            "psfb.conversion_ratio = psfb.output_voltage / dab.bus_voltage"
         ],
         Scenarios =
         [
