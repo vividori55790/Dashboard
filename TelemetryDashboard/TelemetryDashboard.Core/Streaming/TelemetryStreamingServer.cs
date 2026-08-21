@@ -44,6 +44,15 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
 
     public TimeTravelDvrPlayer DvrPlayer { get; } = new();
 
+    /// <summary>The durable archive to serve <c>/api/history</c> from, when the host keeps one.</summary>
+    /// <remarks>
+    /// Settable rather than constructed here because the store belongs to the host's lifetime, not
+    /// the server's: it has to be flushed and closed after the last sample, which is a shutdown
+    /// ordering the server does not own. Null means this host keeps no archive, and the endpoint
+    /// says so rather than returning an empty result that reads like a quiet machine.
+    /// </remarks>
+    public Interfaces.IDataLogger? Archive { get; set; }
+
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>
     public event EventHandler<string>? CommandReceived;
 
@@ -238,6 +247,50 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
         catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or IOException)
         {
             // Client disconnected mid-request.
+        }
+        catch (Exception ex)
+        {
+            // Anything else used to escape here into a fire-and-forget Task.Run, where it was never
+            // observed and the response was never closed -- so the caller waited forever. A hung
+            // request is the worst answer available: it is indistinguishable from a slow query, a
+            // wedged server and a dropped network, and none of those lead anyone to the fault.
+            //
+            // Found by the first endpoint that threw. Every route before it happened not to.
+            Console.Error.WriteLine($"[http] {context.Request.Url?.AbsolutePath} failed: {ex}");
+            await FailAsync(context, ex).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Answers a failed request with a 500 rather than leaving the caller waiting.</summary>
+    /// <remarks>
+    /// The message names the exception type and its text. This endpoint has no authentication and
+    /// binds loopback by default, so the reader is the operator, and withholding the reason from
+    /// them buys nothing.
+    /// </remarks>
+    private static async Task FailAsync(HttpListenerContext context, Exception ex)
+    {
+        try
+        {
+            context.Response.StatusCode = 500;
+            byte[] body = System.Text.Encoding.UTF8.GetBytes(
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    status = "Error",
+                    reason = $"{ex.GetType().Name}: {ex.Message}",
+                    path = context.Request.Url?.AbsolutePath
+                }));
+
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.ContentLength64 = body.Length;
+            await context.Response.OutputStream.WriteAsync(body).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // The response was already begun or the client is gone; closing below is all that is left.
+        }
+        finally
+        {
+            try { context.Response.Close(); } catch (Exception) { }
         }
     }
 

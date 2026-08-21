@@ -35,6 +35,7 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = defaults.ChannelMapPath;
         ProfileId = defaults.ProfileId;
         DashboardExportPath = defaults.DashboardExportPath;
+        ArchivePath = defaults.ArchivePath;
         ReplayPath = defaults.ReplayPath;
         ReplaySpeed = defaults.ReplaySpeed;
         EmergencyStop = defaults.EmergencyStop;
@@ -64,6 +65,7 @@ internal sealed class HostOptionsDraft
     public string? ChannelMapPath;
     public string? ProfileId;
     public string? DashboardExportPath;
+    public string? ArchivePath;
     public string? ReplayPath;
     public double ReplaySpeed = HostOptions.DefaultReplaySpeed;
     public bool EmergencyStop;
@@ -94,6 +96,7 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = ChannelMapPath,
         ProfileId = ProfileId,
         DashboardExportPath = DashboardExportPath,
+        ArchivePath = ArchivePath,
         ReplayPath = ReplayPath,
         ReplaySpeed = ReplaySpeed,
         EmergencyStop = EmergencyStop,

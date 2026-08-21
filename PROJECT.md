@@ -487,6 +487,35 @@ A finite source ending is now reported. A stream that simply goes quiet is indis
 source that died, and the alignment endpoint agrees — after the replay finished, every channel came
 back `HeldAfter` rather than as a current reading.
 
+### The cross-platform half of the product could not remember anything
+The headless host is what "runs on every computer" rests on — the shell is Windows-only. It had no
+durable store at all: a CSV transcript and a few minutes of in-memory ring. *What did this channel
+do last Tuesday* had no answer anywhere on Linux or macOS, and every restart began from nothing.
+
+`telemetry-host --archive <file>` keeps a SQLite archive of every ingested sample, served by
+`/api/history` by node, channel and time window. A bounded ring in front of a drain, the same shape
+the shell uses — writing to SQLite on the ingest thread would put a disk flush between two samples,
+so a slow disk would appear as a gap in the telemetry rather than as a slow disk. What the ring
+cannot hold is counted, because a silent gap in an archive is discovered months later by someone who
+assumes the machine was quiet.
+
+Verified by restarting: one process archives a UPS run, is killed, and a **second process with no
+source at all** answers from the same file.
+
+```
+new process:  seriesChannels=0  dvrFrames=0        (nothing live, as it must be)
+/api/history: SIM:COM3.psfb.output_voltage  48.090 V  48.360 V  48.460 V
+```
+
+**And it found a defect in the server that had nothing to do with the archive.** `DispatchAsync`
+caught exactly three exception types; anything else escaped into a fire-and-forget `Task.Run`, was
+never observed, and left the response unclosed — so the caller waited forever. A hung request is the
+worst answer available: it is indistinguishable from a slow query, a wedged server and a dropped
+network, and none of those lead anyone to the fault. Every route before this one happened not to
+throw. A failing route now returns 500 with the reason, and that change named my own bug in the very
+next request — `RoundtripKind | AdjustToUniversal` is a combination .NET rejects *before* it looks
+at the input, so the endpoint threw even when given no timestamp at all.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
@@ -498,7 +527,7 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 1,008 passing, 0 failing** (940 portable + 68 desktop) — about 2 m 35 s with
+**Suite: 1,018 passing, 0 failing** (950 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

@@ -46,6 +46,10 @@ public static class UsageText
               --simulate        Run the virtual simulator instead of hardware. Every frame it
                                 produces is marked simulated=true and its node id is prefixed
                                 'SIM:'. Env: {EnvironmentVariables.Simulate}=1
+              --archive <file>  Keep a durable SQLite archive of every ingested sample, queryable
+                                afterwards at /api/history by node, channel and time window. A CSV
+                                recording is a transcript; this is a store you can ask questions of,
+                                and it is the only thing here that outlives the process.
               --replay <file>   Play a recorded CSV back through the live pipeline instead of
                                 reading a source. Routing, analytics, the console, the spectrum
                                 and the DVR all behave as they do live; every frame says REPLAY,

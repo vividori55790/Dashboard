@@ -133,6 +133,11 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                case "--archive":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawArchive)) return ArgumentCursor.MissingValue(argument);
+                    draft.ArchivePath = Path.GetFullPath(rawArchive);
+                    break;
+
                 case "--replay":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawReplay)) return ArgumentCursor.MissingValue(argument);
                     if (!File.Exists(rawReplay)) return ArgumentCursor.Fail($"recording '{rawReplay}' does not exist.");

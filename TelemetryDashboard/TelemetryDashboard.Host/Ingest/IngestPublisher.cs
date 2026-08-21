@@ -43,7 +43,8 @@ public sealed class IngestPublisher
         bool isSimulated,
         TelemetryCsvRecorder? recorder,
         IngestRateGuard guard,
-        DetectorPanel? detectors = null)
+        DetectorPanel? detectors = null,
+        ArchiveSink? archive = null)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _origin = origin ?? string.Empty;
@@ -51,6 +52,7 @@ public sealed class IngestPublisher
         _recorder = recorder;
         _detectors = detectors ?? AnalyticsSetup.Shared.Panel;
         Guard = guard ?? throw new ArgumentNullException(nameof(guard));
+        _archive = archive;
     }
 
     /// <summary>The rate guard protecting the stream, the console and the recorder.</summary>
@@ -93,6 +95,9 @@ public sealed class IngestPublisher
     /// </remarks>
     public event EventHandler<ScoredSample>? SampleScored;
 
+    /// <summary>The durable archive, when one was asked for.</summary>
+    private readonly ArchiveSink? _archive;
+
     /// <summary>Samples that reached the wire.</summary>
     public long SamplesPublished => Interlocked.Read(ref _published);
 
@@ -133,6 +138,11 @@ public sealed class IngestPublisher
             analysis.PredictedValueIn60s,
             analysis.HasVerdict ? "OK" : "UNSCORED",
             analysis.ForecastHorizonSec);
+
+        // Archived under the marked node, so the store agrees with the wire and with the CSV about
+        // what a channel is called. The score is not archived: a verdict stored beside the value it
+        // came from is a second copy that disagrees with the detector after any change to it.
+        _archive?.Offer(new TelemetryPacket(node, packet.Variable, packet.Value, packet.Unit, packet.Timestamp));
 
         Interlocked.Increment(ref _published);
 

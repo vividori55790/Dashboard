@@ -95,9 +95,18 @@ public static class Program
             return ExitUsage;
         }
 
+        // Opened before the pump, so no sample is published before there is somewhere to keep it.
+        await using ArchiveSink? archive = ArchiveSink.Open(options.ArchivePath);
+        if (archive is not null)
+        {
+            console.Server.Archive = archive.Store;
+            Console.WriteLine($"  archive       {archive.DatabasePath}");
+            Console.WriteLine("                queryable at /api/history?channel=<id>&from=<iso>&to=<iso>");
+        }
+
         TelemetryIngestPump? pump = source is null
             ? null
-            : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap);
+            : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive);
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, (source as SerialTelemetrySource)?.SerialManager);
 
@@ -122,6 +131,10 @@ public static class Program
 
         await shutdown.WaitAsync().ConfigureAwait(false);
         await run.DrainAsync(shutdown).ConfigureAwait(false);
+
+        // After the drain, so the count covers the tail the ring was still holding.
+        if (archive is not null) Console.WriteLine("           " + archive.Summary());
+
         return 0;
     }
 

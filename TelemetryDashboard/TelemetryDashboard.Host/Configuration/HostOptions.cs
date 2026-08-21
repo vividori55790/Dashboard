@@ -130,6 +130,15 @@ public sealed class HostOptions
     /// </remarks>
     public string? ProfileId { get; init; }
 
+    /// <summary>SQLite file to archive every ingested sample into, or null for none.</summary>
+    /// <remarks>
+    /// Separate from <see cref="RecordingDirectory"/>, which writes CSV. A CSV is a transcript: to
+    /// answer a question about one channel last Tuesday you re-parse the whole file. The archive is
+    /// queryable by node, channel and time window, and <c>/api/history</c> serves it, so the
+    /// cross-platform half of the product finally has somewhere to look back.
+    /// </remarks>
+    public string? ArchivePath { get; init; }
+
     /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
     /// <remarks>
     /// Everything downstream behaves exactly as it does live, because from its side nothing is

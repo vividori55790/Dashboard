@@ -74,12 +74,14 @@ public sealed class TelemetryIngestPump
         ITelemetrySource source,
         TelemetryCsvRecorder? recorder = null,
         int maxChannelRatePerSecond = IngestRateGuard.DefaultMaxChannelRatePerSecond,
-        JsonChannelMap? jsonMap = null)
+        JsonChannelMap? jsonMap = null,
+        ArchiveSink? archive = null)
     {
         _jsonMap = jsonMap;
         _source = source;
         _publisher = new IngestPublisher(
-            server, source.Origin, source.IsSimulated, recorder, new IngestRateGuard(maxChannelRatePerSecond));
+            server, source.Origin, source.IsSimulated, recorder,
+            new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive);
         _records = new IngestRecordPath(_publisher.PublishAsync, source.IsSimulated);
 
         // So a plugin, which is delivered to from inside the router, sees the same truth the wire
