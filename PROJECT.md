@@ -333,6 +333,46 @@ checks, including the one the old page could not have passed:
 Three voltages, three cards, each inside its own range. What the page *looks* like is still
 unverified — that needs a browser.
 
+### A spectrum endpoint, and the two defects it found
+`FftAnalyzerService` — a real radix-2 Cooley-Tukey transform, written in M2 — lived in
+`UI/ViewModels`. The headless host must never reference the WPF project, so the one place a
+spectrum reaches every client, an endpoint any browser can call, could not have it. Its address was
+the mistake, not its contents; it now sits in `Core/Analytics` behind `/api/spectrum`.
+
+The endpoint measures the sample rate from the timestamps rather than taking it from configuration,
+because a telemetry stream never arrives on a metronome and a spectrum labelled with an assumed rate
+puts every peak in the wrong place while looking entirely plausible. It removes the mean before
+transforming — a 400 V bus with a 2 V ripple is the ordinary case — and never reports bin zero as
+the peak, since the mean is the largest bin for nearly every channel and calling it a peak would
+make every spectrum look like it had found something.
+
+**Its first run against live data found a defect in the series store.** `TelemetryFrameRecorder`
+keyed channels on the node id and the JSON field name, and skipped `variable` because it is a
+string — so every channel of a profile was written into one series called `<node>.value`. A
+four-channel run served temperature, humidity, vibration and speed to `/api/series` as one
+interleaved mixture, which is what any browser drawing a chart was reading. The arithmetic said so
+plainly: the merged series reported **36 Hz for a 10 Hz channel**, and its spectrum peaked at
+**exactly half Nyquist** — the signature of alternating unrelated quantities. Keyed on node *and*
+variable, the same run reports 12 series and four distinct peaks.
+
+**And a defect in the simulator.** The drift period came from `channel.Id.GetHashCode()`, beside a
+comment claiming it was "stable across runs". .NET randomises string hashing per process: a probe
+measured 58, then 40, then 40 steps for `dab.bus_voltage` in three consecutive runs. That silently
+broke the promise the fixed `Seed` exists to make — seeding the noise but not the drift leaves a
+demonstration that looks different every time. FNV-1a replaces it.
+
+Verified against a running host by predicting each peak from the engine's formula, computed
+independently in Python, and comparing with what the endpoint measured over the wire:
+
+| channel | period | predicted | measured | error |
+|---|---|---|---|---|
+| `ambient.temperature` | 71 steps | 0.1268 Hz | 0.1230 Hz | 0.43 bins |
+| `ambient.humidity` | 58 | 0.1552 | 0.1582 | 0.34 |
+| `machine.vibration` | 76 | 0.1184 | 0.1142 | 0.48 |
+| `machine.speed` | 93 | 0.0968 | 0.0966 | 0.02 |
+
+All four within half a bin.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
@@ -344,7 +384,7 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 983 passing, 0 failing** (915 portable + 68 desktop) — about 2 m 35 s with
+**Suite: 993 passing, 0 failing** (925 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

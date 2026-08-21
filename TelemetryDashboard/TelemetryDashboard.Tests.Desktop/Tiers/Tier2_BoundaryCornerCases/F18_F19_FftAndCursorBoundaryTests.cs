@@ -1,3 +1,4 @@
+using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.UI.ViewModels;
 
 namespace TelemetryDashboard.Tests.Desktop.Tiers.Tier2_BoundaryCornerCases;

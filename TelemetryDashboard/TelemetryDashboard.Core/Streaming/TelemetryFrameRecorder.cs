@@ -50,7 +50,19 @@ public static class TelemetryFrameRecorder
             using JsonDocument document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Object) return;
 
+            // The channel a frame describes is its node *and* its variable. Keying on the node
+            // alone collapsed every channel of a profile into one series: a four-channel run wrote
+            // temperature, humidity, vibration and speed all into "<node>.value", interleaved, and
+            // /api/series served that mixture to any browser drawing a chart. It was visible in the
+            // arithmetic -- the merged series reported 36 Hz for a 10 Hz channel, and its spectrum
+            // peaked at exactly half Nyquist, which is what alternating unrelated quantities look
+            // like. Including the variable makes the key match the one the analytics engine already
+            // uses for the same sample.
             string node = ResolveNodeId(document.RootElement);
+            string channel = ResolveVariable(document.RootElement) is { } variable
+                ? $"{node}.{variable}"
+                : node;
+
             double? score = ResolveAnomalyScore(document.RootElement);
             double timestamp = TimeTravelDvrPlayer.UtcNowSeconds();
 
@@ -59,7 +71,7 @@ public static class TelemetryFrameRecorder
             // should call TelemetryStreamingServer.PublishSample with the sample's own timestamp.
             var sink = series is null ? default : new SeriesSink(series, SeriesClock.UtcNowSec());
 
-            RecordObject(dvr, document.RootElement, node, score, anomalyThreshold, timestamp, depth: 0, sink);
+            RecordObject(dvr, document.RootElement, channel, score, anomalyThreshold, timestamp, depth: 0, sink);
         }
         catch (JsonException)
         {
@@ -72,6 +84,23 @@ public static class TelemetryFrameRecorder
     {
         public void Append(string channel, double value) => Store?.Append(channel, value, TimestampSec);
     }
+
+    /// <summary>The variable a per-channel frame names, or null when it names none.</summary>
+    /// <remarks>
+    /// Only the canonical per-channel frame carries this. An aggregate frame -- several quantities
+    /// in one object -- has no single variable, and falls back to keying by node and field name,
+    /// which is correct for that shape because the field name <em>is</em> the quantity there.
+    /// </remarks>
+    private static string? ResolveVariable(JsonElement element) =>
+        element.TryGetProperty("variable", out JsonElement variable)
+        && variable.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(variable.GetString())
+            ? variable.GetString()
+            : null;
+
+    /// <summary>Whether a numeric field is the reading itself rather than something about it.</summary>
+    private static bool IsMeasurementField(string name) =>
+        string.Equals(name, "value", StringComparison.OrdinalIgnoreCase);
 
     private static void RecordObject(
         TimeTravelDvrPlayer dvr,
@@ -97,7 +126,13 @@ public static class TelemetryFrameRecorder
                 case JsonValueKind.Number when property.Value.TryGetDouble(out double value):
                     if (IsMetadataField(property.Name)) break;
 
-                    sink.Append($"{prefix}.{property.Name}", value);
+                    // "value" is the measurement, so it is the channel; anything else beside it --
+                    // a score, a forecast -- is a property of that channel and keeps its own name.
+                    string seriesKey = IsMeasurementField(property.Name)
+                        ? prefix
+                        : $"{prefix}.{property.Name}";
+
+                    sink.Append(seriesKey, value);
 
                     // A frame that carried no score field is recorded without a verdict rather
                     // than with a verdict of zero: the producer never judged this sample, and
@@ -105,7 +140,7 @@ public static class TelemetryFrameRecorder
                     // that was present came from upstream, so it is attributed as unidentified —
                     // real, but not reproducible by this system's own analyzer.
                     dvr.RecordFrame(
-                        $"{prefix}.{property.Name}",
+                        seriesKey,
                         value,
                         score ?? 0.0,
                         score.HasValue && score.Value >= threshold,

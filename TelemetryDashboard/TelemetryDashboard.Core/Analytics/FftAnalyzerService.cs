@@ -1,14 +1,20 @@
 using System;
 
-namespace TelemetryDashboard.UI.ViewModels;
+namespace TelemetryDashboard.Core.Analytics;
 
 /// <summary>
-/// Turns a block of time-domain samples into a magnitude spectrum for the frequency-domain scope.
+/// Turns a block of time-domain samples into a magnitude spectrum.
 /// </summary>
 /// <remarks>
 /// The transform is written out here rather than taken from a DSP package. The scope needs exactly
 /// one real-input forward FFT and nothing else, and a dependency whose surface is a hundred times
 /// larger than the use made of it is a liability every upgrade cycle.
+/// <para>
+/// It lived in <c>UI/ViewModels</c>, which is why nothing could reach it: the headless host must
+/// never reference the WPF project, so the one place a spectrum is useful to every client — an
+/// endpoint any browser can call — could not have it. A Fourier transform is an analytics concern
+/// and its address was the mistake, not its contents.
+/// </para>
 /// <para>
 /// Only the lower half of the spectrum is returned. The input is real, so the upper half is its
 /// complex-conjugate mirror and carries no information the lower half does not already hold.

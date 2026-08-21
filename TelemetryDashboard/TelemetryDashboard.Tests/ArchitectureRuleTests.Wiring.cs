@@ -69,7 +69,12 @@ public partial class ArchitectureRuleTests
         // GetCompatibleExtensions(hostApiVersion) to decide what may load, which is the one place
         // that rule is applied — the entry has stopped exempting anything.
         "FailureSnapshotExtractor",
-        "FftAnalyzerService",
+        // FftAnalyzerService retired from this baseline: it moved from UI/ViewModels to
+        // Core/Analytics and SpectrumEndpoint puts it behind /api/spectrum, so any browser on any
+        // platform can ask for a channel's frequency content. Its address was why nothing could
+        // reach it -- the headless host must never reference the WPF project, so the one place a
+        // spectrum is useful to every client could not have it. Its first run against live data
+        // found a defect in the series store, which was writing every channel into one series.
         "FunctionCallNode",
         "HeatmapInterpolationService",
         "KestrelWebServer",

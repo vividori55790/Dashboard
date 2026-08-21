@@ -467,6 +467,13 @@ public partial class ArchitectureRuleTests
         // file is the account of why an interlock that transmits to hardware is off by default and
         // refuses to pick its own port, which belongs beside the code that enforces it.
         "TelemetryDashboard.Host/Outbound/EmergencyInterlockRelay.cs",             // 157 lines
+
+        // The spectrum endpoint and the transform behind it. Both are one idea each -- a Fourier
+        // transform and the query that shapes its answer -- and the length is the account of what
+        // each field means, which is the difference between a spectrum a reader can trust and a
+        // row of numbers.
+        "TelemetryDashboard.Core/Streaming/SpectrumEndpoint.cs",                   // 171 lines
+        "TelemetryDashboard.Core/Analytics/FftAnalyzerService.cs",                 // 153 lines
     };
 
     [Fact]

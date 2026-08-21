@@ -42,6 +42,14 @@ public static class TelemetryHttpRoutes
                 await WriteJsonAsync(response, BuildReport(server, context.Request.QueryString)).ConfigureAwait(false);
                 return;
 
+            case "/api/spectrum":
+                await WriteJsonAsync(response, SpectrumEndpoint.Compute(
+                    server.Series,
+                    context.Request.QueryString["channel"] ?? string.Empty,
+                    ReadDouble(context.Request.QueryString["windowSec"], SpectrumEndpoint.DefaultWindowSec),
+                    SeriesClock.UtcNowSec())).ConfigureAwait(false);
+                return;
+
             case "/api/series":
                 await WriteSeriesAsync(response, server, context.Request.QueryString).ConfigureAwait(false);
                 return;
@@ -69,7 +77,7 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>

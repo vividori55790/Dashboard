@@ -281,12 +281,45 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine
 
         if (span <= 0) return setpoint;
 
-        // Period derived from the channel id, so it is stable across runs and differs per channel.
-        double period = 40 + Math.Abs(channel.Id.GetHashCode() % 60);
+        double period = 40 + StableHash(channel.Id) % 60;
         double drift = span * 0.08 * Math.Sin(2 * Math.PI * step / period);
         double noise = span * 0.01 * (_random.NextDouble() * 2 - 1);
 
         return Math.Clamp(setpoint + drift + noise, channel.Minimum, channel.Maximum);
+    }
+
+    /// <summary>
+    /// A hash that is the same in every process, so a channel keeps its period across runs.
+    /// </summary>
+    /// <remarks>
+    /// This was <c>channel.Id.GetHashCode()</c>, and the comment beside it said the period was
+    /// "stable across runs". It was not. .NET randomises string hashing per process, so the same
+    /// channel drifted with a different period every time the application started — measured here
+    /// at 58, then 40, then 40 steps for <c>dab.bus_voltage</c> across three consecutive runs.
+    /// <para>
+    /// That silently broke the promise <see cref="Seed"/> exists to make. Seeding the noise but not
+    /// the drift leaves a demonstration that looks different every time and a waveform no test can
+    /// depend on, which is the whole reason determinism was chosen here.
+    /// </para>
+    /// <para>
+    /// FNV-1a, 32-bit, over the UTF-16 code units. Not cryptographic and not meant to be: the only
+    /// property needed is that the same string gives the same number on every machine and in every
+    /// process.
+    /// </para>
+    /// </remarks>
+    private static uint StableHash(string value)
+    {
+        const uint OffsetBasis = 2166136261;
+        const uint Prime = 16777619;
+
+        uint hash = OffsetBasis;
+        foreach (char c in value ?? string.Empty)
+        {
+            hash = (hash ^ (byte)(c & 0xFF)) * Prime;
+            hash = (hash ^ (byte)(c >> 8)) * Prime;
+        }
+
+        return hash;
     }
 
     /// <summary>Strips the delimiters the frame format uses, so an id cannot break the frame.</summary>

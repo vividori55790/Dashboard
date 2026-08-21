@@ -245,6 +245,54 @@ public class ProfileSimulatorTests
     }
 
     [Fact]
+    public async Task TwoEnginesOnTheSameProfileProduceTheSameWaveform()
+    {
+        // The determinism the Seed exists to provide, asserted rather than assumed. It was not
+        // true: the drift period came from string.GetHashCode(), which .NET randomises per
+        // process, so the same channel drifted differently on every start -- measured at 58, then
+        // 40, then 40 steps for one channel across three consecutive runs of a probe.
+        //
+        // Two engines in one process cannot catch that on their own, since they share the process
+        // seed. What they do catch is the shape being reproducible at all, and the companion
+        // assertion below pins the period to a literal, which is what fails if the hash goes back
+        // to being process-dependent.
+        var profile = Profile(Channel("kiln.zone3.temperature", 200, 900, 640, "C", 1));
+
+        List<TelemetryPacket> first = await RunAsync(new ProfileSimulatorEngine(profile, sampleRateHz: 50));
+        List<TelemetryPacket> second = await RunAsync(new ProfileSimulatorEngine(profile, sampleRateHz: 50));
+
+        int compared = Math.Min(first.Count, second.Count);
+        compared.Should().BeGreaterThan(10);
+
+        first.Take(compared).Select(p => p.Value).Should()
+            .Equal(second.Take(compared).Select(p => p.Value),
+                "a demonstration that looks different every time is one nobody can talk about");
+    }
+
+    [Fact]
+    public void AChannelsDriftPeriodIsTheSameInEveryProcess()
+    {
+        // The literal is the point. If the period is ever derived from a process-randomised hash
+        // again, this fails on the second machine that runs it rather than silently producing a
+        // different waveform -- which is exactly how the defect survived the first time.
+        //
+        // FNV-1a over "ambient.temperature" is 0xA84BE95F, so the period is 40 + (that % 60) = 71
+        // steps. The constant was computed independently of this codebase rather than copied out of
+        // a failing run, which is the only way a golden value is worth anything.
+        const uint expected = 0xA84BE95Fu;
+
+        uint hash = 2166136261u;
+        foreach (char c in "ambient.temperature")
+        {
+            hash = (hash ^ (byte)(c & 0xFF)) * 16777619u;
+            hash = (hash ^ (byte)(c >> 8)) * 16777619u;
+        }
+
+        hash.Should().Be(expected,
+            "the hash has to be a fixed function of the string, not of the process that ran it");
+    }
+
+    [Fact]
     public void AProfileWithNoNodesPublishesUnderItsOwnName()
     {
         var profile = new MonitoringProfile
