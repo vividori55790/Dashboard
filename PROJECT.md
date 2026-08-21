@@ -456,6 +456,37 @@ server.load          75.59 %   Interpolated      answered the instant: 4 of 4
 ago=-3   HeldAfter  gap=3.07s  answers=false      ago=0.5  Interpolated  answers=true
 ```
 
+### Playing a recording back through the pipeline that wrote it
+`SessionReplayPlayer` could load a recorded CSV from M2 and was constructed by nothing, so a
+recording could be written and never read by the program that wrote it. `telemetry-host --replay
+<file>` attaches it as a source, which makes the whole stack work on recorded data — routing, the
+analytics engine, the console, the spectrum, the alignment endpoint and the DVR all behave exactly
+as they do live, because from their side nothing is different.
+
+Frames are re-encoded as `$TELE` lines rather than pushed in as packets, so the parser and the
+routing rules are exercised by the replay too. The recorded z-score is deliberately dropped and
+recomputed: a score stored beside the value it came from is a second copy that disagrees with the
+detector after any change to it. `Origin` is `REPLAY`, because a recording played back is not a
+live reading.
+
+Wiring it found that `SessionCsvRowParser` used the `Channel` column alone as the channel name and
+**dropped `NodeId`**, so two devices reporting the same channel name collapsed into one series on
+replay and overwrote each other — the same defect as in the series store, in a second place.
+
+Verified by a full round trip against the running host: record 20 s of the UPS profile, replay it at
+4×, and compare what came out of `/api/series` with the CSV.
+
+```
+recorded : 173 samples, 120 distinct
+replayed : 173 samples, 120 distinct
+recorded values missing from replay : 0
+replayed values not in recording    : 0     VALUES MATCH EXACTLY
+```
+
+A finite source ending is now reported. A stream that simply goes quiet is indistinguishable from a
+source that died, and the alignment endpoint agrees — after the replay finished, every channel came
+back `HeldAfter` rather than as a current reading.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
@@ -467,7 +498,7 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 1,001 passing, 0 failing** (933 portable + 68 desktop) — about 2 m 35 s with
+**Suite: 1,008 passing, 0 failing** (940 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

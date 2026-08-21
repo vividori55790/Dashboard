@@ -130,6 +130,20 @@ public sealed class HostOptions
     /// </remarks>
     public string? ProfileId { get; init; }
 
+    /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
+    /// <remarks>
+    /// Everything downstream behaves exactly as it does live, because from its side nothing is
+    /// different: the frames go through the parser, the routing rules and the analytics engine.
+    /// What differs is that every frame says <c>REPLAY</c>, so a console cannot show last week's
+    /// incident as though it were happening now.
+    /// </remarks>
+    public string? ReplayPath { get; init; }
+
+    /// <summary>How fast to play a recording back. 1 is real time.</summary>
+    public double ReplaySpeed { get; init; } = DefaultReplaySpeed;
+
+    public const double DefaultReplaySpeed = 1.0;
+
     /// <summary>Whether an anomaly may transmit a command back to the device. Off unless asked.</summary>
     /// <remarks>
     /// This is the one flag in the host that makes the program <em>act on</em> the machine rather

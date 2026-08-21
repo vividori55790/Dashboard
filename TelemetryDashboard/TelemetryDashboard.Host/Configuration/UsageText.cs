@@ -1,6 +1,8 @@
 using TelemetryDashboard.Host.Outbound;
 using TelemetryDashboard.Host.Startup;
 
+using TelemetryDashboard.Host.Ingest;
+
 namespace TelemetryDashboard.Host.Configuration;
 
 /// <summary>
@@ -44,6 +46,15 @@ public static class UsageText
               --simulate        Run the virtual simulator instead of hardware. Every frame it
                                 produces is marked simulated=true and its node id is prefixed
                                 'SIM:'. Env: {EnvironmentVariables.Simulate}=1
+              --replay <file>   Play a recorded CSV back through the live pipeline instead of
+                                reading a source. Routing, analytics, the console, the spectrum
+                                and the DVR all behave as they do live; every frame says REPLAY,
+                                so a recording is never mistaken for a current reading. The
+                                recorded score is dropped and recomputed, because a stored verdict
+                                disagrees with the detector after any change to it.
+              --replay-speed <x>
+                                How fast to play back. Default {HostOptions.DefaultReplaySpeed}, meaning real time. Gaps
+                                longer than {ReplayTelemetrySource.MaximumGapSec:0.#}s are compressed and counted.
               --profile <id>    Which monitoring profile to use. Applies to --simulate and to
                                 --export-dashboard. An unknown id is refused and the available
                                 ids are listed, rather than quietly falling back.

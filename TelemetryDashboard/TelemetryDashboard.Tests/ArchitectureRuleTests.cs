@@ -478,6 +478,11 @@ public partial class ArchitectureRuleTests
         // row of numbers.
         "TelemetryDashboard.Core/Streaming/SpectrumEndpoint.cs",                   // 171 lines
         "TelemetryDashboard.Core/Analytics/FftAnalyzerService.cs",                 // 153 lines
+
+        // Playing a recording back through the pipeline that wrote it. One idea, and the length is
+        // mostly the account of why a replay is marked REPLAY rather than simulated, and why the
+        // recorded verdict is dropped and recomputed instead of replayed.
+        "TelemetryDashboard.Host/Ingest/ReplayTelemetrySource.cs",                 // 168 lines
     };
 
     [Fact]

@@ -35,6 +35,8 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = defaults.ChannelMapPath;
         ProfileId = defaults.ProfileId;
         DashboardExportPath = defaults.DashboardExportPath;
+        ReplayPath = defaults.ReplayPath;
+        ReplaySpeed = defaults.ReplaySpeed;
         EmergencyStop = defaults.EmergencyStop;
         EmergencySigma = defaults.EmergencySigma;
         EmergencyCommand = defaults.EmergencyCommand;
@@ -62,6 +64,8 @@ internal sealed class HostOptionsDraft
     public string? ChannelMapPath;
     public string? ProfileId;
     public string? DashboardExportPath;
+    public string? ReplayPath;
+    public double ReplaySpeed = HostOptions.DefaultReplaySpeed;
     public bool EmergencyStop;
     public double EmergencySigma = HostOptions.DefaultEmergencySigma;
     public string EmergencyCommand = HostOptions.DefaultEmergencyCommand;
@@ -90,6 +94,8 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = ChannelMapPath,
         ProfileId = ProfileId,
         DashboardExportPath = DashboardExportPath,
+        ReplayPath = ReplayPath,
+        ReplaySpeed = ReplaySpeed,
         EmergencyStop = EmergencyStop,
         EmergencySigma = EmergencySigma,
         EmergencyCommand = EmergencyCommand,

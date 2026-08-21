@@ -133,6 +133,22 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                case "--replay":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawReplay)) return ArgumentCursor.MissingValue(argument);
+                    if (!File.Exists(rawReplay)) return ArgumentCursor.Fail($"recording '{rawReplay}' does not exist.");
+                    draft.ReplayPath = Path.GetFullPath(rawReplay);
+                    break;
+
+                case "--replay-speed":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawSpeed)) return ArgumentCursor.MissingValue(argument);
+                    if (!double.TryParse(rawSpeed, NumberStyles.Float, CultureInfo.InvariantCulture, out double speed)
+                        || !double.IsFinite(speed) || speed <= 0)
+                    {
+                        return ArgumentCursor.Fail($"'{rawSpeed}' is not a positive replay speed.");
+                    }
+                    draft.ReplaySpeed = speed;
+                    break;
+
                 case "--emergency-stop":
                     draft.EmergencyStop = true;
                     break;
@@ -245,6 +261,20 @@ public static class CommandLineParser
             return ArgumentCursor.Fail(
                 "--emergency-sigma, --emergency-command and --emergency-cooldown only apply with "
                 + "--emergency-stop; tuning an interlock that is switched off does nothing.");
+        }
+
+        // One host reads one source. A replay mixed with a live feed would interleave last week's
+        // frames with this minute's on one timeline, and nothing downstream could separate them.
+        if (draft.ReplayPath is not null
+            && (draft.SerialPort is not null || draft.Simulate
+                || draft.SseEndpoint is not null || draft.PollEndpoint is not null))
+        {
+            return ArgumentCursor.Fail("--replay cannot be combined with another source: one host reads one source.");
+        }
+
+        if (draft.ReplayPath is null && draft.ReplaySpeed != HostOptions.DefaultReplaySpeed)
+        {
+            return ArgumentCursor.Fail("--replay-speed only applies with --replay.");
         }
 
         if (draft.PollEndpoint is not null && (draft.SseEndpoint is not null || draft.SerialPort is not null || draft.Simulate))

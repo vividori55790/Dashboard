@@ -115,6 +115,18 @@ public sealed class TelemetryIngestPump
                     await _records.OfferPacketAsync(packet, raw.PortName, cancellationToken).ConfigureAwait(false);
                 }
             }
+
+            // The loop ending without cancellation means the source ran out. A live feed does not
+            // do that, but a recording does -- and a stream that simply goes quiet is
+            // indistinguishable from a source that died, which is the one thing this project
+            // refuses to leave ambiguous.
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                SourceExhausted = true;
+                Console.WriteLine(
+                    $"[ingest] {_source.Origin} source reached its end after {SamplesPublished:N0} sample(s). "
+                    + "The console keeps serving what was read; no more will arrive.");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -126,6 +138,13 @@ public sealed class TelemetryIngestPump
             Console.Error.WriteLine($"[ingest] source stopped: {FaultMessage}");
         }
     }
+
+    /// <summary>Whether the source ended on its own rather than being cancelled.</summary>
+    /// <remarks>
+    /// True only for a finite source -- a replayed recording. A serial port or a stream that stops
+    /// is a fault and is reported through <see cref="FaultMessage"/> instead.
+    /// </remarks>
+    public bool SourceExhausted { get; private set; }
 
     /// <summary>The channel map this run is projecting JSON documents through, if any.</summary>
     public JsonChannelMap? JsonMap => _jsonMap;

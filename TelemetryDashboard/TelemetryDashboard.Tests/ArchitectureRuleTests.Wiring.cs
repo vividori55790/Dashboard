@@ -107,7 +107,11 @@ public partial class ArchitectureRuleTests
         "SampleTelemetryPlugin",
         "SamplingChannelRow",
         "ScopeViewModel",
-        "SessionReplayPlayer",
+        // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
+        // source behind --replay, so a recording can be played back through the pipeline that wrote
+        // it and the whole stack -- routing, analytics, console, spectrum, alignment, DVR -- works
+        // on recorded data. Wiring it found that the row parser dropped the NodeId column, so two
+        // devices reporting the same channel name collapsed into one series on replay.
         "SignalGeneratorService",
         // SlackClient, MqttPublisher and GitHubUpdater retired from this baseline: the headless
         // host now relays anomalies to a webhook (--slack-webhook), republishes every scored sample

@@ -6,7 +6,8 @@ namespace TelemetryDashboard.Infrastructure.Replay;
 
 /// <summary>
 /// Reads one row of the recorder's CSV layout
-/// (<c>Timestamp_ISO,Timestamp_Sec,NodeId,Channel,Value,ZScore,IsAnomaly,Predicted_60s,Status</c>).
+/// (<c>Timestamp_ISO,Timestamp_Sec,NodeId,Channel,Value,ZScore,IsAnomaly,Predicted_Value,
+/// Predicted_Horizon_Sec,Status</c>).
 /// </summary>
 /// <remarks>
 /// The recorder writes unquoted invariant-culture fields, so a plain split matches exactly what it
@@ -44,7 +45,13 @@ internal static class SessionCsvRowParser
 
         frame = new DvrFrame
         {
-            ChannelName = fields[3],
+            // Node and channel together, which is what the rest of the system calls a channel --
+            // the analytics engine, the series store and the live wire all key on "<node>.<var>".
+            // This was fields[3] alone, so a recording of two nodes reporting the same channel name
+            // collapsed into one series on replay, and the two devices overwrote each other.
+            ChannelName = string.IsNullOrWhiteSpace(fields[2])
+                ? fields[3]
+                : $"{fields[2]}.{fields[3]}",
             Value = value,
             ZScore = zScore,
             IsAnomaly = string.Equals(fields[6].Trim(), "TRUE", StringComparison.OrdinalIgnoreCase),

@@ -40,6 +40,26 @@ public static class IngestSetup
             return new SseTelemetrySource(options.SseEndpoint);
         }
 
+        if (options.ReplayPath is not null)
+        {
+            var replay = new ReplayTelemetrySource(options.ReplayPath, options.ReplaySpeed);
+
+            try
+            {
+                if (replay.Load()) return replay;
+
+                Console.Error.WriteLine(
+                    $"telemetry-host: '{options.ReplayPath}' holds no playable rows. A recording is "
+                    + "the recorder's CSV layout; an empty or header-only file has nothing to play.");
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"telemetry-host: could not read '{options.ReplayPath}': {ex.Message}");
+            }
+
+            return null;
+        }
+
         if (options.SerialPort is not null)
         {
             var serial = new SerialTelemetrySource(options.SerialPort, options.BaudRate);
