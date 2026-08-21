@@ -121,7 +121,10 @@
                 try { this.dataListeners[i](packet); } catch (e) { console.error(e); }
             }
 
-            const channelId = packet.nodeId || packet.device || 'DEFAULT';
+            // nodeId is what the wire carries. The `packet.device` fallback that used to sit
+            // here named a field no hub sends -- a leftover from a frame shape that was retired,
+            // kept alive because an || chain never complains about a branch it does not take.
+            const channelId = packet.nodeId || 'DEFAULT';
             if (this.channelListeners[channelId]) {
                 this.channelListeners[channelId].forEach(cb => {
                     try { cb(packet); } catch (e) { }

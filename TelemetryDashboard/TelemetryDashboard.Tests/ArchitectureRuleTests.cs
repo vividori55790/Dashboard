@@ -62,7 +62,11 @@ public partial class ArchitectureRuleTests
     private static IEnumerable<string> WebAssetFiles() =>
         new[] { "*.html", "*.js" }
             .SelectMany(pattern => Directory.EnumerateFiles(
-                Directory.GetParent(SolutionRoot)?.FullName ?? SolutionRoot, pattern, SearchOption.TopDirectoryOnly));
+                Directory.GetParent(SolutionRoot)?.FullName ?? SolutionRoot, pattern, SearchOption.TopDirectoryOnly))
+            // The verify_*.js harnesses sit beside the assets and are not assets: they drive a
+            // page against a running host and name retired field names on purpose, to assert that
+            // no page reads them. Scanning the check for the thing it checks for is circular.
+            .Where(path => !Path.GetFileName(path).StartsWith("verify_", StringComparison.Ordinal));
 
     private static IEnumerable<string> ProductionSourceFiles() =>
         ProductionProjects

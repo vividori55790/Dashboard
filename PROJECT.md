@@ -482,6 +482,14 @@ no gap and checks that premise before asserting on it.
 - Namespaces match folder structure
 - No production file hard-codes an anomaly score — as a literal, a pre-formatted sigma string, or a scenario-keyed ternary
 - 150 lines per file, exemptions keyed by path and retired automatically once a file drops back under
+- **No browser asset reads a telemetry field the hub does not send.** The allowed set is parsed out
+  of `TelemetryFrame.cs`, so adding a field to the wire lets the pages use it and removing one fails
+  the test rather than silently blanking a display. Written after the same defect was found four
+  times in one sweep, in four files written at different times — it never fails loudly, because a
+  page reading an absent field renders a placeholder, which is indistinguishable from a hub that has
+  sent nothing yet. Its first run found a fifth: `telemetry-client.js` still fell back to
+  `packet.device`, a field retired long ago and kept alive by an `||` chain that never complains
+  about a branch it does not take.
 
 ## Code Layout
 ```
