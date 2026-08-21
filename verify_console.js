@@ -119,6 +119,8 @@ statusCb('CONNECTED', true);
 check('the chip follows the socket',
     /연결됨/.test(elements.get('conn-text').textContent));
 
+// Variables that arrived marked derived, so the label check knows what to look for.
+const derivedByVariable = new Set();
 const seen = new Set();
 const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
     let buf = '';
@@ -131,10 +133,14 @@ const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
             if (!line.startsWith('data: ')) continue;
             let p; try { p = JSON.parse(line.slice(6)); } catch { continue; }
             if (typeof p.variable !== 'string') continue;
+            if (p.derived === true) derivedByVariable.add(p.variable);
             seen.add(p.variable);
             dataCb(p);
         }
-        if (seen.size >= 4) { req.destroy(); afterStream(); }
+        // Waits for a derived channel too. Stopping at four raw channels ended the
+        // capture before any derived sample arrived, so the label check below had
+        // nothing to test and said so -- correctly, but for the harness's reason.
+        if (seen.size >= 4 && derivedByVariable.size > 0) { req.destroy(); afterStream(); }
     });
 });
 req.on('error', e => { console.error('FAIL: cannot read stream:', e.message); process.exit(1); });
@@ -162,6 +168,24 @@ function afterStream() {
     check('every card carries a reading of its own',
         values.length === seen.size && new Set(values).size === values.length,
         values.join(' | '));
+
+    // A derived channel must be labelled where a reader will see it. The general console
+    // discovers whatever arrives and drew every channel identically, so an efficiency computed
+    // from four measurements looked exactly like a fifth measurement.
+    const cardMarkup = elements.get('grid').children.map(c => String(c.innerHTML));
+    const derivedCards = cardMarkup.filter(m => m.includes('class="derived"'));
+    const derivedStreamed = [...seen].filter(v => derivedByVariable.has(v));
+
+    if (derivedStreamed.length === 0) {
+        check('a derived channel reached the stream, without which this check tests nothing',
+            false,
+            'rerun the host with --computed, or with a profile that declares computed channels');
+    } else {
+        check('every derived channel is labelled as computed, and no measurement is',
+            derivedCards.length === derivedStreamed.length
+            && derivedStreamed.every(v => cardMarkup.some(m => m.includes('class="derived"') && m.includes(v))),
+            `${derivedCards.length} labelled for ${derivedStreamed.length} derived: ${derivedStreamed.join(', ')}`);
+    }
 
     // The endpoints the console calls, exercised for real.
     sandbox.document.getElementById('spec-ch').value = [...elements.get('spec-ch').children]

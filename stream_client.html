@@ -58,6 +58,13 @@
             display:flex; flex-direction:column; gap:9px; transition:border-color .2s,opacity .3s; }
     .card.alarm { border-color:var(--alarm); }
     .card.stale { opacity:.5; }
+    .derived {
+        display: inline-block; margin-left: 6px; padding: 1px 6px;
+        font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+        border: 1px solid var(--text-3); border-radius: 999px; color: var(--text-3);
+        vertical-align: middle;
+    }
+
     .card .name { font-size:12px; font-weight:600; color:var(--text-2); word-break:break-all; }
     .card .node { font-size:10.5px; color:var(--text-3); }
     .card .val { font-size:28px; font-weight:600; letter-spacing:-.02em; line-height:1.1; }
@@ -171,7 +178,8 @@
         el.className = 'card';
         el.id = domId(k);
         el.innerHTML =
-            '<div><div class="name">' + esc(ch.variable) + '</div>' +
+            '<div><div class="name">' + esc(ch.variable) +
+            (ch.derived ? '<span class="derived">계산값</span>' : '') + '</div>' +
             '<div class="node mono">' + esc(ch.node) + '</div></div>' +
             '<div class="val" id="v-' + domId(k) + '">—</div>' +
             '<canvas id="s-' + domId(k) + '"></canvas>' +
@@ -202,7 +210,13 @@
         var ch = channels[k];
 
         if (!ch) {
-            ch = channels[k] = { node: node, variable: p.variable, series: [] };
+            // Whether a value was computed rather than reported is a property of the channel and
+            // is read at discovery, because it decides how the card is labelled. A derived channel
+            // drawn like a measurement is the confusion this marking exists to prevent, and it
+            // appeared here the moment computed channels started reaching the stream.
+            ch = channels[k] = {
+                node: node, variable: p.variable, series: [], derived: p.derived === true
+            };
             discover(k, ch);
         }
 

@@ -35,7 +35,7 @@ Two portability details that were silently broken and are now explicit:
 |---|---------|----------------|-----------|-------|
 | 1 | Auto-Healing & RingBuffer | `Infrastructure.Serial.AutoReconnectEngine`, `Core.Collections.RingBuffer<T>`, `Serial.ZeroLossPacketBuffer` | M1 | Built |
 | 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` via `/api/aligned` | M1 | Built |
-| 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`, declared by profile or `--computed` | M2 | Built |
+| 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`; published live by `Host.Ingest.ComputedChannelPump` | M2 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -616,7 +616,46 @@ than a property — the grid and DC bus ranges overlap, so two unrelated channel
 integer failed a page that was working. Both are fixed at the cause, the second by injecting three
 distinct values and checking each lands in its own card.
 
-**Suite: 1,067 passing, 0 failing** (999 portable + 68 desktop) — about 2 m 35 s with
+### A derived channel that is actually a channel
+`/api/computed` answered a question; the value was query-only, so it could not be charted beside
+the voltages it came from, could not be scored, and disappeared when the process ended. It now goes
+through the same publisher as a measured sample — scored, broadcast, recorded, archived, and
+available to the spectrum and the DVR. Verified against a live host: the derived channels appear on
+the stream carrying `derived: true` and their units, `/api/spectrum` reports them at exactly
+5.00 Hz, and `/api/history` returns them by name from the SQLite archive.
+
+**The instant is chosen, not configured, and the choice sets the rate.** Evaluating at "now"
+refuses everything: an input other than the one that just arrived has nothing after now, so it
+could only be held. The instant used is the *oldest of the inputs' newest samples* — the latest
+moment every input can be interpolated at rather than extrapolated to. That also means the instant
+only advances when the slowest input advances, so a 10 Hz voltage and a 1 Hz current give a 1 Hz
+power instead of ten interpolations a second of the same two current samples. An input that falls
+silent stops the channel, which is the truthful outcome. Measured lag behind the live stream: about
+170 ms.
+
+**A general console showed a computed efficiency exactly like a measurement.** `stream_client.html`
+discovers whatever arrives and drew every channel identically, so the confusion the whole design
+exists to prevent appeared the moment derived channels started flowing. The wire frame gained a
+`derived` field — absent unless true, and independent of `simulated` — and the console labels those
+cards.
+
+Three defects came out of this, all mine and all found by running it:
+
+- **The pump published for a while and went quiet, and nothing anywhere could say why.** A single
+  try around the whole tick loop, with the task awaited only at shutdown, turned any exception into
+  a channel that had simply stopped arriving. It is now caught per channel, said the first time,
+  and the channel abandoned rather than retried; `/api/status` carries published, withheld, faulted
+  and the first fault message, because "no pump", "publishing nothing" and "threw an hour ago" have
+  the same symptom and different causes.
+- **The whole test suite hung.** The computed loop is a timer that never ends; the read loop over a
+  finite source does. Starting the timer on the caller's token and awaiting it when the source ran
+  out deadlocked every such run. It now has its own linked token, cancelled when the read loop
+  ends, and a test asserts an ingest run over a finished source returns.
+- **A comment that contradicted a measurement.** It claimed the tick rate was only a latency bound
+  and did not affect the output rate; inputs at 9 Hz produced exactly 5.00 Hz, the tick rate. The
+  published rate is the lower of the two, and the comment says so now.
+
+**Suite: 1,078 passing, 0 failing** (1,010 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

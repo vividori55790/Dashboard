@@ -489,6 +489,8 @@ public partial class ArchitectureRuleTests
         // the record shape plus the account of what each field is allowed to claim.
         "TelemetryDashboard.Core/Streaming/IncidentEndpoint.cs",                   // 162 lines
         "TelemetryDashboard.Core/Streaming/ComputedEndpoint.cs",                   // 180 lines — reply shape already split into ComputedEndpointModels.cs
+        "TelemetryDashboard.Host/Ingest/ComputedChannelPump.cs",                   // 226 lines — mostly the reasoning behind the instant it picks
+        "TelemetryDashboard.Host/Ingest/TelemetryFrame.cs",                        // 157 lines — one wire contract, one field per line
     };
 
     [Fact]

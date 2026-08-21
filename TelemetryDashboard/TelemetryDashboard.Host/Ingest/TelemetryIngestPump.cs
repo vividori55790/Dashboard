@@ -54,6 +54,9 @@ public sealed class TelemetryIngestPump
     /// <summary>The record layer: per-stage tallies and the lines nothing could parse.</summary>
     public IngestRecordPath Records => _records;
 
+    /// <summary>Publishes the host's declared expressions as channels of their own.</summary>
+    public ComputedChannelPump Computed { get; }
+
     /// <summary>Raised for every sample that reaches the wire. See the publisher for the contract.</summary>
     public event EventHandler<Outbound.ScoredSample> SampleScored
     {
@@ -84,6 +87,11 @@ public sealed class TelemetryIngestPump
             new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive);
         _records = new IngestRecordPath(_publisher.PublishAsync, source.IsSimulated);
 
+        // Through the same publisher as a measured sample, which is the whole point: a derived
+        // channel that skipped the scoring, the recording or the archive would be a number on a
+        // chart that no alert could fire on and no query could find afterwards.
+        Computed = new ComputedChannelPump(server, _publisher.PublishAsync);
+
         // So a plugin, which is delivered to from inside the router, sees the same truth the wire
         // frame carries rather than an unmarked copy.
         _router.SourceIsSimulated = source.IsSimulated;
@@ -100,6 +108,18 @@ public sealed class TelemetryIngestPump
     /// </summary>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        // Alongside the read loop rather than inside it. A derived channel is computed for an
+        // instant every input can answer, which is not the instant any single arrival carries, so
+        // driving it from arrivals would tie it to whichever channel happened to be fastest.
+        //
+        // Its own token, linked to the caller's, because the read loop can end on its own -- a
+        // replayed recording runs out -- and the computed loop is a timer that never does. Started
+        // on the caller's token and awaited below, that combination deadlocked: the source
+        // finished, the finally waited for a loop nothing had asked to stop, and the whole test
+        // suite hung on it.
+        using var stopComputed = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task derived = Computed.RunAsync(stopComputed.Token);
+
         try
         {
             await foreach (RawPacket raw in _source.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -138,6 +158,22 @@ public sealed class TelemetryIngestPump
         {
             FaultMessage = $"{ex.GetType().Name}: {ex.Message}";
             Console.Error.WriteLine($"[ingest] source stopped: {FaultMessage}");
+        }
+        finally
+        {
+            // Observed rather than abandoned. An unawaited task that faults is a fault nobody
+            // hears about, and this host has already been bitten once by exactly that -- a
+            // fire-and-forget dispatch that swallowed the exception and left the caller waiting.
+            try
+            {
+                stopComputed.Cancel();
+                await derived.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                FaultMessage ??= $"computed channels stopped: {ex.GetType().Name}: {ex.Message}";
+                Console.Error.WriteLine($"[computed] {ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 

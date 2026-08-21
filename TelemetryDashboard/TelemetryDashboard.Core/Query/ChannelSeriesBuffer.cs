@@ -72,6 +72,18 @@ public sealed class ChannelSeriesBuffer
         get { lock (_lock) return _count == 0 ? null : At(0).TimestampSec; }
     }
 
+    /// <summary>Timestamp of the newest retained sample, or <c>null</c> when empty.</summary>
+    /// <remarks>
+    /// The instant a derived channel can be computed for is the oldest of its inputs' newest
+    /// samples: at that instant every input has something at or after it, so every input can be
+    /// interpolated rather than held. Without this the caller has to copy a window just to find
+    /// out when the channel last spoke.
+    /// </remarks>
+    public double? NewestTimestampSec
+    {
+        get { lock (_lock) return _count == 0 ? null : At(_count - 1).TimestampSec; }
+    }
+
     /// <summary>
     /// Copies the samples in <c>[startSec, endSec]</c> into <paramref name="destination"/>.
     /// </summary>

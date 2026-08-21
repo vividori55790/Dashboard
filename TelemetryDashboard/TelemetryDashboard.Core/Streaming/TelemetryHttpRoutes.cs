@@ -123,6 +123,18 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
+        // Null when nothing is computing, so a reader can tell "no derived channels configured"
+        // from "configured and publishing nothing".
+        computed = server.ComputedCounters is { } counters
+            ? new
+            {
+                declared = server.Computed.Count,
+                published = counters.Published,
+                withheld = counters.Withheld,
+                faulted = counters.Faulted,
+                fault = counters.FaultMessage
+            }
+            : null,
         endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 

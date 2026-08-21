@@ -63,6 +63,13 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     public IReadOnlyList<Analytics.ComputedChannel> Computed { get; set; } =
         Array.Empty<Analytics.ComputedChannel>();
 
+    /// <summary>The pump publishing those channels, when one is running.</summary>
+    /// <remarks>
+    /// Null when this host computes nothing, which <c>/api/status</c> reports as such rather than
+    /// as zeros — a pump that published nothing and no pump at all are different situations.
+    /// </remarks>
+    public IComputedChannelCounters? ComputedCounters { get; set; }
+
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>
     public event EventHandler<string>? CommandReceived;
 

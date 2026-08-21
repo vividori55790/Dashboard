@@ -94,6 +94,20 @@ public sealed class TelemetryFrame
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? ForecastLeavesRange { get; init; }
 
+    /// <summary>
+    /// Present and true when the value was computed from other channels rather than reported.
+    /// </summary>
+    /// <remarks>
+    /// Absent otherwise, so a consumer sees it only when it means something. It is not the same as
+    /// <see cref="Simulated"/> and the two are independent: a derived channel over a simulated
+    /// stream is both, a derived channel over a real rig is only this. Without it a console
+    /// merging derived channels into the same chart as measurements has no way to tell a reader
+    /// which is which, and an efficiency reads as though an instrument reported it.
+    /// </remarks>
+    [JsonPropertyName("derived")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Derived { get; init; }
+
     /// <summary>Analyzer and settings behind the verdict, so a stored frame can be re-scored.</summary>
     [JsonPropertyName("analyzerId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -119,6 +133,7 @@ public sealed class TelemetryFrame
             Variable = packet.Variable,
             Value = packet.Value,
             Unit = packet.Unit,
+            Derived = packet.Flags.HasFlag(PacketFlags.IsDerived) ? true : null,
             AnomalyScore = judged ? analysis.ZScore : null,
             IsAnomaly = judged ? analysis.IsAnomaly : null,
             // Independent of the verdict: a channel can be scored confidently and still have no
