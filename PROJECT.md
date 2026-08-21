@@ -34,7 +34,7 @@ Two portability details that were silently broken and are now explicit:
 | # | Feature | Implementation | Milestone | State |
 |---|---------|----------------|-----------|-------|
 | 1 | Auto-Healing & RingBuffer | `Infrastructure.Serial.AutoReconnectEngine`, `Core.Collections.RingBuffer<T>`, `Serial.ZeroLossPacketBuffer` | M1 | Built |
-| 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` | M1 | Built |
+| 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` via `/api/aligned` | M1 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -422,6 +422,40 @@ reports. `custom_dashboard.html` was a 976-line artefact of the old exporter che
 repository; it is regenerated from the fixed one. Verified together by `verify_starters.js`, which
 captures real packets once and replays them into every page.
 
+### Feature 2: what were all these channels at the same moment?
+Channels do not arrive together. Each sample lands when its device sent it, so the question behind
+every efficiency, every ratio and every phase relationship — *what were the input and the output at
+the same instant* — has no answer in the raw stream. Reading the latest of each is the obvious thing
+to do and is wrong by exactly the interval between them.
+
+`TimeSyncJitterBuffer` could answer it from M1, was marked Built, and was constructed by nothing.
+Wiring it meant fixing what it said first:
+
+- It returned **`0.0` for a node that had sent nothing** — which is also a perfectly ordinary
+  reading, so an unwired node and a node reading zero volts gave the same answer. A test asserted
+  this as the required behaviour: `GetAlignedSample(node, 10.0).Should().Be(0.0)`.
+- It **clamped silently** to the nearest sample for any instant outside its buffer, so a request an
+  hour past the last sample returned that sample as though it were the value at that instant.
+- Interpolated and measured values were indistinguishable, so a caller plotting both drew invented
+  points that looked exactly like recorded ones.
+
+`GetAligned` now returns the value **and how it was obtained** — Exact, Interpolated, HeldBefore,
+HeldAfter or None — with the size of the gap for a held value. `/api/aligned` exposes it, and
+reports how many channels answered *the instant* rather than near it, so a caller can reject a whole
+reading at once.
+
+Verified against a running host on the UPS profile — four channels at one instant, each inside its
+own declared range, each labelled:
+
+```
+grid.voltage        413.61 V   Interpolated
+dab.bus_voltage     392.64 V   Interpolated
+psfb.output_voltage  47.78 V   Interpolated
+server.load          75.59 %   Interpolated      answered the instant: 4 of 4
+
+ago=-3   HeldAfter  gap=3.07s  answers=false      ago=0.5  Interpolated  answers=true
+```
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
@@ -433,7 +467,7 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 993 passing, 0 failing** (925 portable + 68 desktop) — about 2 m 35 s with
+**Suite: 1,001 passing, 0 failing** (933 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

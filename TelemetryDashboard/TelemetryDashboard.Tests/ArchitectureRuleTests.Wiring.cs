@@ -120,7 +120,11 @@ public partial class ArchitectureRuleTests
         // from this baseline: TelemetryIngestPump now routes every arrival through the record path,
         // and IngestRateGuard puts the breaker in force. Before this the M6 record layer carried
         // nothing and the documented flood protection was not applied anywhere.
-        "TimeSyncJitterBuffer",
+        // TimeSyncJitterBuffer retired from this baseline: AlignedEndpoint puts it behind
+        // /api/aligned, so Feature 2 can be reached from a running program. Wiring it meant fixing
+        // what it said first -- it returned 0.0 for a node that had sent nothing, which is also an
+        // ordinary reading, and clamped silently to the nearest sample for any instant outside its
+        // buffer. A test asserted the first of those as the required behaviour.
         "Twin3DService",              // the 3D viewport control it holds state for is not in the shell
         "VariableNode",
         "Win32Native",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using TelemetryDashboard.Core.Interfaces;
+using TelemetryDashboard.Core.Models;
 
 namespace TelemetryDashboard.Core.Services;
 
@@ -74,11 +75,14 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
         }
     }
 
-    public double GetAlignedSample(string nodeId, double masterTimestamp)
+    /// <summary>The node's value at <paramref name="masterTimestamp"/>, and how it was obtained.</summary>
+    public AlignedSample GetAligned(string nodeId, double masterTimestamp)
     {
+        // A node nobody has heard from is not a node reading zero. Returning 0.0 here made those
+        // two indistinguishable, and a caller plotting the result drew a flat line through a gap.
         if (!_buffers.TryGetValue(nodeId, out var nodeBuf))
         {
-            return 0.0;
+            return AlignedSample.None;
         }
 
         lock (nodeBuf.Lock)
@@ -86,7 +90,7 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
             var samples = nodeBuf.Samples;
             if (samples.Count == 0)
             {
-                return 0.0;
+                return AlignedSample.None;
             }
 
             // Prune old samples prior to retention window
@@ -96,14 +100,23 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
                 samples.RemoveAt(0);
             }
 
-            if (samples.Count == 1 || masterTimestamp <= samples[0].Timestamp)
+            // Outside the buffer the answer is the nearest sample, and it is labelled as held with
+            // the size of the gap, so the caller can decide whether it is close enough to use. A
+            // held value describes a different instant from the one asked about.
+            if (masterTimestamp <= samples[0].Timestamp)
             {
-                return samples[0].Value;
+                double gap = samples[0].Timestamp - masterTimestamp;
+                return gap < 1e-9
+                    ? new AlignedSample(samples[0].Value, AlignmentKind.Exact, 0.0)
+                    : new AlignedSample(samples[0].Value, AlignmentKind.HeldBefore, gap);
             }
 
             if (masterTimestamp >= samples[^1].Timestamp)
             {
-                return samples[^1].Value;
+                double gap = masterTimestamp - samples[^1].Timestamp;
+                return gap < 1e-9
+                    ? new AlignedSample(samples[^1].Value, AlignmentKind.Exact, 0.0)
+                    : new AlignedSample(samples[^1].Value, AlignmentKind.HeldAfter, gap);
             }
 
             // Binary search to locate bounding interval [t0, t1]
@@ -115,7 +128,7 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
                 int mid = low + (high - low) / 2;
                 if (samples[mid].Timestamp == masterTimestamp)
                 {
-                    return samples[mid].Value;
+                    return new AlignedSample(samples[mid].Value, AlignmentKind.Exact, 0.0);
                 }
                 if (samples[mid].Timestamp < masterTimestamp)
                 {
@@ -136,12 +149,13 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
 
             if (Math.Abs(t1 - t0) < 1e-9)
             {
-                return v0;
+                return new AlignedSample(v0, AlignmentKind.Exact, 0.0);
             }
 
-            // Linear interpolation: v = v0 + (v1 - v0) * (t - t0) / (t1 - t0)
+            // Linear interpolation: v = v0 + (v1 - v0) * (t - t0) / (t1 - t0). Labelled as
+            // interpolated rather than measured, because it is a value nothing reported.
             double fraction = (masterTimestamp - t0) / (t1 - t0);
-            return v0 + (v1 - v0) * fraction;
+            return new AlignedSample(v0 + (v1 - v0) * fraction, AlignmentKind.Interpolated, 0.0);
         }
     }
 

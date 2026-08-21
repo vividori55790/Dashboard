@@ -42,6 +42,19 @@ public static class TelemetryHttpRoutes
                 await WriteJsonAsync(response, BuildReport(server, context.Request.QueryString)).ConfigureAwait(false);
                 return;
 
+            case "/api/aligned":
+                await WriteJsonAsync(response, AlignedEndpoint.Compute(
+                    server.Series,
+                    (context.Request.QueryString["channels"] ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    // Relative by default: a browser rarely knows the server's clock, and "two
+                    // seconds ago" is the question people actually ask.
+                    ReadNullableDouble(context.Request.QueryString["at"])
+                        ?? SeriesClock.UtcNowSec() - ReadDouble(context.Request.QueryString["ago"], 1.0),
+                    ReadDouble(context.Request.QueryString["windowSec"], AlignedEndpoint.DefaultWindowSec))
+                    ).ConfigureAwait(false);
+                return;
+
             case "/api/spectrum":
                 await WriteJsonAsync(response, SpectrumEndpoint.Compute(
                     server.Series,
@@ -77,7 +90,7 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>
