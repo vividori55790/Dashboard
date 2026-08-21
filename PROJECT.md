@@ -740,7 +740,44 @@ rejected the only configuration that can exercise the interlock. And the armed b
 now names every trip limit, and says plainly when there are none that a steady excursion will not
 trip this host.
 
-**Suite: 1,116 passing, 0 failing** (1,048 portable + 68 desktop) — about 2 m 35 s with
+### The most actionable signal was the one that never left the machine
+`SlackAlertRelay.OnSampleScored` began `if (sample.IsAnomaly is not true) return;`. So the only
+thing that reached a webhook was what the rolling detector flagged — and that detector does not
+find a steady value unusual. A converter sitting outside its safe band told nobody, and an
+unattended host that notices a fault and stays quiet has failed at the one job it was left alone
+to do.
+
+Limit events now go out too, on their own throttle key: sharing the channel's would let an ordinary
+anomaly's quiet period swallow the one message that says a machine is outside what it may safely
+do. The MQTT payload carries `outsideLimit` and the rules by name, absent unless true, separate
+from `isAnomaly` — which answers a different question and cannot answer this one.
+
+Verified by pointing the host at a local webhook sink and reading what it actually posted:
+
+```
+*Outside limit* SIM:COM3.grid.voltage: 384 is above the 300 ceiling (`grid.voltage[V] < 300`)
+_No anomaly verdict: the detector has no baseline for this channel yet. A limit does not need one._
+```
+
+**And that run found the defect that mattered.** With a limit set inside the wander band, the host
+logged four crossings and four recoveries; the webhook received one message. Crossings and
+recoveries shared a throttle key, so the crossing consumed the quiet period and the recovery was
+suppressed — an alert channel that says "it broke" and never "it is fine", which leaves an operator
+believing a machine is still out of band hours after it recovered. That is worse than not alerting.
+
+The rule now is that a recovery is sent only for a breach this relay actually announced, and is not
+throttled: it can never be more frequent than the crossings that were sent, because it is only sent
+when one is outstanding. Re-measured on the release binary: 18 host-side transitions, one crossing
+and one recovery at the webhook, nothing orphaned.
+
+Two smaller things. `ScoredSample.BreachedLimits` now carries the transition rather than a
+`JustEntered` flag, because three states are acted on differently — the interlock wants the
+crossing, the relay wants the crossing and the recovery, and nothing wants a message per sample —
+and a bare "is outside" cannot express a recovery at all. And the limit clause moved out of
+`Describe()`, where it had landed between the reading and the timestamp: *"2.62 sigma) OUTSIDE
+LIMIT: grid.voltage[V] < 300 at 2026-08-21"* reads as though the limit had a time on it.
+
+**Suite: 1,126 passing, 0 failing** (1,058 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

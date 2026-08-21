@@ -213,12 +213,13 @@ public sealed class IngestPublisher
                 analysis.HasVerdict ? analysis.IsAnomaly : null,
                 analysis.AnalyzerId,
                 _isSimulated,
-                breached ? limits.Where(l => l.Transition is LimitTransition.Entered
-                                                          or LimitTransition.Sustained)
-                                 .Select(l => new BreachedLimit(
-                                     l.Rule, l.Transition == LimitTransition.Entered))
-                                 .ToList()
-                         : null));
+                // Every outcome, recovery included. A relay that only ever hears about breaches
+                // can tell an operator a converter left its band and never that it came back.
+                limits.Count == 0
+                    ? null
+                    : limits.Where(l => l.Transition != LimitTransition.None)
+                            .Select(l => new BreachedLimit(l.Rule, l.Transition))
+                            .ToList()));
         }
 
         return ValueTask.CompletedTask;

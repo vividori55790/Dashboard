@@ -174,7 +174,7 @@ public sealed class EmergencyInterlockRelay : IAsyncDisposable
 
         foreach (BreachedLimit entry in breached)
         {
-            if (!_tripLimits.Contains(entry.Rule.Declaration)) continue;
+            if (!entry.IsOutside || !_tripLimits.Contains(entry.Rule.Declaration)) continue;
             if (!ShouldAct(sample.Channel, entry)) continue;
 
             return entry.Rule.Explain(sample.Value) + $" ({entry.Rule.Declaration})";

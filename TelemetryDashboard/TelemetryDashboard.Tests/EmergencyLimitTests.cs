@@ -56,7 +56,8 @@ public class EmergencyLimitTests
         BreachedLimits: breached.Length == 0 ? null : breached);
 
     private static BreachedLimit Breach(string declaration, bool justEntered) =>
-        new(ChannelLimit.Parse(declaration), justEntered);
+        new(ChannelLimit.Parse(declaration),
+            justEntered ? LimitTransition.Entered : LimitTransition.Sustained);
 
     [Fact]
     public async Task ATripLimitFiresEvenWhenNothingHasBeenScoredYet()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace TelemetryDashboard.Host.Outbound;
@@ -14,14 +15,27 @@ namespace TelemetryDashboard.Host.Outbound;
 /// "not judged", and every consumer has to decide what to do about it rather than being handed a
 /// confident zero.
 /// </remarks>
-/// <summary>One limit a reading is outside, and whether this sample is the crossing.</summary>
+/// <summary>One limit this sample was evaluated against, and what it did to that rule.</summary>
 /// <remarks>
-/// The distinction is what lets an interlock act once on a crossing and then hold off, instead of
-/// writing a command per sample for as long as the condition lasts. Measured on a live loopback
-/// run before this existed: 91 identical commands in twenty seconds, from a five-second cooldown
-/// that the limit path had bypassed entirely.
+/// The transition rather than a bare "is outside", because the three states are acted on
+/// differently and merging them loses the distinction that matters. An interlock acts on the
+/// crossing and then holds off — before that was true it wrote 91 identical commands in twenty
+/// seconds on a live run, from a five-second cooldown the limit path had bypassed. An alert relay
+/// wants the crossing <em>and</em> the recovery and nothing in between, because an operator paged
+/// once when a converter left its band and once when it came back has been told the whole story,
+/// while one paged per sample stops reading them.
 /// </remarks>
-public readonly record struct BreachedLimit(Core.Analytics.ChannelLimit Rule, bool JustEntered);
+public readonly record struct BreachedLimit(
+    Core.Analytics.ChannelLimit Rule, Core.Analytics.LimitTransition Transition)
+{
+    /// <summary>Whether this sample is the moment the channel left the band.</summary>
+    public bool JustEntered => Transition == Core.Analytics.LimitTransition.Entered;
+
+    /// <summary>Whether the reading is outside the band, however long it has been.</summary>
+    public bool IsOutside =>
+        Transition is Core.Analytics.LimitTransition.Entered
+                   or Core.Analytics.LimitTransition.Sustained;
+}
 
 public readonly record struct ScoredSample(
     string Channel,
@@ -46,7 +60,17 @@ public readonly record struct ScoredSample(
     System.Collections.Generic.IReadOnlyList<BreachedLimit>? BreachedLimits = null)
 {
     /// <summary>True when this reading is outside at least one declared limit.</summary>
-    public bool BreachesALimit => BreachedLimits is { Count: > 0 };
+    /// <remarks>
+    /// Not simply "the list is non-empty": the list also carries the rules this sample brought
+    /// back <em>inside</em>, and a recovery is the opposite of a breach.
+    /// </remarks>
+    public bool BreachesALimit => BreachedLimits is { Count: > 0 } && BreachedLimits.Any(l => l.IsOutside);
+
+    /// <summary>Limits this sample crossed out of, and the ones it returned into.</summary>
+    public IEnumerable<BreachedLimit> LimitTransitions =>
+        BreachedLimits?.Where(l => l.Transition is Core.Analytics.LimitTransition.Entered
+                                                or Core.Analytics.LimitTransition.Cleared)
+        ?? Enumerable.Empty<BreachedLimit>();
 
     /// <summary>True when the host actually reached a judgement about this sample.</summary>
     public bool HasVerdict => ZScore is not null;
@@ -57,16 +81,19 @@ public readonly record struct ScoredSample(
     /// 370..420 V" tells an operator what to do and "2.4 sigma" tells them the channel has been
     /// quiet lately.
     /// </remarks>
-    public string Describe()
-    {
-        string limits = BreachesALimit
-            ? " OUTSIDE LIMIT: " + string.Join("; ", BreachedLimits!.Select(l => l.Rule.Declaration))
-            : string.Empty;
+    public string Describe() => HasVerdict
+        ? $"{Channel} = {Value:0.###}{UnitSuffix} ({ZScore:0.00} sigma, {AnalyzerId})"
+        : $"{Channel} = {Value:0.###}{UnitSuffix} (no verdict: not enough history yet)";
 
-        return (HasVerdict
-            ? $"{Channel} = {Value:0.###}{UnitSuffix} ({ZScore:0.00} sigma, {AnalyzerId})"
-            : $"{Channel} = {Value:0.###}{UnitSuffix} (no verdict: not enough history yet)") + limits;
-    }
+    /// <summary>The limits this reading is outside, or empty when it is inside all of them.</summary>
+    /// <remarks>
+    /// Separate from <see cref="Describe"/> so a caller can place it. Appended inside the
+    /// description it landed between the reading and the timestamp — "2.62 sigma) OUTSIDE LIMIT:
+    /// grid.voltage[V] &lt; 300 at 2026-08-21" — which reads as though the limit had a time on it.
+    /// </remarks>
+    public string DescribeLimits() => BreachesALimit
+        ? "Outside " + string.Join("; ", BreachedLimits!.Where(l => l.IsOutside).Select(l => l.Rule.Declaration))
+        : string.Empty;
 
     private string UnitSuffix => string.IsNullOrEmpty(Unit) ? string.Empty : " " + Unit;
 }

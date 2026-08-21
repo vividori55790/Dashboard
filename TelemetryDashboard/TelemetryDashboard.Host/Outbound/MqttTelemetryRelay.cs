@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -75,7 +76,17 @@ public sealed class MqttTelemetryRelay : IAsyncDisposable
             simulated = sample.IsSimulated,
             zscore = sample.ZScore,
             isAnomaly = sample.IsAnomaly,
-            analyzerId = sample.AnalyzerId
+            analyzerId = sample.AnalyzerId,
+
+            // Absent unless the reading is outside a band, so a subscriber sees the field only
+            // when it means something -- and separate from isAnomaly, which answers a different
+            // question and cannot answer this one: a channel sitting steadily outside its safe
+            // band is not unusual to a rolling detector.
+            outsideLimit = sample.BreachesALimit ? true : (bool?)null,
+            limits = sample.BreachedLimits?
+                .Where(l => l.IsOutside)
+                .Select(l => l.Rule.Declaration)
+                .ToArray() is { Length: > 0 } declarations ? declarations : null
         },
         PayloadOptions);
 
