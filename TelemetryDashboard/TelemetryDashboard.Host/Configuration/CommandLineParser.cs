@@ -132,6 +132,19 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                case "--export-dashboard":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawExport)) return ArgumentCursor.MissingValue(argument);
+                    // The directory has to exist; creating one the operator did not ask for is how
+                    // a mistyped path silently becomes a new folder nobody looks in again.
+                    string exportFull = Path.GetFullPath(rawExport);
+                    string? exportDir = Path.GetDirectoryName(exportFull);
+                    if (!string.IsNullOrEmpty(exportDir) && !Directory.Exists(exportDir))
+                    {
+                        return ArgumentCursor.Fail($"directory '{exportDir}' does not exist.");
+                    }
+                    draft.DashboardExportPath = exportFull;
+                    break;
+
                 case "--profile":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawProfile)) return ArgumentCursor.MissingValue(argument);
                     draft.ProfileId = rawProfile;
@@ -168,10 +181,15 @@ public static class CommandLineParser
         // Both sources at once would mean broadcasting synthetic and measured frames on one
         // channel, with nothing downstream able to separate them again.
         // Naming a profile without asking for the simulator does nothing, and doing nothing
-        // quietly is how an operator concludes the flag worked.
-        if (draft.ProfileId is not null && !draft.Simulate)
+        // quietly is how an operator concludes the flag worked. Exporting a dashboard is the
+        // second thing a profile decides, so it counts as a use of the flag: the exported page
+        // carries one card per declared channel whether the data behind it is generated or read
+        // off a wire.
+        if (draft.ProfileId is not null && !draft.Simulate && draft.DashboardExportPath is null)
         {
-            return ArgumentCursor.Fail("--profile only applies to --simulate; a profile describes what to generate, not how to read a device.");
+            return ArgumentCursor.Fail(
+                "--profile applies to --simulate or --export-dashboard; it describes what to generate "
+                + "or what to draw, not how to read a device.");
         }
 
         if (draft.PollEndpoint is not null && (draft.SseEndpoint is not null || draft.SerialPort is not null || draft.Simulate))

@@ -9,6 +9,7 @@ using FluentAssertions;
 using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
+using TelemetryDashboard.Core.Simulator;
 using TelemetryDashboard.Infrastructure.Replay;
 using TelemetryDashboard.Core.Streaming;
 using TelemetryDashboard.Core.Recording;
@@ -39,10 +40,15 @@ public class MilestoneM2EnterpriseVerificationTests
             htmlContent.Should().Contain("Dual Active Bridge Monitoring Hub");
             htmlContent.Should().Contain("telemetry-client.js");
             htmlContent.Should().Contain("dashboard-container");
-            htmlContent.Should().Contain("w-temp");
-            htmlContent.Should().Contain("w-zscore");
-            htmlContent.Should().Contain("w-chart");
-            htmlContent.Should().Contain("w-vin");
+
+            // Was: w-temp, w-vin, w-zscore, w-chart -- the ids of a widget list hardcoded in the
+            // exporter, describing one installation's sensors. The default now comes from the
+            // neutral built-in profile, so what this asserts is that the page carries a card for
+            // every channel the default describes rather than four particular ids.
+            foreach (ProfileChannel channel in MonitoringProfileLibrary.Generic.Channels)
+            {
+                htmlContent.Should().Contain($"\"Field\": \"{channel.Id}\"");
+            }
         }
         finally
         {

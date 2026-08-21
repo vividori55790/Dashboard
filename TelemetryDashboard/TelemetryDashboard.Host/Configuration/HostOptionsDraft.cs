@@ -34,6 +34,7 @@ internal sealed class HostOptionsDraft
         SseEndpoint = defaults.SseEndpoint;
         ChannelMapPath = defaults.ChannelMapPath;
         ProfileId = defaults.ProfileId;
+        DashboardExportPath = defaults.DashboardExportPath;
         PollEndpoint = defaults.PollEndpoint;
         PollInterval = defaults.PollInterval;
     }
@@ -56,6 +57,7 @@ internal sealed class HostOptionsDraft
     public string? SseEndpoint;
     public string? ChannelMapPath;
     public string? ProfileId;
+    public string? DashboardExportPath;
     public string? PollEndpoint;
     public TimeSpan PollInterval;
 
@@ -79,6 +81,7 @@ internal sealed class HostOptionsDraft
         SseEndpoint = SseEndpoint,
         ChannelMapPath = ChannelMapPath,
         ProfileId = ProfileId,
+        DashboardExportPath = DashboardExportPath,
         PollEndpoint = PollEndpoint,
         PollInterval = PollInterval
     };

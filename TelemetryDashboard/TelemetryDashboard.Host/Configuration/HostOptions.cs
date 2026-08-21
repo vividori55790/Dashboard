@@ -130,6 +130,21 @@ public sealed class HostOptions
     /// </remarks>
     public string? ProfileId { get; init; }
 
+    /// <summary>Path to write a standalone HTML dashboard to, or null for none.</summary>
+    /// <remarks>
+    /// The file is a complete console for whatever profile is in force: one card and one trend per
+    /// declared channel, in that channel's own unit and range. It connects back to this host's
+    /// WebSocket, so it is a page to open on another machine rather than a screenshot.
+    /// <para>
+    /// The exporter has existed since M2 and was marked Built. Nothing constructed it, so the
+    /// feature could not be reached from any running program — and once it could, two faults in
+    /// the page it produced turned out never to have been exercised: the connection chip was the
+    /// literal text "WS CONNECTED", updated by nothing, and a widget whose field was missing from
+    /// a packet fell back to the temperature and then to zero.
+    /// </para>
+    /// </remarks>
+    public string? DashboardExportPath { get; init; }
+
     /// <summary>HTTP endpoint to poll, or null for none.</summary>
     /// <remarks>
     /// Most public real-time data is request/response rather than a stream — open-data portals,

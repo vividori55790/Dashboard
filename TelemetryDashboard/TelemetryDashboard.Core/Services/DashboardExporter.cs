@@ -10,19 +10,18 @@ namespace TelemetryDashboard.Core.Services;
 
 public class DashboardExporter : IDashboardExporter
 {
-    public string ExportCustomHtmlDashboard(string targetFilePath, string title, IEnumerable<WidgetConfig>? widgets = null)
+    public string ExportCustomHtmlDashboard(
+        string targetFilePath, string title, IEnumerable<WidgetConfig>? widgets = null, int port = 8080)
     {
+        // Falls back to the neutral built-in profile, not to a rig. The list that used to be here
+        // named "Edge Temp Sensor (CH-1)", a field called vin and a bus gauge fixed at 0-500 V, so
+        // every dashboard anyone exported described one installation's hardware whatever they were
+        // actually monitoring -- and the fields it asked for are not even the ones this wire format
+        // carries, so all five cards would have sat at their placeholder forever.
         var widgetList = widgets?.ToList();
         if (widgetList == null || widgetList.Count == 0)
         {
-            widgetList = new List<WidgetConfig>
-            {
-                new WidgetConfig { Id = "w-temp", WidgetType = "digital_card", Title = "Edge Temp Sensor (CH-1)", Field = "temp", Unit = "°C", ColorTheme = "#66FCF1" },
-                new WidgetConfig { Id = "w-vib", WidgetType = "digital_card", Title = "Vibration Accelerometer (CH-2)", Field = "vibration", Unit = "g", ColorTheme = "#BA68C8" },
-                new WidgetConfig { Id = "w-vin", WidgetType = "gauge_meter", Title = "Primary Bus Voltage (CH-3)", Field = "vin", Unit = "V", MinLimit = 0, MaxLimit = 500, ColorTheme = "#00FF66" },
-                new WidgetConfig { Id = "w-zscore", WidgetType = "zscore_card", Title = "System ML Z-Score Engine", Field = "anomalyScore", Unit = "σ", ColorTheme = "#FF2E63" },
-                new WidgetConfig { Id = "w-chart", WidgetType = "line_chart", Title = "Real-Time Telemetry Waveform", Field = "temp", Unit = "°C", ColorTheme = "#66FCF1" }
-            };
+            widgetList = ProfileDashboardWidgets.For(Simulator.MonitoringProfileLibrary.Generic).ToList();
         }
 
         string widgetsJson = JsonSerializer.Serialize(widgetList, new JsonSerializerOptions { WriteIndented = true });
@@ -190,7 +189,7 @@ public class DashboardExporter : IDashboardExporter
         <h1>🚀 <span>{title}</span></h1>
         <div class=""chip"">
             <div class=""dot""></div>
-            <span id=""conn-status"">WS CONNECTED (:8080)</span>
+            <span id=""conn-status"">연결 중...</span>
         </div>
     </header>
 
@@ -198,7 +197,7 @@ public class DashboardExporter : IDashboardExporter
         <!-- Rendered dynamically from widgets schema -->
     </main>
 
-    <script src=""http://localhost:8080/telemetry-client.js""></script>
+    <script src=""http://localhost:{port}/telemetry-client.js""></script>
     <script>
         const widgetConfigs = {widgetsJson};
         const chartBuffers = {{}};
@@ -218,8 +217,8 @@ public class DashboardExporter : IDashboardExporter
                     innerHtml += `
                         <div class=""widget-value"" id=""val-${{w.Id}}"" style=""color: ${{w.ColorTheme}}"">--<span class=""widget-unit"">${{w.Unit}}</span></div>
                         <div class=""widget-footer"">
-                            <span>Field: ${{w.Field}}</span>
-                            <span>Live Telemetry</span>
+                            <span>${{w.Field}}</span>
+                            <span id=""z-${{w.Id}}"">수신 대기</span>
                         </div>`;
                 }} else if (w.WidgetType === 'gauge_meter') {{
                     innerHtml += `
@@ -228,15 +227,8 @@ public class DashboardExporter : IDashboardExporter
                             <div class=""gauge-bar-fill"" id=""gauge-${{w.Id}}"" style=""background-color: ${{w.ColorTheme}}""></div>
                         </div>
                         <div class=""widget-footer"">
-                            <span>Min: ${{w.MinLimit}} ${{w.Unit}}</span>
-                            <span>Max: ${{w.MaxLimit}} ${{w.Unit}}</span>
-                        </div>`;
-                }} else if (w.WidgetType === 'zscore_card') {{
-                    innerHtml += `
-                        <div class=""widget-value"" id=""val-${{w.Id}}"" style=""color: ${{w.ColorTheme}}"">0.0<span class=""widget-unit"">${{w.Unit}}</span></div>
-                        <div class=""widget-footer"">
-                            <span>Status: <strong id=""zs-status-${{w.Id}}"" class=""z-score-tag"">NORMAL</strong></span>
-                            <span>ML Z-Score Engine</span>
+                            <span>${{w.MinLimit}} ~ ${{w.MaxLimit}} ${{w.Unit}}</span>
+                            <span id=""z-${{w.Id}}"">수신 대기</span>
                         </div>`;
                 }} else if (w.WidgetType === 'line_chart') {{
                     chartBuffers[w.Id] = [];
@@ -244,8 +236,8 @@ public class DashboardExporter : IDashboardExporter
                         <div class=""widget-value"" id=""val-${{w.Id}}"" style=""font-size: 20px; color: ${{w.ColorTheme}}"">-- ${{w.Unit}}</div>
                         <canvas class=""widget-chart"" id=""chart-${{w.Id}}""></canvas>
                         <div class=""widget-footer"">
-                            <span>Real-time Trend (${{w.Field}})</span>
-                            <span>30 Samples</span>
+                            <span>${{w.Field}}</span>
+                            <span>최근 30 샘플</span>
                         </div>`;
                 }}
 
@@ -282,52 +274,103 @@ public class DashboardExporter : IDashboardExporter
             ctx.stroke();
         }}
 
+        // Every widget starts unknown. A channel that has not reported is not a channel reading
+        // zero, and the two must not look the same -- that distinction is the whole reason this
+        // page exists rather than a screenshot.
+        const latest = {{}};
+
+        function setConnection(status) {{
+            const el = document.getElementById('conn-status');
+            const dot = document.querySelector('.chip .dot');
+            if (!el) return;
+
+            const text = {{
+                CONNECTED: 'WS 연결됨 (:{port})',
+                CONNECTED_SSE: 'SSE 연결됨 (WebSocket 사용 불가)',
+                DISCONNECTED: '연결 끊김 - 재시도 중',
+                RETRYING_SLOWLY: '연결 끊김 - 재시도 간격을 늘리는 중',
+                ERROR: '연결 오류 - 재시도 중'
+            }}[status] || status;
+
+            el.innerText = text;
+            const live = status === 'CONNECTED' || status === 'CONNECTED_SSE';
+            if (dot) dot.style.backgroundColor = live ? '#00FF66' : '#FF2E63';
+        }}
+
+        function render(w) {{
+            const state = latest[w.Field];
+            const valEl = document.getElementById(`val-${{w.Id}}`);
+
+            if (!state) {{
+                if (valEl) valEl.innerHTML = `--<span class=""widget-unit"">${{w.Unit}}</span>`;
+                return;
+            }}
+
+            const unit = state.unit || w.Unit;
+
+            if (valEl) {{
+                valEl.innerHTML = state.value.toFixed(2) + `<span class=""widget-unit"">${{unit}}</span>`;
+                // Colour follows the detector's verdict rather than a threshold re-derived here,
+                // which could disagree with the engine that decided.
+                valEl.style.color = state.isAnomaly ? '#FF2E63' : w.ColorTheme;
+            }}
+
+            const zEl = document.getElementById(`z-${{w.Id}}`);
+            if (zEl) {{
+                // Absent rather than zero during warm-up: the engine reports no score until it has
+                // a baseline, and printing 0.0σ would state a verdict nobody reached.
+                zEl.innerText = (typeof state.anomalyScore === 'number')
+                    ? `z = ${{state.anomalyScore.toFixed(2)}}σ`
+                    : '기준선 학습 중';
+            }}
+
+            if (w.WidgetType === 'gauge_meter') {{
+                const gauge = document.getElementById(`gauge-${{w.Id}}`);
+                if (gauge && w.MaxLimit > w.MinLimit) {{
+                    const pct = Math.min(100, Math.max(0,
+                        ((state.value - w.MinLimit) / (w.MaxLimit - w.MinLimit)) * 100));
+                    gauge.style.width = pct + '%';
+                    gauge.style.backgroundColor = state.isAnomaly ? '#FF2E63' : w.ColorTheme;
+                }}
+            }} else if (w.WidgetType === 'line_chart') {{
+                const buf = chartBuffers[w.Id];
+                if (buf) {{
+                    buf.push(state.value);
+                    if (buf.length > 30) buf.shift();
+                    drawSparkline(`chart-${{w.Id}}`, buf, state.isAnomaly ? '#FF2E63' : w.ColorTheme);
+                }}
+            }}
+        }}
+
         window.addEventListener('DOMContentLoaded', () => {{
             buildDashboard();
 
-            if (typeof TelemetryClient !== 'undefined') {{
-                TelemetryClient.connect('ws://localhost:8080/ws');
-                TelemetryClient.onData(data => {{
-                    widgetConfigs.forEach(w => {{
-                        const rawVal = data[w.Field] !== undefined ? data[w.Field] : (data.temp || 0);
-                        const val = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal) || 0;
-
-                        const valEl = document.getElementById(`val-${{w.Id}}`);
-                        if (valEl) {{
-                            valEl.innerHTML = (w.WidgetType === 'zscore_card' ? val.toFixed(1) : val.toFixed(2)) + `<span class=""widget-unit"">${{w.Unit}}</span>`;
-                        }}
-
-                        if (w.WidgetType === 'gauge_meter') {{
-                            const gauge = document.getElementById(`gauge-${{w.Id}}`);
-                            if (gauge) {{
-                                const pct = Math.min(100, Math.max(0, ((val - w.MinLimit) / (w.MaxLimit - w.MinLimit)) * 100));
-                                gauge.style.width = pct + '%';
-                            }}
-                        }} else if (w.WidgetType === 'zscore_card') {{
-                            const tag = document.getElementById(`zs-status-${{w.Id}}`);
-                            if (tag) {{
-                                if (val >= 3.5) {{
-                                    tag.innerText = 'CRITICAL ANOMALY';
-                                    tag.className = 'z-score-tag anomaly';
-                                }} else if (val >= 2.0) {{
-                                    tag.innerText = 'WARNING';
-                                    tag.className = 'z-score-tag anomaly';
-                                }} else {{
-                                    tag.innerText = 'NORMAL';
-                                    tag.className = 'z-score-tag';
-                                }}
-                            }}
-                        }} else if (w.WidgetType === 'line_chart') {{
-                            const buf = chartBuffers[w.Id];
-                            if (buf) {{
-                                buf.push(val);
-                                if (buf.length > 30) buf.shift();
-                                drawSparkline(`chart-${{w.Id}}`, buf, w.ColorTheme);
-                            }}
-                        }}
-                    }});
-                }});
+            if (typeof TelemetryClient === 'undefined') {{
+                setConnection('ERROR');
+                const el = document.getElementById('conn-status');
+                if (el) el.innerText = 'telemetry-client.js 를 불러오지 못했습니다 (호스트가 실행 중인지 확인하세요)';
+                return;
             }}
+
+            TelemetryClient.onStatusChange(status => setConnection(status));
+            TelemetryClient.connect('ws://localhost:{port}/ws');
+
+            TelemetryClient.onData(packet => {{
+                // One packet, one channel. Widgets are matched on the variable that arrived,
+                // and a widget whose channel is not in this packet is left alone -- never filled
+                // in from a different quantity.
+                if (!packet || typeof packet.variable !== 'string') return;
+                if (typeof packet.value !== 'number') return;
+
+                latest[packet.variable] = {{
+                    value: packet.value,
+                    unit: packet.unit,
+                    isAnomaly: packet.isAnomaly === true,
+                    anomalyScore: typeof packet.anomalyScore === 'number' ? packet.anomalyScore : undefined
+                }};
+
+                widgetConfigs.filter(w => w.Field === packet.variable).forEach(render);
+            }});
         }});
     </script>
 </body>

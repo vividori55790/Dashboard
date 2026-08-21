@@ -44,6 +44,14 @@ public static class UsageText
               --simulate        Run the virtual simulator instead of hardware. Every frame it
                                 produces is marked simulated=true and its node id is prefixed
                                 'SIM:'. Env: {EnvironmentVariables.Simulate}=1
+              --profile <id>    Which monitoring profile to use. Applies to --simulate and to
+                                --export-dashboard. An unknown id is refused and the available
+                                ids are listed, rather than quietly falling back.
+              --export-dashboard <file>
+                                Write a standalone HTML console for the active profile: one card
+                                and one trend per declared channel, in that channel's own unit and
+                                range. Open it while this host runs; it connects back over the
+                                WebSocket. The directory must already exist.
               --plugin-dir <dir>
                                 Directory scanned for plugin assemblies at start-up.
                                 Default: 'plugins' beside the executable.

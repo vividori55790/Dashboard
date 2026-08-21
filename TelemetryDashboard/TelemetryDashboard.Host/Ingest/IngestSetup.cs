@@ -54,29 +54,20 @@ public static class IngestSetup
 
         if (!options.Simulate) return null;
 
-        MonitoringProfileSet profiles = MonitoringProfileStore.Load(AppContext.BaseDirectory);
+        // Resolved through the same helper the dashboard export uses, so a run cannot generate one
+        // machine's channels while its exported page describes another.
+        ProfileResolution.Result resolved =
+            ProfileResolution.Resolve(options.ProfileId, AppContext.BaseDirectory);
 
-        if (profiles.Status == ProfileSourceStatus.Invalid)
+        if (resolved.Warning is not null) Console.Error.WriteLine($"telemetry-host: {resolved.Warning}");
+
+        if (resolved.Error is not null)
         {
-            // Said out loud, then carried on with the built-ins. A profile file that failed to parse
-            // and one that was never written produce the same set of profiles, and only the first is
-            // a mistake somebody needs to hear about.
-            Console.Error.WriteLine($"telemetry-host: {profiles.Message}");
+            Console.Error.WriteLine($"telemetry-host: {resolved.Error}");
+            return null;
         }
 
-        if (options.ProfileId is null) return new SimulatedTelemetrySource(profiles.Profiles.FirstOrDefault());
-
-        MonitoringProfile? named = profiles.Profiles
-            .FirstOrDefault(p => string.Equals(p.Id, options.ProfileId, StringComparison.OrdinalIgnoreCase));
-
-        if (named is not null) return new SimulatedTelemetrySource(named);
-
-        // Refused rather than defaulted. Generating a different machine's channels than the one
-        // asked for, under a name the operator chose, is precisely what profiles exist to stop.
-        Console.Error.WriteLine(
-            $"telemetry-host: no profile with id '{options.ProfileId}'. Available: "
-            + string.Join(", ", profiles.Profiles.Select(p => p.Id)));
-        return null;
+        return new SimulatedTelemetrySource(resolved.Profile);
     }
 
     /// <summary>

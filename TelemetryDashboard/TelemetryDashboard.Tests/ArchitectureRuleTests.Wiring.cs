@@ -48,7 +48,11 @@ public partial class ArchitectureRuleTests
         // Connected forever and reconnection impossible.
         "BinaryOpNode",
         "CommandItem",
-        "DashboardExporter",
+        // DashboardExporter retired from this baseline: TelemetryDashboard.Host writes a standalone
+        // HTML console behind --export-dashboard, built from the profile in force. Feature 6 was
+        // marked Built since M2 while nothing constructed it, so the page had never been opened --
+        // which is how it kept a connection chip reading "WS CONNECTED" that no code updated, and a
+        // widget that filled a missing field in from the temperature and then from zero.
         "DeltaCursorService",
         "DerivedNumericProjection",
         "DropResult",

@@ -79,6 +79,7 @@ public static class Program
         await StartupBanner.PrintAsync(console, source, recorder, shutdown.Token).ConfigureAwait(false);
         await ExtensionCatalogueReport.PrintAsync(options, shutdown.Token).ConfigureAwait(false);
         await UpdateCheck.PrintAsync(options, HostVersion, shutdown.Token).ConfigureAwait(false);
+        DashboardExport.Print(options);
 
         // The pump is built before the plugins so they are handed the router it is publishing
         // through, and started after them so no frame is routed past a plugin that is not up yet.

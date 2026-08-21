@@ -38,7 +38,7 @@ Two portability details that were silently broken and are now explicit:
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
-| 6 | No-Code Web Builder | `Core.Services.DashboardExporter` → `custom_dashboard.html` | M2 | Built |
+| 6 | No-Code Web Builder | `Core.Services.DashboardExporter` + `ProfileDashboardWidgets`, via `telemetry-host --export-dashboard` | M2 | Built |
 | 7 | 2D Visual Node Wires | `stream_client.html` | M2 | Built |
 | 8 | DVR Time-Travel & Report | `Core.Recording.TimeTravelDvrPlayer`, `Infrastructure.Replay.IncidentReportGenerator` | M2 | Built |
 | 9 | Right-Docked Event List UX | `UI.Controls.ControlPanelControl` | M2 | Built |
@@ -250,7 +250,31 @@ a **one-hour** deadline and a `while(true)`, and the call still returns — so r
 backstop to ten seconds costs nothing that was protecting anybody. A timeout now says it is a limit
 on time rather than a fault in the script.
 
-**Suite: 970 passing, 0 failing** (902 portable + 68 desktop) — 6 m 16 s for everything, 1 m 14 s
+### Feature 6 reached a user for the first time
+`DashboardExporter` was marked Built in M2 and constructed by nothing, so no running program could
+produce a dashboard and the page it emitted had never been opened. `telemetry-host
+--export-dashboard <file>` writes one now, built from the profile in force: one reading card and
+one trend per declared channel, in that channel's own unit and range.
+
+Making it reachable exposed three faults that had survived precisely because it was not:
+
+- The connection chip was the literal text **WS CONNECTED**, written into the markup and updated by
+  nothing. `TelemetryClient` had been reporting `CONNECTED`/`DISCONNECTED`/`ERROR` all along through
+  `onStatusChange`; the page simply never asked.
+- A widget whose field was absent from a packet fell back to `data.temp`, and then to `0` — so a
+  card headed with one quantity could show another's reading, or a confident zero, with nothing on
+  screen to say which. Worse, the fields it asked for (`temp`, `vin`) are not the ones this wire
+  format carries at all, so every card would have sat at its placeholder forever.
+- Port 8080 was hardcoded in the script tag, the socket URL and the chip, so a host on any other
+  port exported a page pointing at nothing while claiming to be connected.
+
+Verified by running the page's **own script** — extracted from the exported file, not a copy —
+against live packets from a running host (`verify_dashboard.js`): eight checks covering both
+profiles, including that a card whose channel never reported still shows no value, and that a packet
+for an unknown channel changes nothing. The browser pane in this environment would not composite, so
+what the page *looks* like is still unverified and marked as such.
+
+**Suite: 974 passing, 0 failing** (906 portable + 68 desktop) — 6 m 16 s for everything, 1 m 14 s
 with `--filter "Category!=Benchmark"`. The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two
 tests were fixed at the cause rather than loosened — the JavaScript load timeout above, and
