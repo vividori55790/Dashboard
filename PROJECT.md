@@ -44,7 +44,7 @@ Two portability details that were silently broken and are now explicit:
 | 9 | Right-Docked Event List UX | `UI.Controls.ControlPanelControl` | M2 | Built |
 | 10 | Adaptive Dynamic Sampling | `Core.Services.AdaptiveSamplingController` | M3 | Built |
 | 11 | Multi-Channel Alert Forwarder | `Infrastructure.Integrations.MultiChannelAlertForwarder` (Slack, Discord, Telegram, generic webhook) | M3 | Built |
-| 12 | LLM Diagnosis & Emergency Control | `Core.Services.LlmDiagnosisAgent`, `EmergencyMcuController` | M3 | Built |
+| 12 | LLM Diagnosis & Emergency Control | `Core.Services.LlmDiagnosisAgent`, `EmergencyMcuController` via `telemetry-host --emergency-stop` | M3 | Built |
 | 13 | Hot-Reload Plugin Sandbox | `Core.Plugins.ScriptPluginSandbox` + formula, managed, `JavaScriptEngine` (Jint), `PythonScriptEngine` (IronPython) | M4 | Built |
 | 14 | Remote MCU OTA Flasher | `Infrastructure.Serial.EdgeMcuOtaFlasher`, `Core.Firmware.IntelHexParser` | M4 | Built |
 | 15 | Industrial Protocol Adapters | `Core.Protocols.{CanBus,Modbus,Ros2}BridgeAdapter` via `ProtocolBridgeRegistry` | M4 | Built |
@@ -274,8 +274,49 @@ profiles, including that a card whose channel never reported still shows no valu
 for an unknown channel changes nothing. The browser pane in this environment would not composite, so
 what the page *looks* like is still unverified and marked as such.
 
-**Suite: 974 passing, 0 failing** (906 portable + 68 desktop) — 6 m 16 s for everything, 1 m 14 s
-with `--filter "Category!=Benchmark"`. The intermittent
+### Feature 12: the one path that acts on the machine
+`EmergencyMcuController` was marked Built in M3 and constructed by nothing, so the only feature that
+*writes to* hardware rather than reading it could not be reached from any running program.
+`telemetry-host --emergency-stop` arms it: above `--emergency-sigma`, transmit `--emergency-command`
+to the serial port, at most once per channel per `--emergency-cooldown`.
+
+Two refusals are the design, and both are verified against the real binary:
+
+```
+--simulate --emergency-stop   → refused: needs --serial. The interlock transmits to the port
+                                you opened; this host will not choose one to write to.
+--emergency-sigma 4.0         → refused: tuning an interlock that is switched off does nothing.
+```
+
+That matters because the controller ships a default rule that **auto-executes against a port
+literally named `COM3`**. A host that armed itself would have been writing to whatever happened to
+be on that port. The relay discards that rule rather than adding to it, and registers only what the
+operator configured.
+
+Wiring it also found a defect in the controller: a trigger held back by the cooldown did a bare
+`return false` — no history entry, no event — while a trigger held back by the disarm interlock was
+recorded. So a channel that stayed over threshold for a minute produced one history entry and then
+silence, and a reader could not tell a throttled storm from a condition that cleared. Suppressions
+are now recorded and counted, the way every other relay here reports what it held back.
+
+**Not verified, and marked so:** the byte leaving a serial port. That needs hardware this repository
+does not have. Everything in front of it is — when it arms, when it refuses, what it sends, where it
+sends it, and that a warm-up sample with no verdict can never trip it.
+
+### The flaky suite was one story
+Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
+downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
+passing alone. Chasing them found two genuine defects worth having (above, and the JavaScript load
+timeout). The residue was xUnit running measurement-sensitive tests concurrently: tests whose
+assertion *is* a measurement, measuring each other.
+
+Eleven classes now share one `DisableParallelization` collection, so they take turns. Nothing is
+excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
+lying.
+
+**Suite: 983 passing, 0 failing** (915 portable + 68 desktop) — about 2 m 35 s with
+`--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
+seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two
 tests were fixed at the cause rather than loosened — the JavaScript load timeout above, and
 `Win32HotPlugHook_RapidMessages_DebouncesToSingleEvent`, which slept between messages so a stalled

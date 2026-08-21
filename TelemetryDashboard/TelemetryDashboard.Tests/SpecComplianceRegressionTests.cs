@@ -11,6 +11,7 @@ namespace TelemetryDashboard.Tests;
 /// Regression tests pinning the defects found during the PROJECT.md / IDEA.md specification
 /// compliance review. Each test reproduces a concrete failure of the previous implementation.
 /// </summary>
+[Collection(HeavyTestCollection.Name)]
 public class SpecComplianceRegressionTests
 {
     // ---------------------------------------------------------------------

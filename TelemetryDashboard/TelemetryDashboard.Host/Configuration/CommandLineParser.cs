@@ -1,3 +1,4 @@
+using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -132,6 +133,39 @@ public static class CommandLineParser
                     draft.ChannelMapPath = Path.GetFullPath(rawMap);
                     break;
 
+                case "--emergency-stop":
+                    draft.EmergencyStop = true;
+                    break;
+
+                case "--emergency-sigma":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawSigma)) return ArgumentCursor.MissingValue(argument);
+                    if (!double.TryParse(rawSigma, NumberStyles.Float, CultureInfo.InvariantCulture, out double sigma)
+                        || !double.IsFinite(sigma) || sigma <= 0)
+                    {
+                        return ArgumentCursor.Fail($"'{rawSigma}' is not a positive sigma threshold.");
+                    }
+                    draft.EmergencySigma = sigma;
+                    break;
+
+                case "--emergency-command":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawCommand)) return ArgumentCursor.MissingValue(argument);
+                    if (string.IsNullOrWhiteSpace(rawCommand))
+                    {
+                        return ArgumentCursor.Fail("--emergency-command needs a command to transmit.");
+                    }
+                    draft.EmergencyCommand = rawCommand;
+                    break;
+
+                case "--emergency-cooldown":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawCooldown)) return ArgumentCursor.MissingValue(argument);
+                    if (!double.TryParse(rawCooldown, NumberStyles.Float, CultureInfo.InvariantCulture, out double cooldown)
+                        || !double.IsFinite(cooldown) || cooldown < 0)
+                    {
+                        return ArgumentCursor.Fail($"'{rawCooldown}' is not a cooldown in seconds.");
+                    }
+                    draft.EmergencyCooldownSec = cooldown;
+                    break;
+
                 case "--export-dashboard":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawExport)) return ArgumentCursor.MissingValue(argument);
                     // The directory has to exist; creating one the operator did not ask for is how
@@ -190,6 +224,27 @@ public static class CommandLineParser
             return ArgumentCursor.Fail(
                 "--profile applies to --simulate or --export-dashboard; it describes what to generate "
                 + "or what to draw, not how to read a device.");
+        }
+
+        // Refused rather than ignored, and refused rather than allowed to pick a port itself. This
+        // is the only flag that transmits to hardware, so the port it writes to has to be one the
+        // operator named -- and the controller behind it defaults to a rule aimed at COM3, which
+        // would otherwise be where an unqualified --emergency-stop ended up pointing.
+        if (draft.EmergencyStop && draft.SerialPort is null)
+        {
+            return ArgumentCursor.Fail(
+                "--emergency-stop needs --serial: the interlock transmits to the port you opened, "
+                + "and this host will not choose a port to write to on its own.");
+        }
+
+        if (!draft.EmergencyStop
+            && (draft.EmergencySigma != HostOptions.DefaultEmergencySigma
+                || draft.EmergencyCommand != HostOptions.DefaultEmergencyCommand
+                || draft.EmergencyCooldownSec != HostOptions.DefaultEmergencyCooldownSec))
+        {
+            return ArgumentCursor.Fail(
+                "--emergency-sigma, --emergency-command and --emergency-cooldown only apply with "
+                + "--emergency-stop; tuning an interlock that is switched off does nothing.");
         }
 
         if (draft.PollEndpoint is not null && (draft.SseEndpoint is not null || draft.SerialPort is not null || draft.Simulate))

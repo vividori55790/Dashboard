@@ -16,6 +16,7 @@ using TelemetryDashboard.Infrastructure.Serial;
 using Xunit;
 using TelemetryDashboard.Core.Plugins;
 
+[Collection(HeavyTestCollection.Name)]
 public class Challenger1EmpiricalStressTests
 {
     #region 1. Empirical Stress Tests: Packet Parsing

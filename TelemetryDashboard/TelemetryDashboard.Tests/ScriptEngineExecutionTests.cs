@@ -13,6 +13,7 @@ namespace TelemetryDashboard.Tests;
 /// at all, and the Python path validated syntax and then refused to run. Both are embedded managed
 /// interpreters now, so these assertions are about real output, not about a stub's error message.
 /// </remarks>
+[Collection(HeavyTestCollection.Name)]
 public class ScriptEngineExecutionTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "tdscripts_" + Guid.NewGuid().ToString("N")[..8]);

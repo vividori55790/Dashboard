@@ -5,6 +5,8 @@ using TelemetryDashboard.Host.Configuration;
 using TelemetryDashboard.Host.Ingest;
 using TelemetryDashboard.Infrastructure.WebServer;
 
+using TelemetryDashboard.Core.Interfaces;
+
 namespace TelemetryDashboard.Host.Outbound;
 
 /// <summary>
@@ -24,6 +26,7 @@ public sealed class OutboundRelays : IAsyncDisposable
     private readonly List<string> _banner = new();
     private SlackAlertRelay? _slack;
     private MqttTelemetryRelay? _mqtt;
+    private EmergencyInterlockRelay? _emergency;
 
     private OutboundRelays() { }
 
@@ -31,10 +34,11 @@ public sealed class OutboundRelays : IAsyncDisposable
     public IReadOnlyList<string> BannerLines => _banner;
 
     /// <summary>Whether anything at all is relaying.</summary>
-    public bool IsActive => _slack is not null || _mqtt is not null;
+    public bool IsActive => _slack is not null || _mqtt is not null || _emergency is not null;
 
     /// <summary>Builds and subscribes the configured relays.</summary>
-    public static async Task<OutboundRelays> StartAsync(HostOptions options, TelemetryIngestPump? pump)
+    public static async Task<OutboundRelays> StartAsync(
+        HostOptions options, TelemetryIngestPump? pump, ISerialManager? serialManager = null)
     {
         var relays = new OutboundRelays();
 
@@ -61,6 +65,17 @@ public sealed class OutboundRelays : IAsyncDisposable
             }
         }
 
+        relays._emergency = EmergencyInterlockRelay.Start(options, serialManager);
+        if (relays._emergency is not null)
+        {
+            relays._banner.Add(
+                $"  emergency     ARMED -- above {options.EmergencySigma:0.#} sigma, transmits "
+                + $"'{options.EmergencyCommand.Trim()}' to {options.SerialPort}");
+            relays._banner.Add(
+                $"                at most once per channel every {options.EmergencyCooldownSec:0.#}s. "
+                + "This host writes to your hardware.");
+        }
+
         relays.Subscribe(pump);
         return relays;
     }
@@ -78,6 +93,7 @@ public sealed class OutboundRelays : IAsyncDisposable
 
         if (_slack is not null) pump.SampleScored += _slack.OnSampleScored;
         if (_mqtt is not null) pump.SampleScored += _mqtt.OnSampleScored;
+        if (_emergency is not null) pump.SampleScored += _emergency.OnSampleScored;
     }
 
     /// <summary>What each relay actually delivered, for the shutdown report.</summary>
@@ -86,6 +102,7 @@ public sealed class OutboundRelays : IAsyncDisposable
         var lines = new List<string>();
         if (_slack?.Summary() is { } slack) lines.Add("           " + slack);
         if (_mqtt?.Summary() is { } mqtt) lines.Add("           " + mqtt);
+        if (_emergency?.Summary() is { } emergency) lines.Add("           " + emergency);
         return lines;
     }
 
@@ -93,5 +110,6 @@ public sealed class OutboundRelays : IAsyncDisposable
     {
         if (_slack is not null) await _slack.DisposeAsync().ConfigureAwait(false);
         if (_mqtt is not null) await _mqtt.DisposeAsync().ConfigureAwait(false);
+        if (_emergency is not null) await _emergency.DisposeAsync().ConfigureAwait(false);
     }
 }

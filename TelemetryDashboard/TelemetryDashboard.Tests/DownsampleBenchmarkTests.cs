@@ -17,6 +17,7 @@ namespace TelemetryDashboard.Tests;
 /// for reasons that have nothing to do with the algorithm. The numbers themselves are written to
 /// the test output, which is what the claims in the report are drawn from.
 /// </remarks>
+[Collection(HeavyTestCollection.Name)]
 public class DownsampleBenchmarkTests
 {
     private readonly ITestOutputHelper _output;
@@ -50,18 +51,41 @@ public class DownsampleBenchmarkTests
         SeriesPoint[] source = Signal(count);
         var destination = new SeriesPoint[budget];
 
-        MinMaxDownsampler.Reduce(source, budget, destination);  // warm the code path
+        // Warmed more than once, and the allocation taken as the minimum of several runs -- the
+        // same treatment Benchmark_LttbReduction below has carried for a while, and which this
+        // twin was simply never given.
+        //
+        // A single warm-up call leaves the method at tier-0. The measured call can then be
+        // re-jitted mid-measurement, and the re-JIT allocates on this thread -- so the reduction
+        // was charged for bytes it never asked for. In isolation that almost never happened; inside
+        // the full suite, where the machine is busy enough to shift the tiering, it produced a
+        // failure roughly one run in three and never reproduced when the test was run alone.
+        //
+        // Minimum-of-N is the right estimator here rather than a widened bound: the true allocation
+        // is zero, every source of noise can only add, and a run that allocates nothing proves the
+        // claim outright. Widening the bound would have made the test pass without making it true.
+        const int Runs = 5;
+        for (int i = 0; i < Runs; i++) MinMaxDownsampler.Reduce(source, budget, destination);
 
         var clock = new Stopwatch();
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        clock.Restart();
-        int written = MinMaxDownsampler.Reduce(source, budget, destination);
-        clock.Stop();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        long allocated = long.MaxValue;
+        double fastestMs = double.MaxValue;
+        int written = 0;
+
+        for (int i = 0; i < Runs; i++)
+        {
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            clock.Restart();
+            written = MinMaxDownsampler.Reduce(source, budget, destination);
+            clock.Stop();
+
+            allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            fastestMs = Math.Min(fastestMs, clock.Elapsed.TotalMilliseconds);
+        }
 
         _output.WriteLine(
             $"min/max  in={count,9:N0}  out={written,5:N0}  ratio={count / (double)written,8:N1}:1  " +
-            $"wall={clock.Elapsed.TotalMilliseconds,7:F3} ms  alloc={allocated,6:N0} B");
+            $"wall={fastestMs,7:F3} ms  alloc={allocated,6:N0} B  (best of {Runs})");
 
         written.Should().BeLessThanOrEqualTo(budget);
         allocated.Should().Be(0, "the reduction writes into the caller's buffer and allocates nothing");
@@ -90,22 +114,25 @@ public class DownsampleBenchmarkTests
         // nothing, at least one run of five will show zero; if the reduction starts allocating per
         // call, every run shows it and the floor rises. Loosening the bound instead would have hidden
         // exactly the regression this test exists to catch.
+        const int Runs = 5;
         var clock = new Stopwatch();
         long allocated = long.MaxValue;
+        double fastestMs = double.MaxValue;
         int written = 0;
 
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < Runs; attempt++)
         {
             long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
             clock.Restart();
             written = LttbDownsampler.Reduce(source, budget, destination);
             clock.Stop();
             allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            fastestMs = Math.Min(fastestMs, clock.Elapsed.TotalMilliseconds);
         }
 
         _output.WriteLine(
             $"lttb     in={count,9:N0}  out={written,5:N0}  ratio={count / (double)written,8:N1}:1  " +
-            $"wall={clock.Elapsed.TotalMilliseconds,7:F3} ms  alloc={allocated,6:N0} B");
+            $"wall={fastestMs,7:F3} ms  alloc={allocated,6:N0} B  (best of {Runs})");
 
         written.Should().Be(budget);
         allocated.Should().Be(0);

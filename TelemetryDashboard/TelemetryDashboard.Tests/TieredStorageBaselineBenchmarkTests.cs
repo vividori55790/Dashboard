@@ -30,6 +30,7 @@ namespace TelemetryDashboard.Tests;
 /// looked exactly like a deadlock in the code under test.
 /// </para>
 /// </remarks>
+[Collection(HeavyTestCollection.Name)]
 public sealed class TieredStorageBaselineBenchmarkTests
 {
     private readonly ITestOutputHelper _output;

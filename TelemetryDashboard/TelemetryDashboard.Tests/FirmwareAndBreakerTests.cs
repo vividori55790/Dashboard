@@ -8,6 +8,7 @@ namespace TelemetryDashboard.Tests;
 /// <summary>
 /// Covers Intel HEX decoding, bounded OTA retries, and circuit-breaker rate accounting.
 /// </summary>
+[Collection(HeavyTestCollection.Name)]
 public class FirmwareAndBreakerTests
 {
     // A real Intel HEX image: 16 bytes at 0x0100, then 4 bytes at 0x0110, then EOF.

@@ -462,6 +462,11 @@ public partial class ArchitectureRuleTests
         // that persists whatever arrived. Most of the addition is the account of what it replaces,
         // which belongs next to the code rather than in a commit message nobody reads twice.
         "TelemetryDashboard.UI/MainWindow.Archive.cs",                             // 177 lines
+
+        // Feature 12 reaching a running program for the first time. Most of the addition in each
+        // file is the account of why an interlock that transmits to hardware is off by default and
+        // refuses to pick its own port, which belongs beside the code that enforces it.
+        "TelemetryDashboard.Host/Outbound/EmergencyInterlockRelay.cs",             // 157 lines
     };
 
     [Fact]

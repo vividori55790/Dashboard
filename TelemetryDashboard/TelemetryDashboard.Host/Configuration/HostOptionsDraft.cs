@@ -35,6 +35,10 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = defaults.ChannelMapPath;
         ProfileId = defaults.ProfileId;
         DashboardExportPath = defaults.DashboardExportPath;
+        EmergencyStop = defaults.EmergencyStop;
+        EmergencySigma = defaults.EmergencySigma;
+        EmergencyCommand = defaults.EmergencyCommand;
+        EmergencyCooldownSec = defaults.EmergencyCooldownSec;
         PollEndpoint = defaults.PollEndpoint;
         PollInterval = defaults.PollInterval;
     }
@@ -58,6 +62,10 @@ internal sealed class HostOptionsDraft
     public string? ChannelMapPath;
     public string? ProfileId;
     public string? DashboardExportPath;
+    public bool EmergencyStop;
+    public double EmergencySigma = HostOptions.DefaultEmergencySigma;
+    public string EmergencyCommand = HostOptions.DefaultEmergencyCommand;
+    public double EmergencyCooldownSec = HostOptions.DefaultEmergencyCooldownSec;
     public string? PollEndpoint;
     public TimeSpan PollInterval;
 
@@ -82,6 +90,10 @@ internal sealed class HostOptionsDraft
         ChannelMapPath = ChannelMapPath,
         ProfileId = ProfileId,
         DashboardExportPath = DashboardExportPath,
+        EmergencyStop = EmergencyStop,
+        EmergencySigma = EmergencySigma,
+        EmergencyCommand = EmergencyCommand,
+        EmergencyCooldownSec = EmergencyCooldownSec,
         PollEndpoint = PollEndpoint,
         PollInterval = PollInterval
     };

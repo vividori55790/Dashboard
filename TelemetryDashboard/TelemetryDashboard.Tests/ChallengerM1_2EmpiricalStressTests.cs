@@ -10,6 +10,7 @@ using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Parsers;
 using TelemetryDashboard.Core.Services;
 
+[Collection(HeavyTestCollection.Name)]
 public class ChallengerM1_2EmpiricalStressTests
 {
     // ==========================================

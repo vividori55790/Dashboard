@@ -21,6 +21,7 @@ using Xunit;
 /// memory leak verification, snapshot extraction under failure, and channel stability).
 /// </summary>
 [Trait("Category", "Tier4")]
+[Collection(HeavyTestCollection.Name)]
 public class SustainedTelemetryStressTest
 {
     private class RollingSnapshotExtractor

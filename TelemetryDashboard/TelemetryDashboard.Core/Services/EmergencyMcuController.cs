@@ -60,6 +60,36 @@ public class EmergencyMcuController : IEmergencyMcuController
         });
     }
 
+    /// <summary>Triggers that fired but were held back by a cooldown.</summary>
+    /// <remarks>
+    /// Counted because the alternative is an operator reading a single dispatch and concluding the
+    /// condition happened once. Every relay in this project reports what it held back for the same
+    /// reason.
+    /// </remarks>
+    public long SuppressedByCooldown => Interlocked.Read(ref _suppressedByCooldown);
+
+    private long _suppressedByCooldown;
+
+    /// <summary>Adds an outcome to the history and announces it, whatever the outcome was.</summary>
+    private void RecordAndAnnounce(EmergencyEventRecord record)
+    {
+        lock (_lock)
+        {
+            _history.Add(record);
+        }
+
+        EmergencyTriggered?.Invoke(this, new EmergencyTriggerEventArgs
+        {
+            ChannelName = record.ChannelName,
+            PortOrNode = record.TargetPort,
+            ZScore = record.ZScore,
+            Value = record.Value,
+            CommandTxPayload = record.CommandPayload,
+            Dispatched = record.Dispatched,
+            Timestamp = record.Timestamp
+        });
+    }
+
     public void Arm()
     {
         IsArmed = true;
@@ -164,7 +194,25 @@ public class EmergencyMcuController : IEmergencyMcuController
         {
             if ((DateTime.UtcNow - lastTime).TotalSeconds < matchingRule.CooldownSec)
             {
-                return false; // Suppressed by debounce cooldown
+                // Recorded, not merely returned. This used to be a bare `return false`, so a
+                // channel that stayed over threshold for a minute produced one history entry and
+                // then nothing -- and the history is the only account anyone has afterwards of
+                // what the interlock did. A reader could not tell a storm that was throttled from
+                // a condition that cleared, which are opposite facts about the machine.
+                Interlocked.Increment(ref _suppressedByCooldown);
+                RecordAndAnnounce(new EmergencyEventRecord
+                {
+                    Timestamp = DateTime.UtcNow,
+                    ChannelName = channelName,
+                    TargetPort = targetPort,
+                    ZScore = zScore,
+                    Value = value,
+                    CommandPayload = matchingRule.CommandTxPayload,
+                    Dispatched = false,
+                    Reason = $"Suppressed: within {matchingRule.CooldownSec:0.#}s cooldown of the last dispatch"
+                });
+
+                return false;
             }
         }
 

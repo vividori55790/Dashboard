@@ -18,6 +18,7 @@ namespace TelemetryDashboard.Tests;
 /// <see cref="CancellationTokenSource"/> in the endpoint, so the deadline under test is the shipped
 /// one.
 /// </remarks>
+[Collection(HeavyTestCollection.Name)]
 public class InferenceEndpointTests
 {
     private static readonly Uri Endpoint = new("http://127.0.0.1:9/score");

@@ -52,6 +52,17 @@ public static class UsageText
                                 and one trend per declared channel, in that channel's own unit and
                                 range. Open it while this host runs; it connects back over the
                                 WebSocket. The directory must already exist.
+              --emergency-stop  Transmit a command back to the device when a channel is judged
+                                past --emergency-sigma. OFF by default and refused without
+                                --serial: this is the only flag that makes the host act on your
+                                hardware, and it writes only to the port you opened.
+              --emergency-sigma <n>
+                                Sigma at which the interlock fires. Default {HostOptions.DefaultEmergencySigma}.
+              --emergency-command <text>
+                                What to transmit. Default '{HostOptions.DefaultEmergencyCommand}'.
+              --emergency-cooldown <sec>
+                                Seconds before the same channel may fire again. Default
+                                {HostOptions.DefaultEmergencyCooldownSec}. Triggers held back are counted and reported.
               --plugin-dir <dir>
                                 Directory scanned for plugin assemblies at start-up.
                                 Default: 'plugins' beside the executable.

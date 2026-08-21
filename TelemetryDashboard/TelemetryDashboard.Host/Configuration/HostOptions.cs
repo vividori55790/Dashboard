@@ -130,6 +130,30 @@ public sealed class HostOptions
     /// </remarks>
     public string? ProfileId { get; init; }
 
+    /// <summary>Whether an anomaly may transmit a command back to the device. Off unless asked.</summary>
+    /// <remarks>
+    /// This is the one flag in the host that makes the program <em>act on</em> the machine rather
+    /// than watch it, so it is opt-in and it is refused without <see cref="SerialPort"/>: the only
+    /// port it can write to is the one the operator already told it to open. A monitoring tool that
+    /// transmits to hardware because a statistic crossed a threshold, without being asked to, is
+    /// not a feature — and the controller behind it ships a default rule that auto-executes against
+    /// a port called COM3, which is exactly the accident this refuses to have.
+    /// </remarks>
+    public bool EmergencyStop { get; init; }
+
+    /// <summary>Sigma at which the interlock fires. Only meaningful with <see cref="EmergencyStop"/>.</summary>
+    public double EmergencySigma { get; init; } = DefaultEmergencySigma;
+
+    /// <summary>Command transmitted when the interlock fires.</summary>
+    public string EmergencyCommand { get; init; } = DefaultEmergencyCommand;
+
+    /// <summary>Seconds before the same channel may fire the interlock again.</summary>
+    public double EmergencyCooldownSec { get; init; } = DefaultEmergencyCooldownSec;
+
+    public const double DefaultEmergencySigma = 3.5;
+    public const string DefaultEmergencyCommand = "$CMD,SAFE_MODE";
+    public const double DefaultEmergencyCooldownSec = 5.0;
+
     /// <summary>Path to write a standalone HTML dashboard to, or null for none.</summary>
     /// <remarks>
     /// The file is a complete console for whatever profile is in force: one card and one trend per

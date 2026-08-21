@@ -13,6 +13,7 @@ using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Infrastructure.Serial;
 
+[Collection(HeavyTestCollection.Name)]
 public class F09_AdversarialStressTests
 {
     private readonly Mock<ISerialManager> _mockSerialManager;

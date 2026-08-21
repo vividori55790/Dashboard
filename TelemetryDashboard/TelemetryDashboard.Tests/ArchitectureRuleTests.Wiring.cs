@@ -57,7 +57,12 @@ public partial class ArchitectureRuleTests
         "DerivedNumericProjection",
         "DropResult",
         "DvrFrameEventArgs",
-        "EmergencyMcuController",
+        // EmergencyMcuController retired from this baseline: EmergencyInterlockRelay constructs it
+        // behind --emergency-stop, so the one feature that acts on the machine rather than watching
+        // it can now be reached from a running program. It stays off by default and is refused
+        // without --serial, because the controller ships a rule that auto-executes against a port
+        // literally named COM3 -- a host that armed itself would be writing to whatever happened to
+        // be there.
         "EventLogEntry",
         // ExtensionRegistry retired from this baseline: installing exists now, so the host has
         // something to register. ExtensionLoader fills it from the extension store and asks it

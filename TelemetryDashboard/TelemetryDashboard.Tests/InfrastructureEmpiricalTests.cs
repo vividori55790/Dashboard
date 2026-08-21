@@ -14,6 +14,7 @@ using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Infrastructure.Serial;
 using Xunit;
 
+[Collection(HeavyTestCollection.Name)]
 public class InfrastructureEmpiricalTests
 {
     #region 1. MultiPortSerialManager Tests
