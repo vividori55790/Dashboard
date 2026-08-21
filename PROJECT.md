@@ -37,6 +37,7 @@ Two portability details that were silently broken and are now explicit:
 | 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` via `/api/aligned` | M1 | Built |
 | 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`; published live by `Host.Ingest.ComputedChannelPump` | M2 | Built |
 | 2c | Engineering Limits | `Core.Analytics.ChannelLimit` + `LimitMonitor` via `/api/limits`, declared by profile or `--limit` | M3 | Built |
+| 12b | Loopback Serial Port | `Host.Ingest.LoopbackSerialManager` over `Core.Simulator.MockSerialPort`, via `--serial loopback` | M3 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -700,7 +701,46 @@ breach check read the card's `innerHTML`, where the label is assigned as `textCo
 that is an assertion about the shim, which is the fourth time that particular trap has been walked
 into and the first time it was walked into in the direction of a false failure.
 
-**Suite: 1,107 passing, 0 failing** (1,039 portable + 68 desktop) — about 2 m 35 s with
+### The interlock was armed on the one signal that cannot see a steady fault
+The emergency interlock is the only thing in this product that acts on the machine rather than
+watching it, and `OnSampleScored` began `if (sample.ZScore is not double z) return;`. So it could
+only ever fire on a rolling z-score — the signal measured, last cycle, to be blind to a channel
+held 42–119 V above a hard limit for 107 consecutive samples.
+
+`--emergency-limit "<declaration>"` declares a limit that also trips. It is a separate flag from
+`--limit` because they are separate authorisations: every limit says "somebody should look", and
+this one says "act on the machine". Making every band excursion a trip would be its own kind of
+unsafe — a converter shut down for a two-sample overshoot is a converter whose interlock gets
+disabled by the end of the week. The flag is refused without `--emergency-stop`, because a limit
+that says it will act on a host that cannot is worse than no limit: it reads as protection.
+
+Unlike the sigma path, it fires during warm-up. A reading outside a hard limit is outside it before
+any baseline exists, and the machine does not wait for statistics before being damaged.
+
+**`--serial loopback` makes this observable without hardware.** `MockSerialPort` had been written
+for exactly this and was constructed by nothing. `LoopbackSerialManager` builds ports out of it and
+`LoopbackTelemetrySource` sends profile frames in one side and reads them back out the other, so
+the parser, the checksum and the routing rules all run on their real inputs — and anything the host
+writes back is announced. This is the first time in this project that a command has been watched
+leaving the host's write path. What it does **not** check is the driver, the cable and the device:
+it proves the host wrote the command to the port it was told to, and nothing after that.
+
+**Its first run found a defect immediately.** 91 identical commands in twenty seconds, from a
+five-second cooldown — because the limit path handed the command straight to the queue, bypassing
+the controller where the cooldown lives. The fix distinguishes a crossing from a hold: the crossing
+always acts, and a breach that is merely still there re-asserts only after the cooldown, because
+both halves are true at once — a machine that ignored the first command should be told again, and a
+command per sample is a flood aimed at the one port that matters. Re-measured: 242 breaching
+samples, 7 commands.
+
+Two more things were wrong and are fixed. The command line refused `--profile` alongside
+`--serial loopback` — a check written before a serial port could generate from a profile, which
+rejected the only configuration that can exercise the interlock. And the armed banner said only
+`above 3.5 sigma`, leaving an operator to read a sigma threshold and assume that was all of it; it
+now names every trip limit, and says plainly when there are none that a steady excursion will not
+trip this host.
+
+**Suite: 1,116 passing, 0 failing** (1,048 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

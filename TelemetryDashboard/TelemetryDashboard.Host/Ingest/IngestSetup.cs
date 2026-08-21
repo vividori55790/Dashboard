@@ -60,6 +60,17 @@ public static class IngestSetup
             return null;
         }
 
+        if (string.Equals(options.SerialPort, LoopbackTelemetrySource.PortToken, StringComparison.OrdinalIgnoreCase))
+        {
+            // A port with nothing behind it, so the write path has somewhere to write. The one
+            // feature that acts on the machine is refused without --serial, which on a workstation
+            // with no MCU meant it could not be exercised at all -- and an unverifiable safety path
+            // is the one most worth being able to run.
+            var loopback = new LoopbackTelemetrySource(ResolveProfile(options));
+            await loopback.OpenAsync(cancellationToken).ConfigureAwait(false);
+            return loopback;
+        }
+
         if (options.SerialPort is not null)
         {
             var serial = new SerialTelemetrySource(options.SerialPort, options.BaudRate);
@@ -74,8 +85,32 @@ public static class IngestSetup
 
         if (!options.Simulate) return null;
 
-        // Resolved through the same helper the dashboard export uses, so a run cannot generate one
-        // machine's channels while its exported page describes another.
+        return ResolveProfile(options) is { } profile ? new SimulatedTelemetrySource(profile) : null;
+    }
+
+    /// <summary>The serial manager behind a source, when it has one.</summary>
+    /// <remarks>
+    /// Two sources carry a port now — a real one and the loopback — and the plugin host and the
+    /// emergency interlock both need whichever is open rather than a fresh instance. Asking for
+    /// <c>SerialTelemetrySource</c> by name silently handed both of them null on a loopback run,
+    /// so the interlock reported itself unarmed on the only configuration that can exercise it.
+    /// </remarks>
+    public static Core.Interfaces.ISerialManager? SerialManagerOf(ITelemetrySource? source) => source switch
+    {
+        SerialTelemetrySource serial => serial.SerialManager,
+        LoopbackTelemetrySource loopback => loopback.SerialManager,
+        _ => null
+    };
+
+    /// <summary>
+    /// Resolves the profile a generated source should produce, reporting why it could not.
+    /// </summary>
+    /// <remarks>
+    /// Through the same helper the dashboard export uses, so a run cannot generate one machine's
+    /// channels while its exported page describes another.
+    /// </remarks>
+    private static MonitoringProfile? ResolveProfile(HostOptions options)
+    {
         ProfileResolution.Result resolved =
             ProfileResolution.Resolve(options.ProfileId, AppContext.BaseDirectory);
 
@@ -87,7 +122,7 @@ public static class IngestSetup
             return null;
         }
 
-        return new SimulatedTelemetrySource(resolved.Profile);
+        return resolved.Profile;
     }
 
     /// <summary>

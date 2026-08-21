@@ -165,6 +165,22 @@ public static class CommandLineParser
                     draft.Limits.Add(rawLimit);
                     break;
 
+                // A limit that also acts. Kept apart from --limit because the two are different
+                // authorisations, and this one writes to the machine.
+                case "--emergency-limit":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawTrip)) return ArgumentCursor.MissingValue(argument);
+                    try
+                    {
+                        TelemetryDashboard.Core.Analytics.ChannelLimit.Parse(rawTrip);
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ArgumentCursor.Fail($"--emergency-limit {rawTrip}: {ex.Message}");
+                    }
+                    draft.EmergencyLimits.Add(rawTrip);
+                    draft.Limits.Add(rawTrip);
+                    break;
+
                 case "--archive":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawArchive)) return ArgumentCursor.MissingValue(argument);
                     draft.ArchivePath = Path.GetFullPath(rawArchive);
@@ -272,7 +288,12 @@ public static class CommandLineParser
         // second thing a profile decides, so it counts as a use of the flag: the exported page
         // carries one card per declared channel whether the data behind it is generated or read
         // off a wire.
-        if (draft.ProfileId is not null && !draft.Simulate && draft.DashboardExportPath is null)
+        // The loopback port generates from a profile too, so naming one is meaningful there. This
+        // check predates it and refused the only configuration that can exercise the interlock.
+        bool generates = draft.Simulate
+            || string.Equals(draft.SerialPort, "loopback", StringComparison.OrdinalIgnoreCase);
+
+        if (draft.ProfileId is not null && !generates && draft.DashboardExportPath is null)
         {
             return ArgumentCursor.Fail(
                 "--profile applies to --simulate or --export-dashboard; it describes what to generate "
@@ -283,6 +304,13 @@ public static class CommandLineParser
         // is the only flag that transmits to hardware, so the port it writes to has to be one the
         // operator named -- and the controller behind it defaults to a rule aimed at COM3, which
         // would otherwise be where an unqualified --emergency-stop ended up pointing.
+        if (draft.EmergencyLimits.Count > 0 && !draft.EmergencyStop)
+        {
+            return ArgumentCursor.Fail(
+                "--emergency-limit needs --emergency-stop. A limit that says it will act on the "
+                + "machine, on a host that cannot, is worse than no limit: it reads as protection.");
+        }
+
         if (draft.EmergencyStop && draft.SerialPort is null)
         {
             return ArgumentCursor.Fail(

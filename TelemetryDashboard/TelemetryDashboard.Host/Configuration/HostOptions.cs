@@ -153,6 +153,16 @@ public sealed class HostOptions
     /// </remarks>
     public bool SourceRequested => SerialPort is not null || ReplayPath is not null || Simulate;
 
+    /// <summary>Whether this run's telemetry is generated from a monitoring profile.</summary>
+    /// <remarks>
+    /// True for <c>--simulate</c> and for the loopback port, which generates the same frames and
+    /// sends them through an in-memory device. Both need the profile's limits and derived channels;
+    /// checking only <c>Simulate</c> left a loopback run with a serial path, an armed interlock and
+    /// no limits for it to act on.
+    /// </remarks>
+    public bool GeneratesFromProfile =>
+        Simulate || string.Equals(SerialPort, "loopback", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Derived channels declared on the command line, as <c>id[unit] = expression</c>.
     /// </summary>
@@ -176,6 +186,22 @@ public sealed class HostOptions
     /// something the operator learns to ignore.
     /// </remarks>
     public IReadOnlyList<string> Limits { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Limits that additionally trip the emergency interlock, not merely raise an alarm.
+    /// </summary>
+    /// <remarks>
+    /// A separate flag because they are separate authorisations. Every declared limit says
+    /// "somebody should look"; these say "act on the machine", and the second is not a louder
+    /// version of the first. Making every band excursion a trip would be its own kind of unsafe —
+    /// a converter shut down for a two-sample overshoot is a converter whose interlock gets
+    /// disabled by the end of the week.
+    /// <para>
+    /// These are also ordinary limits: they appear in <c>/api/limits</c>, raise the same alarm and
+    /// carry the same unit check. The flag adds an action, it does not create a second rule set.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> EmergencyLimits { get; init; } = Array.Empty<string>();
 
     /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
     /// <remarks>

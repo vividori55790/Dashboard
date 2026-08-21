@@ -95,7 +95,13 @@ public partial class ArchitectureRuleTests
         // MatFileWriter retired from this baseline: MatlabArchiveExporter now drives it from the
         // shell's "MATLAB .mat 내보내기" button, reading the durable archive through IDataLogger, so
         // the entry has stopped exempting anything.
-        "MockSerialPort",
+        // MockSerialPort retired from this baseline: LoopbackSerialManager builds ports out of
+        // it behind --serial loopback, so a run has a serial path with no device on it. That
+        // exists for one thing that could not otherwise be checked -- the emergency interlock
+        // is refused without --serial, so on a workstation with no MCU the furthest anyone
+        // could get was "the relay reports itself armed". It now writes a command that can be
+        // watched leaving the host, and the first live run showed 91 of them in twenty seconds
+        // from a five-second cooldown the limit path had bypassed.
         // Publishing a report needs a trigger the headless host does not have yet: unlike an alert
         // or a stream sample, there is no moment in a run that obviously means "publish now".
         "NotionClient",

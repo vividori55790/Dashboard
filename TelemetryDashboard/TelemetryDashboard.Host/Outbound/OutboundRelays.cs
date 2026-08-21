@@ -69,11 +69,32 @@ public sealed class OutboundRelays : IAsyncDisposable
         if (relays._emergency is not null)
         {
             relays._banner.Add(
-                $"  emergency     ARMED -- above {options.EmergencySigma:0.#} sigma, transmits "
-                + $"'{options.EmergencyCommand.Trim()}' to {options.SerialPort}");
+                $"  emergency     ARMED -- transmits '{options.EmergencyCommand.Trim()}' "
+                + $"to {options.SerialPort}, at most once per channel every "
+                + $"{options.EmergencyCooldownSec:0.#}s");
             relays._banner.Add(
-                $"                at most once per channel every {options.EmergencyCooldownSec:0.#}s. "
-                + "This host writes to your hardware.");
+                $"                on  above {options.EmergencySigma:0.#} sigma");
+
+            // Named rather than summarised. An armed interlock that does not say what trips it
+            // leaves an operator reading a sigma threshold and assuming that is all of it, and the
+            // limits are the half that fires on a steady fault the sigma cannot see.
+            foreach (string trip in options.EmergencyLimits)
+            {
+                relays._banner.Add($"                and outside {trip}");
+            }
+
+            if (options.EmergencyLimits.Count == 0)
+            {
+                relays._banner.Add(
+                    "                NOTE: sigma only. A channel sitting steadily outside a safe "
+                    + "band is not unusual to a rolling detector and will not trip this. "
+                    + "--emergency-limit adds a band that will.");
+            }
+
+            relays._banner.Add(
+                string.Equals(options.SerialPort, "loopback", StringComparison.OrdinalIgnoreCase)
+                    ? "                Writes go to an in-memory port, not to hardware."
+                    : "                This host writes to your hardware.");
         }
 
         relays.Subscribe(pump);

@@ -27,7 +27,7 @@ public static class HostFeatureSetup
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(server);
 
-        MonitoringProfile? profile = options.Simulate
+        MonitoringProfile? profile = options.GeneratesFromProfile
             ? ProfileResolution.Resolve(options.ProfileId, AppContext.BaseDirectory).Profile
             : null;
 

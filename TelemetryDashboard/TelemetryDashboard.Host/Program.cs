@@ -114,12 +114,12 @@ public static class Program
             ? null
             : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive);
         using PluginHostSession plugins = PluginHostSession.Start(
-            options, pump?.Router, (source as SerialTelemetrySource)?.SerialManager);
+            options, pump?.Router, IngestSetup.SerialManagerOf(source));
 
         // After the pump exists, so a relay is subscribed to the stream that is actually running
         // rather than reporting itself armed over nothing.
         await using OutboundRelays relays = await OutboundRelays.StartAsync(
-            options, pump, (source as SerialTelemetrySource)?.SerialManager).ConfigureAwait(false);
+            options, pump, IngestSetup.SerialManagerOf(source)).ConfigureAwait(false);
         foreach (string line in relays.BannerLines) Console.WriteLine(line);
 
         StartupBanner.PrintFooter();

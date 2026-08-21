@@ -36,6 +36,15 @@ public static class UsageText
                                 Env: {EnvironmentVariables.WebRoot} (path-separator delimited)
           -c, --client <file>   HTML file served at '/'. Default: the first known console file
                                 found under a web root. Env: {EnvironmentVariables.Client}
+          -s, --serial loopback
+                                An in-memory port with nothing behind it. Frames are generated
+                                from the profile and sent through the port's own buffer, and
+                                anything the host writes back is announced as
+                                "[loopback] LOOPBACK <= <command>". This exists so the emergency
+                                interlock -- refused without --serial, and the only feature that
+                                acts on the machine -- can be exercised on a workstation with no
+                                MCU attached. It proves the host wrote the command to the port it
+                                was told to, and nothing about drivers, cables or devices.
           -s, --serial <port>   Serial port to open, e.g. COM3 or /dev/ttyUSB0.
                                 Default: none -- the host runs with no hardware attached.
                                 Env: {EnvironmentVariables.Serial}
@@ -58,6 +67,15 @@ public static class UsageText
                                 --computed "psfb.efficiency[%] = 100 * psfb.output_voltage *
                                 psfb.output_current / (dab.bus_voltage * dab.input_current)"
                                 Served at /api/computed, and always marked derived.
+              --emergency-limit <decl>
+                                A limit that also trips the interlock, not merely raises an
+                                alarm. Needs --emergency-stop. Kept separate from --limit because
+                                acting on the machine is a different authorisation from telling
+                                somebody to look, and because a converter shut down for a
+                                two-sample overshoot is a converter whose interlock gets disabled
+                                by the end of the week. Unlike the sigma threshold, this fires
+                                during warm-up: a reading outside a hard limit is outside it
+                                before any baseline exists.
               --limit <decl>    Enforce an engineering limit, written as
                                 "channel[unit] in lo..hi", or a channel followed by >, >=, <
                                 or <= and a number. Repeatable. This is the alarm a rolling

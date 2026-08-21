@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Analytics;
@@ -211,7 +212,13 @@ public sealed class IngestPublisher
                 analysis.HasVerdict ? analysis.ZScore : null,
                 analysis.HasVerdict ? analysis.IsAnomaly : null,
                 analysis.AnalyzerId,
-                _isSimulated));
+                _isSimulated,
+                breached ? limits.Where(l => l.Transition is LimitTransition.Entered
+                                                          or LimitTransition.Sustained)
+                                 .Select(l => new BreachedLimit(
+                                     l.Rule, l.Transition == LimitTransition.Entered))
+                                 .ToList()
+                         : null));
         }
 
         return ValueTask.CompletedTask;
