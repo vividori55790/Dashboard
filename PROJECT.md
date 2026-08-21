@@ -303,6 +303,36 @@ are now recorded and counted, the way every other relay here reports what it hel
 does not have. Everything in front of it is — when it arms, when it refuses, what it sends, where it
 sends it, and that a warm-up sample with no verdict can never trip it.
 
+### A real console for the DAB/PSFB project
+`power_ups_psfb_dashboard.html` was a mockup. `380.0 V`, `60.0 Hz`, `12.8 kW`, a grid-frequency
+readout and a received-power readout were all typed into the markup with no code to update them —
+and the host sends neither frequency nor power, so those numbers could never have moved. Of the
+whole wire frame it read only `source`, `type`, `port` and `nodeId`.
+
+Where it did read measurements it matched variable names by substring, so
+`vName.includes('voltage')` caught `grid.voltage`, `dab.bus_voltage` **and** `psfb.output_voltage`
+and wrote all three into the DAB bus field — three measurements from three points in the power chain
+overwriting each other in one box, several times a second.
+
+`dab_psfb_console.html` replaces it: the four channels the `dab-psfb-ups` profile actually declares,
+laid out as the chain they form (계통 → DAB → PSFB → 서버). Exact channel-id matching, a channel that
+has never reported stays at `—`, anomaly colour comes from the detector's verdict rather than a
+threshold re-derived in the page, warm-up reads `기준선 학습 중` instead of `0.00σ`, a channel that
+goes quiet dims and shows its age, and a synthetic stream raises a banner that cannot be missed.
+
+Verified by `verify_dab_console.js`, which runs the page's own script against live packets — twelve
+checks, including the one the old page could not have passed:
+
+| channel | value | its declared range |
+|---|---|---|
+| `grid.voltage` | 394 V | 0–440 |
+| `dab.bus_voltage` | 403 V | 350–450 |
+| `psfb.output_voltage` | 48.44 V | 38–54 |
+| `server.load` | 83.2 % | 10–100 |
+
+Three voltages, three cards, each inside its own range. What the page *looks* like is still
+unverified — that needs a browser.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each

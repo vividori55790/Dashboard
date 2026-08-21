@@ -180,7 +180,6 @@ public partial class MainWindow : Window
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
         string[] candidates = new string[]
         {
-            "power_ups_psfb_dashboard.html",
             "stream_client.html"
         };
 

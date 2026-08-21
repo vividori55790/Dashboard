@@ -24,7 +24,7 @@ public sealed class WebConsoleHost : IAsyncDisposable
     /// <summary>File names probed for the console page, in order, when none was specified.</summary>
     private static readonly string[] KnownClientFiles =
     {
-        "stream_client.html", "index.html", "custom_dashboard.html", "power_ups_psfb_dashboard.html"
+        "stream_client.html", "index.html", "custom_dashboard.html"
     };
 
     private WebConsoleHost(TelemetryStreamingServer server, IReadOnlyList<string> roots, string? client)

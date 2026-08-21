@@ -1,0 +1,401 @@
+<!--
+    DAB/PSFB UPS 전력 변환 체인 콘솔.
+
+    이 페이지는 계측기입니다. 장식이 아닙니다. 따라서 규칙 하나가 나머지를 전부 지배합니다:
+    화면에 있는 모든 숫자는 방금 도착한 패킷에서 온 것이거나, 아니면 비어 있어야 합니다.
+
+    이것이 대체하는 power_ups_psfb_dashboard.html 은 그 규칙을 지키지 않았습니다. "380.0 V",
+    "60.0 Hz", "12.8 kW", "수전 전력", "계통 주파수" 가 전부 HTML 에 타이핑되어 있었고 갱신하는
+    코드가 없었습니다. 호스트는 주파수도 전력도 보내지 않으므로 그 값들은 영원히 그대로였습니다.
+    더 나쁜 것은 변수 이름을 부분 문자열로 맞춘 부분입니다 -- vName.includes('voltage') 는
+    grid.voltage, dab.bus_voltage, psfb.output_voltage 를 전부 잡아서 셋 다 DAB 버스 칸에
+    덮어썼습니다. 서로 다른 세 지점의 전압이 한 칸에서 서로를 지우고 있었습니다.
+
+    여기서는 채널 id 를 정확히 일치시킵니다. 보고된 적 없는 채널은 '—' 로 남습니다.
+    이상 여부는 검출기가 내린 판정을 그대로 쓰고, 이 페이지에서 임계값을 다시 계산하지 않습니다.
+    워밍업 중에는 0.00σ 가 아니라 '기준선 학습 중' 이라고 씁니다 -- 엔진이 아직 판정을 내리지
+    않았기 때문입니다.
+-->
+<meta charset="utf-8">
+<title>DAB/PSFB UPS 전력 변환 체인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --bg: #0B0F17;
+        --panel: #131A26;
+        --panel-2: #1A2331;
+        --line: #26324A;
+        --text: #E8EDF7;
+        --text-2: #97A3BA;
+        --text-3: #5F6D87;
+        --accent: #3D8BFF;
+        --ok: #2ED47A;
+        --warn: #FFB020;
+        --alarm: #FF4D5E;
+        --sim: #C77DFF;
+        --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, "Segoe UI", "Malgun Gothic", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .mono { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+
+    header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        flex-wrap: wrap;
+    }
+
+    h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    .sub { color: var(--text-3); font-size: 12.5px; }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 12.5px;
+        color: var(--text-2);
+        background: var(--panel-2);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+
+    /* 합성 데이터 배너는 놓칠 수 없어야 합니다. 시뮬레이터 화면을 실측 기록으로 착각하는 것이
+       이 프로젝트가 막으려는 바로 그 실패입니다. */
+    #sim-banner {
+        display: none;
+        padding: 10px 24px;
+        background: rgba(199, 125, 255, 0.12);
+        border-bottom: 1px solid rgba(199, 125, 255, 0.35);
+        color: var(--sim);
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+    .chain {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        align-items: stretch;
+    }
+
+    .stage {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        position: relative;
+        transition: border-color 0.2s;
+    }
+    .stage.alarm { border-color: var(--alarm); }
+    .stage.stale { opacity: 0.55; }
+
+    .stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .stage-name { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .stage-id { font-size: 11px; color: var(--text-3); }
+
+    .value { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+    .value .unit { font-size: 15px; font-weight: 500; color: var(--text-3); margin-left: 6px; }
+    .value.absent { color: var(--text-3); font-weight: 400; }
+
+    .bar { height: 5px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s, background 0.2s; }
+
+    .range { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); }
+
+    .verdict { font-size: 12px; color: var(--text-2); display: flex; justify-content: space-between; gap: 8px; }
+    .verdict .state { font-weight: 600; }
+    .verdict .state.ok { color: var(--ok); }
+    .verdict .state.alarm { color: var(--alarm); }
+    .verdict .state.unknown { color: var(--text-3); font-weight: 400; }
+
+    canvas { width: 100%; height: 56px; display: block; }
+
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+    }
+    .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 12px; font-weight: 600; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+    th { color: var(--text-3); font-weight: 500; font-size: 11px; }
+    tr:last-child td { border-bottom: none; }
+
+    #log { max-height: 240px; overflow-y: auto; font-size: 12px; }
+    #log div { padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--text-2); }
+    #log div:last-child { border-bottom: none; }
+    #log .t { color: var(--text-3); margin-right: 8px; }
+    #log .alarm { color: var(--alarm); }
+    #log .clear { color: var(--ok); }
+    .empty { color: var(--text-3); font-style: normal; }
+</style>
+
+<header>
+    <div>
+        <h1>DAB/PSFB UPS 전력 변환 체인</h1>
+        <div class="sub">계통 → DAB 배터리 컨버터 → PSFB 48 V 서버 레일</div>
+    </div>
+    <div style="flex:1"></div>
+    <span class="chip"><span class="dot" id="conn-dot"></span><span id="conn-text">연결 중…</span></span>
+    <span class="chip mono" id="node-chip">노드 —</span>
+</header>
+
+<div id="sim-banner">합성 데이터입니다. 이 화면의 값은 시뮬레이터가 생성한 것이며 측정값이 아닙니다.</div>
+
+<main>
+    <section class="chain" id="chain"></section>
+
+    <div class="panels">
+        <div class="panel">
+            <h2>채널 현황</h2>
+            <table id="table">
+                <thead><tr><th>채널</th><th>값</th><th>판정</th><th>마지막 수신</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="panel">
+            <h2>이상 상태 변화</h2>
+            <div id="log"><div class="empty">아직 상태 변화가 없습니다.</div></div>
+        </div>
+    </div>
+</main>
+
+<script src="telemetry-client.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    // 채널 정의는 dab-psfb-ups 프로파일과 같은 값입니다. id 는 프레임에 실제로 실려 오는
+    // 문자열이므로 정확히 일치시켜야 합니다 -- 부분 문자열로 맞추면 grid.voltage 와
+    // psfb.output_voltage 가 서로의 칸을 덮어씁니다.
+    var STAGES = [
+        { id: 'grid.voltage',        name: '계통 전압',      unit: 'V', min: 0,   max: 440, dp: 0 },
+        { id: 'dab.bus_voltage',     name: 'DAB 버스 전압',  unit: 'V', min: 350, max: 450, dp: 0 },
+        { id: 'psfb.output_voltage', name: 'PSFB 출력 전압', unit: 'V', min: 38,  max: 54,  dp: 2 },
+        { id: 'server.load',         name: '서버 부하',      unit: '%', min: 10,  max: 100, dp: 1 }
+    ];
+
+    var HISTORY = 90;          // 스파크라인이 보관하는 샘플 수
+    var STALE_MS = 10000;      // 이 시간 넘게 소식이 없으면 카드를 흐리게 표시
+
+    var state = {};            // id -> 마지막으로 도착한 것
+    var series = {};           // id -> 최근 값 배열
+    var inAlarm = {};          // id -> 지금 이상 상태인가
+    var logged = 0;
+
+    STAGES.forEach(function (s) { series[s.id] = []; });
+
+    // ---- 화면 만들기 -----------------------------------------------------
+    var chain = document.getElementById('chain');
+    STAGES.forEach(function (s) {
+        var el = document.createElement('div');
+        el.className = 'stage stale';
+        el.id = 'stage-' + key(s.id);
+        el.innerHTML =
+            '<div class="stage-head"><span class="stage-name">' + s.name + '</span>' +
+            '<span class="stage-id mono">' + s.id + '</span></div>' +
+            '<div class="value absent" id="v-' + key(s.id) + '">—</div>' +
+            '<div class="bar"><i id="b-' + key(s.id) + '"></i></div>' +
+            '<div class="range mono"><span>' + s.min + '</span><span>' + s.max + ' ' + s.unit + '</span></div>' +
+            '<canvas id="c-' + key(s.id) + '"></canvas>' +
+            '<div class="verdict"><span id="z-' + key(s.id) + '">수신 대기</span>' +
+            '<span class="state unknown" id="s-' + key(s.id) + '">판정 없음</span></div>';
+        chain.appendChild(el);
+    });
+
+    var tbody = document.querySelector('#table tbody');
+    STAGES.forEach(function (s) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td class="mono">' + s.id + '</td>' +
+            '<td class="mono" id="tv-' + key(s.id) + '">—</td>' +
+            '<td id="ts-' + key(s.id) + '" class="empty">—</td>' +
+            '<td class="mono empty" id="tt-' + key(s.id) + '">—</td>';
+        tbody.appendChild(tr);
+    });
+
+    function key(id) { return id.replace(/[^a-zA-Z0-9]/g, '-'); }
+
+    // ---- 연결 상태 -------------------------------------------------------
+    // 소켓이 말하는 것만 씁니다. 이전 페이지는 "🟢 C# 백엔드 실시간 수신 중 (LIVE 20Hz)" 를
+    // 마크업에 적어두고 있었습니다.
+    var CONN = {
+        CONNECTED:     ['WS 연결됨', 'var(--ok)'],
+        CONNECTED_SSE: ['SSE 연결됨 (WebSocket 불가)', 'var(--warn)'],
+        DISCONNECTED:  ['연결 끊김 — 재시도 중', 'var(--alarm)'],
+        RETRYING_SLOWLY: ['연결 끊김 — 재시도 간격 확대', 'var(--alarm)'],
+        ERROR:         ['연결 오류 — 재시도 중', 'var(--alarm)']
+    };
+
+    function setConnection(status) {
+        var c = CONN[status] || [status, 'var(--text-3)'];
+        document.getElementById('conn-text').textContent = c[0];
+        document.getElementById('conn-dot').style.background = c[1];
+    }
+
+    // ---- 패킷 처리 -------------------------------------------------------
+    function onPacket(p) {
+        if (!p || typeof p.variable !== 'string' || typeof p.value !== 'number') return;
+
+        if (p.simulated === true) document.getElementById('sim-banner').style.display = 'block';
+        if (p.nodeId) document.getElementById('node-chip').textContent = '노드 ' + p.nodeId;
+
+        var stage = null;
+        for (var i = 0; i < STAGES.length; i++) {
+            if (STAGES[i].id === p.variable) { stage = STAGES[i]; break; }
+        }
+        // 이 체인에 속하지 않는 채널은 무시합니다. 억지로 어느 칸엔가 넣는 것이 이전 페이지의
+        // 결함이었습니다.
+        if (!stage) return;
+
+        state[stage.id] = {
+            value: p.value,
+            unit: p.unit || stage.unit,
+            isAnomaly: p.isAnomaly === true,
+            z: (typeof p.anomalyScore === 'number') ? p.anomalyScore : null,
+            at: Date.now()
+        };
+
+        var buf = series[stage.id];
+        buf.push(p.value);
+        if (buf.length > HISTORY) buf.shift();
+
+        noteTransition(stage, state[stage.id]);
+        render(stage);
+    }
+
+    function render(s) {
+        var st = state[s.id];
+        var k = key(s.id);
+        var card = document.getElementById('stage-' + k);
+        var val = document.getElementById('v-' + k);
+
+        card.classList.remove('stale');
+        card.classList.toggle('alarm', st.isAnomaly);
+
+        val.classList.remove('absent');
+        val.innerHTML = st.value.toFixed(s.dp) + '<span class="unit">' + st.unit + '</span>';
+        val.style.color = st.isAnomaly ? 'var(--alarm)' : 'var(--text)';
+
+        var bar = document.getElementById('b-' + k);
+        var pct = Math.max(0, Math.min(100, ((st.value - s.min) / (s.max - s.min)) * 100));
+        bar.style.width = pct + '%';
+        bar.style.background = st.isAnomaly ? 'var(--alarm)' : 'var(--accent)';
+
+        // 워밍업 중에는 점수가 없습니다. 0.00σ 라고 쓰면 아무도 내리지 않은 판정을 쓰는 것입니다.
+        document.getElementById('z-' + k).textContent =
+            st.z === null ? '기준선 학습 중' : ('z = ' + st.z.toFixed(2) + 'σ');
+
+        var badge = document.getElementById('s-' + k);
+        badge.className = 'state ' + (st.z === null ? 'unknown' : (st.isAnomaly ? 'alarm' : 'ok'));
+        badge.textContent = st.z === null ? '판정 없음' : (st.isAnomaly ? '이상' : '정상');
+
+        document.getElementById('tv-' + k).textContent = st.value.toFixed(s.dp) + ' ' + st.unit;
+        var ts = document.getElementById('ts-' + k);
+        ts.textContent = badge.textContent;
+        ts.className = st.z === null ? 'empty' : '';
+
+        spark(k, series[s.id], st.isAnomaly);
+    }
+
+    function noteTransition(s, st) {
+        // 상태가 바뀔 때만 기록합니다. 초당 수십 줄이 쌓이는 로그는 아무도 읽지 않습니다.
+        if (st.z === null) return;
+        var was = inAlarm[s.id] === true;
+        if (was === st.isAnomaly) return;
+        inAlarm[s.id] = st.isAnomaly;
+
+        var log = document.getElementById('log');
+        var empty = log.querySelector('.empty');
+        if (empty) log.removeChild(empty);
+
+        var row = document.createElement('div');
+        row.innerHTML = '<span class="t mono">' + new Date().toLocaleTimeString() + '</span>' +
+            '<span class="' + (st.isAnomaly ? 'alarm' : 'clear') + '">' +
+            s.name + (st.isAnomaly ? ' 이상 판정' : ' 정상 복귀') + '</span>' +
+            ' <span class="mono">' + st.value.toFixed(s.dp) + ' ' + st.unit +
+            ' (z=' + st.z.toFixed(2) + 'σ)</span>';
+        log.insertBefore(row, log.firstChild);
+
+        if (++logged > 200 && log.lastChild) log.removeChild(log.lastChild);
+    }
+
+    function spark(k, data, alarm) {
+        var c = document.getElementById('c-' + k);
+        if (!c || data.length < 2) return;
+        var w = c.width = c.clientWidth, h = c.height = 56;
+        var ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+
+        var lo = Math.min.apply(null, data), hi = Math.max.apply(null, data);
+        if (lo === hi) { lo -= 1; hi += 1; }
+
+        ctx.strokeStyle = alarm ? '#FF4D5E' : '#3D8BFF';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (var i = 0; i < data.length; i++) {
+            var x = (i / (data.length - 1)) * w;
+            var y = h - 4 - ((data[i] - lo) / (hi - lo)) * (h - 8);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+
+    // 소식이 끊긴 채널은 마지막 값을 그대로 두되 카드를 흐리게 하고 경과 시간을 보여줍니다.
+    // 멈춘 값과 살아있는 값이 똑같이 보이면 안 됩니다.
+    setInterval(function () {
+        var now = Date.now();
+        STAGES.forEach(function (s) {
+            var st = state[s.id], k = key(s.id);
+            var cell = document.getElementById('tt-' + k);
+            if (!st) { cell.textContent = '수신 없음'; return; }
+            var age = Math.round((now - st.at) / 1000);
+            cell.textContent = age + '초 전';
+            cell.className = 'mono' + (now - st.at > STALE_MS ? ' empty' : '');
+            document.getElementById('stage-' + k).classList.toggle('stale', now - st.at > STALE_MS);
+        });
+    }, 1000);
+
+    // ---- 연결 -----------------------------------------------------------
+    var PORT = new URLSearchParams(location.search).get('port')
+        || (location.port || '8080');
+
+    if (typeof TelemetryClient !== 'undefined') {
+        TelemetryClient.onStatusChange(setConnection);
+        TelemetryClient.onData(onPacket);
+        TelemetryClient.connect('ws://' + location.hostname + ':' + PORT + '/ws');
+    } else {
+        // telemetry-client.js 없이 파일만 열었을 때. 이 경우도 조용히 죽지 않고 이유를 말합니다.
+        setConnection('ERROR');
+        document.getElementById('conn-text').textContent =
+            'telemetry-client.js 를 불러오지 못했습니다 — 호스트를 통해 열어주세요';
+    }
+})();
+</script>

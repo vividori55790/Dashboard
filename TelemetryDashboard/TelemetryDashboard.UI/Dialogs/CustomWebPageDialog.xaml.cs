@@ -77,7 +77,7 @@ public partial class CustomWebPageDialog : Window
 
     private void BtnLaunchPowerUpsPsfb_Click(object sender, RoutedEventArgs e)
     {
-        LaunchBrowserUrl("power_ups_psfb_dashboard.html");
+        LaunchBrowserUrl("dab_psfb_console.html");
     }
 
     private void BtnLaunchMinimal_Click(object sender, RoutedEventArgs e)

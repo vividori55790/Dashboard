@@ -48,7 +48,7 @@ public partial class MainWindow
     /// </remarks>
     private void BtnOpenPowerUpsPsfbConsole_Click(object sender, RoutedEventArgs e)
     {
-        const string page = "power_ups_psfb_dashboard.html";
+        const string page = "dab_psfb_console.html";
 
         try
         {
