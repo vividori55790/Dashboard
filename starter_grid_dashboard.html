@@ -1,198 +1,91 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎛️ 다채널 센서 그리드 대시보드 (Starter Multi-Node Grid)</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background: #0B0E14; color: #F0F6FC; padding: 24px; min-height: 100vh; }
-        
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #283548; padding-bottom: 16px; }
-        h1 { font-size: 20px; color: #00F0FF; }
-        .meta-text { font-size: 12px; color: #8B949E; margin-top: 4px; }
+<!--
+    Starter: a grid that grows as channels report.
 
-        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .filter-btn { background: #121720; border: 1px solid #283548; color: #F0F6FC; padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-        .filter-btn.active { background: #00F0FF; color: #0B0E14; font-weight: 700; border-color: #00F0FF; }
+    Nothing is declared. Every tile on screen exists because a frame arrived carrying that
+    channel, which is the only channel list that is true on an installation you have not seen.
 
-        /* Multi-Node Dynamic Grid */
-        .node-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-        
-        .node-card {
-            background: #121720;
-            border: 1px solid #283548;
-            border-radius: 12px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: all 0.2s ease;
-        }
-        .node-card:hover { transform: translateY(-2px); border-color: #00F0FF; }
+    It used to read data.temp, data.humidity, data.vibration and data.rpm, and to key tiles on
+    data.device. The hub sends none of those: a frame carries nodeId, variable, value and unit.
+-->
+<meta charset="utf-8">
+<title>Telemetry starter — discovered grid</title>
+<style>
+    body { background:#0B0F17; color:#E8EDF7; font-family:"Segoe UI","Malgun Gothic",sans-serif;
+           margin:0; padding:26px; }
+    h1 { font-size:16px; margin:0 0 4px; font-weight:600; }
+    .sub { color:#5F6D87; font-size:13px; margin-bottom:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:13px; }
+    .tile { background:#131A26; border:1px solid #26324A; border-radius:11px; padding:15px; }
+    .tile.alarm { border-color:#FF4D5E; }
+    .tile.quiet { opacity:.5; }
+    .n { font-size:12px; color:#97A3BA; font-weight:600; word-break:break-all; }
+    .nd { font-size:10.5px; color:#5F6D87; font-family:"JetBrains Mono",Consolas,monospace; }
+    .v { font-size:26px; font-weight:600; margin:9px 0 5px; letter-spacing:-.02em; }
+    .v .u { font-size:13px; color:#5F6D87; margin-left:5px; font-weight:500; }
+    .z { font-size:11.5px; color:#5F6D87; }
+    .alarm-text { color:#FF4D5E; }
+    #none { color:#5F6D87; padding:30px 0; }
+</style>
 
-        /* Anomaly Alert Animation */
-        .node-card.anomaly {
-            border-color: #FF2E63;
-            background: #240A12;
-            animation: pulseAlert 1.2s infinite;
-        }
-        @keyframes pulseAlert {
-            0% { box-shadow: 0 0 0 0 rgba(255, 46, 99, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(255, 46, 99, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 46, 99, 0); }
-        }
+<h1>Telemetry starter — discovered grid</h1>
+<div class="sub" id="sub">연결 중…</div>
+<div class="grid" id="grid"></div>
+<div id="none">아직 도착한 채널이 없습니다.</div>
 
-        .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .node-name { font-size: 13px; font-weight: 700; color: #00F0FF; }
-        .node-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 10px; background: #18202C; color: #8B949E; }
-        .node-badge.anomaly-badge { background: #FF2E63; color: #FFFFFF; }
+<script src="telemetry-client.js"></script>
+<script>
+    var tiles = {};
 
-        .metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-        .metric-cell { background: #0B0E14; padding: 8px 10px; border-radius: 6px; border: 1px solid #1C2430; }
-        .metric-label { font-size: 10px; color: #8B949E; text-transform: uppercase; }
-        .metric-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #F0F6FC; margin-top: 2px; }
+    TelemetryClient.onStatusChange(function (s) {
+        document.getElementById('sub').textContent =
+            '연결 상태: ' + s + ' · 채널 ' + Object.keys(tiles).length + '개';
+    });
 
-        .card-footer { font-size: 11px; color: #8B949E; display: flex; justify-content: space-between; border-top: 1px solid #18202C; padding-top: 8px; }
-    </style>
-</head>
-<body>
-    <header>
-        <div>
-            <h1>🎛️ TelemetryDashboard — 다채널 노드 그리드 대시보드</h1>
-            <p class="meta-text">센서 패킷이 들어올 때마다 자동으로 노드 카드가 생성/갱신되는 동적 반응형 그리드</p>
-        </div>
-        <div id="stat-nodes" style="font-size: 12px; color: #00FF9D; background: #121720; padding: 6px 14px; border-radius: 20px; border: 1px solid #283548;">
-            Active Nodes: 0 | Anomaly: 0
-        </div>
-    </header>
+    TelemetryClient.onData(function (p) {
+        if (!p || typeof p.variable !== 'string' || typeof p.value !== 'number') return;
 
-    <div class="toolbar">
-        <div style="font-size: 13px; color: #8B949E;">실시간 연결된 모든 MCU 및 센서 노드 상태:</div>
-        <div>
-            <button class="filter-btn active" onclick="filterCards('ALL')">전체 보기</button>
-            <button class="filter-btn" onclick="filterCards('ALERT')">🚨 이상치만 보기</button>
-        </div>
-    </div>
+        var key = (p.nodeId || '?') + '|' + p.variable;
+        var t = tiles[key];
 
-    <!-- 동적 생성되는 노드 그리드 컨테이너 -->
-    <div id="node-container" class="node-grid"></div>
-
-    <!-- SDK 및 연동 스크립트 -->
-    <script src="http://localhost:8080/telemetry-client.js"></script>
-    <script>
-        const nodes = {};
-        let activeFilter = 'ALL';
-
-        function filterCards(type) {
-            activeFilter = type;
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            renderAllCards();
+        if (!t) {
+            var el = document.createElement('div');
+            el.className = 'tile';
+            el.innerHTML = '<div class="n"></div><div class="nd"></div>' +
+                           '<div class="v"></div><div class="z"></div>';
+            el.querySelector('.n').textContent = p.variable;
+            el.querySelector('.nd').textContent = p.nodeId || '';
+            document.getElementById('grid').appendChild(el);
+            document.getElementById('none').style.display = 'none';
+            t = tiles[key] = { el: el, at: 0 };
         }
 
-        function updateOrAddNode(data) {
-            const nodeId = data.nodeId || data.device || 'MCU-DEFAULT';
-            const timestamp = data.timestamp || new Date().toISOString();
+        t.at = Date.now();
+        t.el.classList.remove('quiet');
+        t.el.classList.toggle('alarm', p.isAnomaly === true);
 
-            if (!nodes[nodeId]) {
-                nodes[nodeId] = {
-                    id: nodeId,
-                    temp: 0,
-                    vib: 0,
-                    hum: 0,
-                    rpm: 0,
-                    zScore: 0,
-                    isAnomaly: false,
-                    lastSeen: new Date()
-                };
-            }
+        t.el.querySelector('.v').innerHTML =
+            p.value.toFixed(3) + '<span class="u">' + (p.unit || '') + '</span>';
 
-            const node = nodes[nodeId];
-            if (data.temp !== undefined) node.temp = data.temp;
-            if (data.vibration !== undefined) node.vib = data.vibration;
-            if (data.humidity !== undefined) node.hum = data.humidity;
-            if (data.rpm !== undefined) node.rpm = data.rpm;
-            if (data.anomalyScore !== undefined) node.zScore = data.anomalyScore;
-            node.isAnomaly = (node.zScore >= 2.5) || data.isAnomaly;
-            node.lastSeen = new Date();
+        var z = t.el.querySelector('.z');
+        // The engine reports no score until it has a baseline. Absent is not zero.
+        z.textContent = (typeof p.anomalyScore === 'number')
+            ? ('z = ' + p.anomalyScore.toFixed(2) + 'σ')
+            : '기준선 학습 중';
+        z.className = 'z' + (p.isAnomaly ? ' alarm-text' : '');
+    });
 
-            renderCard(node);
-            updateStats();
-        }
+    // A tile whose channel has gone quiet keeps its last value but dims and says how old it is,
+    // so a frozen reading is never mistaken for a live one.
+    setInterval(function () {
+        var now = Date.now();
+        Object.keys(tiles).forEach(function (k) {
+            var t = tiles[k];
+            if (now - t.at <= 10000) return;
+            t.el.classList.add('quiet');
+            t.el.querySelector('.z').textContent =
+                Math.round((now - t.at) / 1000) + '초간 수신 없음';
+        });
+    }, 1000);
 
-        function renderCard(node) {
-            const container = document.getElementById('node-container');
-            let card = document.getElementById(`node-card-${node.id}`);
-
-            if (!card) {
-                card = document.createElement('div');
-                card.id = `node-card-${node.id}`;
-                card.className = 'node-card';
-                container.appendChild(card);
-            }
-
-            // 필터링 적용
-            if (activeFilter === 'ALERT' && !node.isAnomaly) {
-                card.style.display = 'none';
-            } else {
-                card.style.display = 'flex';
-            }
-
-            if (node.isAnomaly) {
-                card.classList.add('anomaly');
-            } else {
-                card.classList.remove('anomaly');
-            }
-
-            card.innerHTML = `
-                <div class="card-top">
-                    <span class="node-name">📡 ${node.id}</span>
-                    <span class="node-badge ${node.isAnomaly ? 'anomaly-badge' : ''}">${node.isAnomaly ? '🚨 CRITICAL' : '🟢 NORMAL'}</span>
-                </div>
-                <div class="metrics-row">
-                    <div class="metric-cell">
-                        <div class="metric-label">온도 (Temp)</div>
-                        <div class="metric-val" style="color:#00F0FF">${node.temp.toFixed(1)}°C</div>
-                    </div>
-                    <div class="metric-cell">
-                        <div class="metric-label">진동 (Vib)</div>
-                        <div class="metric-val" style="color:#00FF9D">${node.vib.toFixed(3)}g</div>
-                    </div>
-                    <div class="metric-cell">
-                        <div class="metric-label">습도 (Hum)</div>
-                        <div class="metric-val">${node.hum.toFixed(1)}%</div>
-                    </div>
-                    <div class="metric-cell">
-                        <div class="metric-label">이상치 (Z-Score)</div>
-                        <div class="metric-val" style="color:${node.isAnomaly ? '#FF2E63' : '#8B949E'}">${node.zScore.toFixed(1)}σ</div>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <span>RPM: <strong>${Math.round(node.rpm)}</strong></span>
-                    <span>${node.lastSeen.toLocaleTimeString()}</span>
-                </div>
-            `;
-        }
-
-        function renderAllCards() {
-            Object.values(nodes).forEach(renderCard);
-        }
-
-        function updateStats() {
-            const list = Object.values(nodes);
-            const total = list.length;
-            const anomalies = list.filter(n => n.isAnomaly).length;
-            document.getElementById('stat-nodes').textContent = `Active Nodes: ${total} | Anomalies: ${anomalies}`;
-        }
-
-        // TelemetryClient 스트림 연결
-        if (window.TelemetryClient) {
-            TelemetryClient.connect('ws://localhost:8080/ws');
-            TelemetryClient.onData(updateOrAddNode);
-        }
-    </script>
-</body>
-</html>
+    TelemetryClient.connect('ws://' + location.hostname + ':' + (location.port || '8080') + '/ws');
+</script>

@@ -408,6 +408,20 @@ spectrum: 294 samples, measured 9.59 Hz, peak 0.1311 Hz (period 7.63 s)
 DVR: 30.6 s buffered, 172 frames in a 4 s window
 ```
 
+### Every bundled example page had the same fault
+The starters are teaching material: someone copies one and builds on it. All of them read
+`data.temp`, `data.humidity`, `data.rpm`, `data.vibration` and friends — fields the hub does not
+send — so a reader who copied one got a page that displayed nothing and no way to tell whether the
+fault was theirs.
+
+`starter_minimal.html` did worse than show nothing. It matched channel names by substring and ended
+with an `else` that wrote **every unrecognised channel into the temperature box**.
+
+All four now read the canonical frame, match on the exact channel, and show `—` until that channel
+reports. `custom_dashboard.html` was a 976-line artefact of the old exporter checked into the
+repository; it is regenerated from the fixed one. Verified together by `verify_starters.js`, which
+captures real packets once and replays them into every page.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each

@@ -1,51 +1,73 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>⚡ Telemetry Custom Web Widget Template</title>
-    <style>
-        body { background-color: #13141C; color: #C0CAF5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; margin: 0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
-        .card { background-color: #16161E; border: 1px solid #3B4252; border-radius: 8px; padding: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        .card-header { font-size: 11px; font-weight: bold; color: #7AA2F7; letter-spacing: 0.8px; margin-bottom: 8px; }
-        .val { font-size: 32px; font-weight: bold; color: #00E676; }
-        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; background: #00E676; color: #101014; }
-    </style>
-</head>
-<body>
-    <h2>⚡ Telemetry Custom Web Widget Boilerplate</h2>
-    <p>Powered by <code>telemetry-client.js</code> Live WebSocket Stream (ws://localhost:8080/ws)</p>
-    <div id="status" class="status-badge">CONNECTED</div>
+<!--
+    A single-channel widget. Point it at one channel and embed it anywhere.
 
-    <div class="grid">
-        <div class="card">
-            <div class="card-header">COM3 TEMPERATURE</div>
-            <div id="tempVal" class="val">-- °C</div>
-        </div>
+        custom_widget.html?channel=ambient.temperature
 
-        <div class="card">
-            <div class="card-header">COM3 HUMIDITY</div>
-            <div id="humVal" class="val" style="color: #7DCFFF;">-- %</div>
-        </div>
+    With no ?channel it adopts the first channel that reports and says which one it took, rather
+    than picking a channel silently or showing nothing at all.
 
-        <div class="card">
-            <div class="card-header">Z-SCORE ANOMALY SCORE</div>
-            <div id="anomalyVal" class="val" style="color: #BB9AF7;">Z = --</div>
-        </div>
-    </div>
+    It used to read data.temp and data.humidity under headings that named COM3. The hub sends
+    neither field, so both boxes read "--" forever while looking like a working widget.
+-->
+<meta charset="utf-8">
+<title>Telemetry widget</title>
+<style>
+    body { background:#0B0F17; color:#E8EDF7; font-family:"Segoe UI","Malgun Gothic",sans-serif;
+           margin:0; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .card { background:#131A26; border:1px solid #26324A; border-radius:14px; padding:26px 32px;
+            min-width:280px; text-align:center; }
+    .name { font-size:12px; color:#97A3BA; text-transform:uppercase; letter-spacing:.06em;
+            font-weight:600; word-break:break-all; }
+    .node { font-size:11px; color:#5F6D87; margin-top:3px; font-family:"JetBrains Mono",Consolas,monospace; }
+    .val { font-size:46px; font-weight:600; margin:16px 0 6px; letter-spacing:-.02em; }
+    .val.absent { color:#5F6D87; font-weight:400; font-size:38px; }
+    .val .u { font-size:18px; color:#5F6D87; margin-left:6px; font-weight:500; }
+    .foot { font-size:12px; color:#5F6D87; }
+    .alarm { color:#FF4D5E; }
+</style>
 
-    <script src="http://localhost:8080/telemetry-client.js"></script>
-    <script>
-        TelemetryClient.connect();
-        TelemetryClient.onData((data) => {
-            if (data.temp !== undefined) document.getElementById('tempVal').innerText = data.temp.toFixed(2) + ' °C';
-            if (data.humidity !== undefined) document.getElementById('humVal').innerText = data.humidity.toFixed(1) + ' %';
-            if (data.anomalyScore !== undefined) {
-                const el = document.getElementById('anomalyVal');
-                el.innerText = 'Z = ' + data.anomalyScore.toFixed(2);
-                el.style.color = data.isAnomaly ? '#FF5555' : '#BB9AF7';
-            }
-        });
-    </script>
-</body>
-</html>
+<div class="card">
+    <div class="name" id="name">채널 대기 중</div>
+    <div class="node" id="node"></div>
+    <div class="val absent" id="val">—</div>
+    <div class="foot" id="foot">연결 중…</div>
+</div>
+
+<script src="telemetry-client.js"></script>
+<script>
+    var wanted = new URLSearchParams(location.search).get('channel');
+    var adopted = null;
+
+    TelemetryClient.onStatusChange(function (state) {
+        if (!adopted) document.getElementById('foot').textContent = '연결 상태: ' + state;
+    });
+
+    TelemetryClient.onData(function (p) {
+        if (!p || typeof p.variable !== 'string' || typeof p.value !== 'number') return;
+
+        // Exact match. A substring match would let a second channel overwrite this one, and the
+        // widget would alternate between two quantities under one heading.
+        if (wanted) {
+            if (p.variable !== wanted) return;
+        } else if (!adopted) {
+            adopted = p.variable;
+            document.getElementById('foot').textContent = '첫 수신 채널을 채택했습니다';
+        } else if (p.variable !== adopted) {
+            return;
+        }
+
+        document.getElementById('name').textContent = p.variable;
+        document.getElementById('node').textContent = p.nodeId || '';
+
+        var val = document.getElementById('val');
+        val.className = 'val' + (p.isAnomaly ? ' alarm' : '');
+        val.innerHTML = p.value.toFixed(3) + '<span class="u">' + (p.unit || '') + '</span>';
+
+        // No score means no baseline yet, which is not the same as a score of zero.
+        document.getElementById('foot').textContent = (typeof p.anomalyScore === 'number')
+            ? ('z = ' + p.anomalyScore.toFixed(2) + 'σ' + (p.isAnomaly ? ' · 이상' : ' · 정상'))
+            : '기준선 학습 중';
+    });
+
+    TelemetryClient.connect('ws://' + location.hostname + ':' + (location.port || '8080') + '/ws');
+</script>

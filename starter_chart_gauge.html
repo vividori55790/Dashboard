@@ -1,175 +1,120 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📈 실시간 차트 &amp; 게이지 대시보드 (Starter Chart &amp; Gauge)</title>
-    <!-- Google Fonts & Chart.js -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background: #0B0E14; color: #F0F6FC; padding: 24px; min-height: 100vh; }
-        
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #283548; padding-bottom: 16px; }
-        h1 { font-size: 20px; color: #00F0FF; }
-        .status-badge { background: #121720; border: 1px solid #283548; padding: 6px 14px; border-radius: 20px; font-size: 12px; }
+<!--
+    Starter: one channel, drawn as a gauge and a rolling chart.
 
-        .dashboard-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        @media (max-width: 900px) { .dashboard-layout { grid-template-columns: 1fr; } }
+        starter_chart_gauge.html?channel=dab.bus_voltage&min=350&max=450
 
-        .card { background: #121720; border: 1px solid #283548; border-radius: 12px; padding: 20px; }
-        .card-title { font-size: 14px; font-weight: 600; color: #8B949E; margin-bottom: 16px; display: flex; justify-content: space-between; }
+    The gauge needs a range. Give it one with ?min= and ?max=; without them the page tracks the
+    range it has actually seen and says so, because a bar drawn against invented bounds tells the
+    reader a fraction that means nothing.
 
-        /* Chart Canvas */
-        .chart-container { position: relative; height: 320px; width: 100%; }
+    It used to read data.temp, data.rpm and data.vibration, which no hub sends.
+-->
+<meta charset="utf-8">
+<title>Telemetry starter — gauge and chart</title>
+<style>
+    body { background:#0B0F17; color:#E8EDF7; font-family:"Segoe UI","Malgun Gothic",sans-serif;
+           margin:0; padding:28px; }
+    h1 { font-size:16px; margin:0 0 4px; font-weight:600; }
+    .sub { color:#5F6D87; font-size:13px; margin-bottom:22px; }
+    .panel { background:#131A26; border:1px solid #26324A; border-radius:12px; padding:20px;
+             max-width:640px; }
+    .name { font-size:12px; color:#97A3BA; font-weight:600; word-break:break-all; }
+    .val { font-size:40px; font-weight:600; margin:10px 0; letter-spacing:-.02em; }
+    .val.absent { color:#5F6D87; font-weight:400; }
+    .val .u { font-size:16px; color:#5F6D87; margin-left:6px; }
+    .bar { height:8px; background:#1A2331; border-radius:99px; overflow:hidden; }
+    .bar > i { display:block; height:100%; width:0; background:#3D8BFF; transition:width .2s; }
+    .range { display:flex; justify-content:space-between; font-size:11px; color:#5F6D87;
+             margin-top:5px; font-family:"JetBrains Mono",Consolas,monospace; }
+    canvas { width:100%; height:150px; display:block; margin-top:18px; }
+    .foot { font-size:12px; color:#5F6D87; margin-top:12px; }
+    .alarm { color:#FF4D5E; }
+</style>
 
-        /* Circular Speedometer Gauge */
-        .gauge-box { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; }
-        .gauge-svg { width: 220px; height: 140px; }
-        .gauge-val { font-family: 'JetBrains Mono', monospace; font-size: 38px; font-weight: 700; color: #00FF9D; margin-top: -30px; }
-        .gauge-sub { font-size: 13px; color: #8B949E; margin-top: 4px; }
-    </style>
-</head>
-<body>
-    <header>
-        <div>
-            <h1>📈 TelemetryDashboard — 실시간 차트 &amp; 게이지 템플릿</h1>
-            <p style="font-size: 12px; color: #8B949E; margin-top: 4px;">Chart.js 실시간 스크롤링 그래프 및 원형 게이지 연동 예제</p>
-        </div>
-        <div class="status-badge">
-            <span id="status-text" style="color: #00FF9D;">🟢 LIVE STREAMING</span>
-        </div>
-    </header>
+<h1>Telemetry starter — gauge and chart</h1>
+<div class="sub" id="sub">?channel= 로 채널을 지정하세요. 없으면 처음 도착한 채널을 사용합니다.</div>
 
-    <div class="dashboard-layout">
-        <!-- 1. 실시간 시계열 스크롤링 차트 -->
-        <div class="card">
-            <div class="card-title">
-                <span>🔥 실시간 온도 &amp; 진동 추이 (Last 50 Samples)</span>
-                <span id="lbl-last-update" style="color: #00F0FF; font-family: 'JetBrains Mono'; font-size: 12px;">Update: --</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="telemetryChart"></canvas>
-            </div>
-        </div>
+<div class="panel">
+    <div class="name" id="name">채널 대기 중</div>
+    <div class="val absent" id="val">—</div>
+    <div class="bar"><i id="fill"></i></div>
+    <div class="range"><span id="lo">—</span><span id="hi">—</span></div>
+    <canvas id="chart"></canvas>
+    <div class="foot" id="foot">연결 중…</div>
+</div>
 
-        <!-- 2. 원형 속도계/부하 게이지 -->
-        <div class="card">
-            <div class="card-title">
-                <span>⚙️ 모터 속도 (RPM) 게이지</span>
-                <span style="color: #FFB800;">MAX 5000</span>
-            </div>
-            <div class="gauge-box">
-                <svg class="gauge-svg" viewBox="0 0 200 120">
-                    <!-- Gauge Background Arc -->
-                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#18202C" stroke-width="18" stroke-linecap="round"/>
-                    <!-- Gauge Active Value Arc -->
-                    <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#00FF9D" stroke-width="18" stroke-linecap="round"
-                          stroke-dasharray="251.2" stroke-dashoffset="150" style="transition: stroke-dashoffset 0.1s, stroke 0.2s;"/>
-                </svg>
-                <div id="val-gauge-rpm" class="gauge-val">0</div>
-                <div class="gauge-sub">RPM (Rotations Per Min)</div>
-            </div>
-        </div>
-    </div>
+<script src="telemetry-client.js"></script>
+<script>
+    var q = new URLSearchParams(location.search);
+    var wanted = q.get('channel');
+    var declaredMin = q.has('min') ? Number(q.get('min')) : null;
+    var declaredMax = q.has('max') ? Number(q.get('max')) : null;
 
-    <!-- SDK 및 연동 스크립트 -->
-    <script src="http://localhost:8080/telemetry-client.js"></script>
-    <script>
-        // 1. Chart.js 초기화
-        const ctx = document.getElementById('telemetryChart').getContext('2d');
-        const maxPoints = 50;
-        const labels = Array.from({length: maxPoints}, (_, i) => '');
-        const tempData = Array.from({length: maxPoints}, () => 25);
-        const vibData = Array.from({length: maxPoints}, () => 0.2);
+    var adopted = null, history = [], seenMin = null, seenMax = null;
 
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: '온도 (°C)',
-                        data: tempData,
-                        borderColor: '#00F0FF',
-                        backgroundColor: 'rgba(0, 240, 255, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        pointRadius: 0,
-                        fill: true
-                    },
-                    {
-                        label: '진동 (g * 10)',
-                        data: vibData,
-                        borderColor: '#00FF9D',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        pointRadius: 0
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false, // 20Hz 고속 렌더링을 위해 애니메이션 비활성화
-                scales: {
-                    x: { display: false },
-                    y: {
-                        grid: { color: '#18202C' },
-                        ticks: { color: '#8B949E' }
-                    }
-                },
-                plugins: {
-                    legend: { labels: { color: '#F0F6FC' } }
-                }
-            }
-        });
+    TelemetryClient.onStatusChange(function (s) {
+        if (!adopted) document.getElementById('foot').textContent = '연결 상태: ' + s;
+    });
 
-        // 2. 게이지 아크 업데이트 함수
-        function updateGauge(rpm) {
-            const maxRpm = 5000;
-            const pct = Math.min(1.0, Math.max(0.0, rpm / maxRpm));
-            const totalArcLength = 251.2;
-            const offset = totalArcLength * (1 - pct);
+    TelemetryClient.onData(function (p) {
+        if (!p || typeof p.variable !== 'string' || typeof p.value !== 'number') return;
 
-            const arcEl = document.getElementById('gauge-arc');
-            arcEl.style.strokeDashoffset = offset;
-            document.getElementById('val-gauge-rpm').textContent = Math.round(rpm);
+        if (wanted) { if (p.variable !== wanted) return; }
+        else if (!adopted) { adopted = p.variable; }
+        else if (p.variable !== adopted) { return; }
 
-            // 위험 수치 도달 시 게이지 색상 변경
-            if (pct > 0.8) {
-                arcEl.style.stroke = '#FF2E63';
-            } else if (pct > 0.6) {
-                arcEl.style.stroke = '#FFB800';
-            } else {
-                arcEl.style.stroke = '#00FF9D';
-            }
+        document.getElementById('name').textContent = p.variable + '  ·  ' + (p.nodeId || '');
+
+        var val = document.getElementById('val');
+        val.className = 'val' + (p.isAnomaly ? ' alarm' : '');
+        val.innerHTML = p.value.toFixed(3) + '<span class="u">' + (p.unit || '') + '</span>';
+
+        seenMin = seenMin === null ? p.value : Math.min(seenMin, p.value);
+        seenMax = seenMax === null ? p.value : Math.max(seenMax, p.value);
+
+        // Declared bounds if given, observed ones otherwise -- and the labels say which, so nobody
+        // reads a bar filled against a range the page invented.
+        var lo = declaredMin !== null ? declaredMin : seenMin;
+        var hi = declaredMax !== null ? declaredMax : seenMax;
+        var declared = declaredMin !== null && declaredMax !== null;
+
+        document.getElementById('lo').textContent = lo.toFixed(2);
+        document.getElementById('hi').textContent =
+            hi.toFixed(2) + (declared ? ' (지정 범위)' : ' (관측 범위)');
+
+        document.getElementById('fill').style.width =
+            (hi > lo ? Math.max(0, Math.min(100, ((p.value - lo) / (hi - lo)) * 100)) : 0) + '%';
+        document.getElementById('fill').style.background = p.isAnomaly ? '#FF4D5E' : '#3D8BFF';
+
+        history.push(p.value);
+        if (history.length > 120) history.shift();
+        draw(p.isAnomaly);
+
+        document.getElementById('foot').textContent = (typeof p.anomalyScore === 'number')
+            ? ('z = ' + p.anomalyScore.toFixed(2) + 'σ')
+            : '기준선 학습 중';
+    });
+
+    function draw(alarm) {
+        var c = document.getElementById('chart');
+        if (history.length < 2) return;
+        var w = c.width = c.clientWidth, h = c.height = 150;
+        var ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+
+        var lo = Math.min.apply(null, history), hi = Math.max.apply(null, history);
+        if (lo === hi) { lo -= 1; hi += 1; }
+
+        ctx.strokeStyle = alarm ? '#FF4D5E' : '#3D8BFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var i = 0; i < history.length; i++) {
+            var x = (i / (history.length - 1)) * w;
+            var y = h - 8 - ((history[i] - lo) / (hi - lo)) * (h - 16);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
+        ctx.stroke();
+    }
 
-        // 3. TelemetryClient로 실시간 스트림 수신
-        if (window.TelemetryClient) {
-            TelemetryClient.connect('ws://localhost:8080/ws');
-            TelemetryClient.onData((data) => {
-                // 차트 데이터 갱신
-                if (data.temp !== undefined) {
-                    tempData.push(data.temp);
-                    tempData.shift();
-                }
-                if (data.vibration !== undefined) {
-                    vibData.push(data.vibration * 10);
-                    vibData.shift();
-                }
-                chart.update();
-
-                // 게이지 갱신
-                if (data.rpm !== undefined) {
-                    updateGauge(data.rpm);
-                }
-
-                document.getElementById('lbl-last-update').textContent = `Update: ${new Date().toLocaleTimeString()}`;
-            });
-        }
-    </script>
-</body>
-</html>
+    TelemetryClient.connect('ws://' + location.hostname + ':' + (location.port || '8080') + '/ws');
+</script>
