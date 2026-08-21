@@ -42,6 +42,16 @@ public static class TelemetryHttpRoutes
                 await WriteJsonAsync(response, BuildReport(server, context.Request.QueryString)).ConfigureAwait(false);
                 return;
 
+            case "/api/incident":
+                await WriteJsonAsync(response, await IncidentEndpoint.QueryAsync(
+                    server.Archive,
+                    HistoryEndpoint.ReadTimestamp(context.Request.QueryString["at"]),
+                    ReadDouble(context.Request.QueryString["lead"], IncidentEndpoint.DefaultLeadSec),
+                    ReadDouble(context.Request.QueryString["trail"], IncidentEndpoint.DefaultTrailSec),
+                    context.Request.QueryString["node"]).ConfigureAwait(false)
+                    ).ConfigureAwait(false);
+                return;
+
             case "/api/history":
                 await WriteJsonAsync(response, await HistoryEndpoint.QueryAsync(
                     server.Archive,
@@ -101,7 +111,7 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/history", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>

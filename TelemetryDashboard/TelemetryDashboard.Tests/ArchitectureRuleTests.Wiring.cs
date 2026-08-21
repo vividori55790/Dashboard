@@ -68,7 +68,12 @@ public partial class ArchitectureRuleTests
         // something to register. ExtensionLoader fills it from the extension store and asks it
         // GetCompatibleExtensions(hostApiVersion) to decide what may load, which is the one place
         // that rule is applied — the entry has stopped exempting anything.
-        "FailureSnapshotExtractor",
+        // FailureSnapshotExtractor retired from this baseline: IncidentEndpoint puts it behind
+        // /api/incident, over the durable archive, so an alert's timestamp turns into the run-up to
+        // it across every channel. It lived in Infrastructure/Storage and depends on nothing but
+        // TelemetryPacket, which is why nothing could reach it -- Core must not reference
+        // Infrastructure, so the endpoint layer where an incident window is asked for could not
+        // have it.
         // FftAnalyzerService retired from this baseline: it moved from UI/ViewModels to
         // Core/Analytics and SpectrumEndpoint puts it behind /api/spectrum, so any browser on any
         // platform can ask for a channel's frequency content. Its address was why nothing could

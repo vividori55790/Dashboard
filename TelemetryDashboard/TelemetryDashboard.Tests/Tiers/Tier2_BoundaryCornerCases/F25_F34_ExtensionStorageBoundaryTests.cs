@@ -15,6 +15,7 @@ using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Resilience;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Infrastructure.Plugins;
+using TelemetryDashboard.Core.Recording;
 using TelemetryDashboard.Infrastructure.Storage;
 using TelemetryDashboard.Infrastructure.WebServer;
 using TelemetryDashboard.Infrastructure.Integrations;

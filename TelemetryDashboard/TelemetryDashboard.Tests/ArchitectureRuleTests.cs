@@ -483,6 +483,11 @@ public partial class ArchitectureRuleTests
         // mostly the account of why a replay is marked REPLAY rather than simulated, and why the
         // recorded verdict is dropped and recomputed instead of replayed.
         "TelemetryDashboard.Host/Ingest/ReplayTelemetrySource.cs",                 // 168 lines
+
+        // The archive query and the incident window. Each is one question -- what did this channel
+        // do over a span, and what was everything doing around this instant -- and the length is
+        // the record shape plus the account of what each field is allowed to claim.
+        "TelemetryDashboard.Core/Streaming/IncidentEndpoint.cs",                   // 162 lines
     };
 
     [Fact]

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TelemetryDashboard.Core.Models;
 
-namespace TelemetryDashboard.Infrastructure.Storage;
+namespace TelemetryDashboard.Core.Recording;
 
 /// <summary>
 /// Extracts the window of telemetry surrounding a failure, for post-mortem analysis.
@@ -12,6 +12,12 @@ namespace TelemetryDashboard.Infrastructure.Storage;
 /// The default window is the ten seconds leading up to the failure: what happened <em>before</em>
 /// the fault is what explains it. A trailing margin is included so the operator can see how the
 /// system responded.
+/// <para>
+/// It lived in <c>Infrastructure/Storage</c> and depends on nothing but <c>TelemetryPacket</c>,
+/// which is why nothing could reach it: Core must not reference Infrastructure, so the endpoint
+/// layer where an incident window is actually asked for could not have it. Its address was the
+/// mistake, not its contents.
+/// </para>
 /// </remarks>
 public sealed class FailureSnapshotExtractor
 {

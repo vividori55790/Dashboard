@@ -516,6 +516,36 @@ throw. A failing route now returns 500 with the reason, and that change named my
 next request — `RoundtripKind | AdjustToUniversal` is a combination .NET rejects *before* it looks
 at the input, so the endpoint threw even when given no timestamp at all.
 
+### An alert names a time; this turns it into the run-up
+`FailureSnapshotExtractor` lived in `Infrastructure/Storage` and depends on nothing but
+`TelemetryPacket`. That address is why nothing could reach it — Core must not reference
+Infrastructure, so the endpoint layer where an incident window is actually asked for could not have
+it. `/api/incident?at=<iso>` now answers over the durable archive, so the question can be asked days
+later from another machine.
+
+The window is asymmetric on purpose: ten seconds before the failure and two after. What happened
+*before* a fault is what explains it, and the tail exists only to show how the system responded.
+Measured against a live host rather than assumed:
+
+```
+dab.bus_voltage   94 samples spanning 9.9s before the instant
+                  19 samples spanning 1.9s after      ratio 4.9 : 1
+4 channels, 452 samples, each channel's min/max and its last value before the instant
+```
+
+The instant is supplied, never discovered. The archive stores measurements and not verdicts, so this
+endpoint cannot claim to have found an incident — it answers about a moment an alert or an operator
+identified. A channel silent before the instant reports **no** value before it rather than offering
+the first reading after, which describes a different state entirely.
+
+**And the tests for this feature were testing a stub.** `F32_SessionReplayTests` exercised two
+classes declared at the bottom of its own file: a `SessionReplayPlayerState` whose
+`LoadSession(file)` returned true and set `TotalPackets = 100` **without opening the file** — so a
+path that did not exist loaded successfully — and a `FailureSnapshotExtractorHelper` that
+reimplemented the extractor with a *symmetric* window. A double that stands in for the thing under
+test can only confirm itself. Both are gone; the assertions run against the shipping classes, and
+one of them now pins the asymmetry the helper had quietly discarded.
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
@@ -527,7 +557,7 @@ Eleven classes now share one `DisableParallelization` collection, so they take t
 excluded and no bound was widened. The routine run went from 1 m 14 s to about 2 m 35 s, and stopped
 lying.
 
-**Suite: 1,018 passing, 0 failing** (950 portable + 68 desktop) — about 2 m 35 s with
+**Suite: 1,028 passing, 0 failing** (960 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two
