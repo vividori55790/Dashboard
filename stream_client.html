@@ -1,2505 +1,425 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DAB & PSFB Dual Converter Live Web Telemetry Stream & 2D Node Wires</title>
-    <meta name="description" content="High-fidelity Dual Active Bridge & Phase-Shift Full Bridge Converter real-time web telemetry web client console. High-performance HTML5 Canvas streaming chart renderer, 2D visual node wires, and 0.1s DVR timeline scrubber.">
-    <!-- Google Fonts Outfit & Share Tech Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    
-    <style>
-        /* Modern Carbon Dark Design System */
-        :root {
-            --bg-base: #060608;
-            --bg-surface: #101014;
-            --bg-card: rgba(22, 22, 28, 0.7);
-            --border-glow: #1a1a24;
-            --text-primary: #f1f1f5;
-            --text-secondary: #8c8c9e;
-            
-            /* DAB Colors (Neon Teal & Green) */
-            --color-teal: #00d2ff;
-            --color-green: #00ff66;
-            --color-yellow: #ffea00;
-            --color-purple: #e040fb;
-            
-            /* PSFB Colors (Neon Purple & Orange) */
-            --color-purple-in: #ba68c8;
-            --color-orange-out: #ff9100;
-            --color-red: #ff1744;
-            
-            /* Glow Effects */
-            --glow-teal: 0 0 15px rgba(0, 210, 255, 0.4);
-            --glow-green: 0 0 15px rgba(0, 255, 102, 0.4);
-            --glow-red: 0 0 20px rgba(255, 23, 68, 0.6);
-            --glow-yellow: 0 0 15px rgba(255, 234, 0, 0.4);
-            --glow-purple: 0 0 15px rgba(186, 104, 200, 0.4);
-            --glow-orange: 0 0 15px rgba(255, 145, 0, 0.4);
-            
-            --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            --font-mono: 'Share Tech Mono', Consolas, monospace;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-base);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(0, 210, 255, 0.05) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, rgba(213, 0, 249, 0.03) 0px, transparent 50%),
-                linear-gradient(rgba(18, 18, 24, 0.4) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(18, 18, 24, 0.4) 1px, transparent 1px);
-            background-size: 100% 100%, 100% 100%, 20px 20px, 20px 20px;
-            color: var(--text-primary);
-            font-family: var(--font-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow-x: hidden;
-        }
-
-        header {
-            background: rgba(16, 16, 20, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-glow);
-            padding: 15px 30px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .header-logo-section {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .mcu-status-chip {
-            background-color: #1a1a24;
-            border: 1px solid #282836;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: #546e7a;
-            display: inline-block;
-        }
-
-        .status-dot.active {
-            background-color: var(--color-green);
-            box-shadow: 0 0 10px var(--color-green);
-            animation: pulse-green 1.5s infinite;
-        }
-
-        @keyframes pulse-green {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.6; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        h1 {
-            font-size: 20px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #ffffff 30%, var(--color-teal) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.5px;
-        }
-
-        /* Sticky DVR Control Dock */
-        .dvr-control-dock {
-            background: rgba(12, 14, 20, 0.95);
-            border-bottom: 1px solid #23232e;
-            padding: 12px 30px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            z-index: 90;
-        }
-
-        .dvr-mode-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dvr-btn {
-            background: #181922;
-            color: var(--text-primary);
-            border: 1px solid #2e2e3f;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
-
-        .dvr-btn:hover {
-            border-color: var(--color-teal);
-            color: var(--color-teal);
-        }
-
-        .dvr-btn.active-live {
-            background: rgba(255, 23, 68, 0.15);
-            border-color: var(--color-red);
-            color: var(--color-red);
-            box-shadow: var(--glow-red);
-        }
-
-        .dvr-btn.active-replay {
-            background: rgba(0, 210, 255, 0.15);
-            border-color: var(--color-teal);
-            color: var(--color-teal);
-            box-shadow: var(--glow-teal);
-        }
-
-        .dvr-scrubber-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .dvr-scrubber-input {
-            flex: 1;
-            accent-color: var(--color-teal);
-            height: 6px;
-            cursor: pointer;
-        }
-
-        .dvr-time-label {
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--color-teal);
-            min-width: 110px;
-        }
-
-        .dvr-speed-group {
-            display: flex;
-            gap: 4px;
-        }
-
-        .speed-btn {
-            background: #14151e;
-            border: 1px solid #23232e;
-            color: var(--text-secondary);
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .speed-btn.active {
-            background: var(--color-teal);
-            color: #060608;
-            border-color: var(--color-teal);
-        }
-
-        /* 2D Visual Node Wires Canvas Section */
-        .node-topology-section {
-            background: rgba(16, 16, 22, 0.6);
-            border: 1px solid #23232e;
-            border-radius: 14px;
-            padding: 16px;
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .topology-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--color-teal);
-        }
-
-        /* Horizontal scroll viewport for the node graph.
-           On wide screens the container is already >= its min-width, so no
-           scrollbar appears and desktop rendering is byte-identical. */
-        .node-topology-scroll {
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-x: contain;
-            border-radius: 10px;
-            scrollbar-width: thin;
-            scrollbar-color: #2e2e3f transparent;
-        }
-
-        .node-topology-scroll::-webkit-scrollbar { height: 8px; }
-        .node-topology-scroll::-webkit-scrollbar-track { background: transparent; }
-        .node-topology-scroll::-webkit-scrollbar-thumb {
-            background: #2e2e3f;
-            border-radius: 4px;
-        }
-
-        /* Hidden on desktop; only surfaced where the graph actually pans. */
-        .topology-pan-hint { display: none; }
-
-        .node-topology-container {
-            position: relative;
-            width: 100%;
-            /* node-5 sits at left:990px and .topology-node is a hard-coded
-               170px (drawAllWires and the drag clamp both depend on it), so
-               the graph needs 1160px to be fully reachable. */
-            min-width: 1180px;
-            height: 180px;
-            background: #090a0e;
-            border-radius: 10px;
-            border: 1px solid #1a1a24;
-            overflow: hidden;
-        }
-
-        #wires-svg {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .topology-node {
-            position: absolute;
-            width: 170px;
-            background: #14141c;
-            border: 1px solid #2a2a3a;
-            border-radius: 8px;
-            padding: 10px 12px;
-            z-index: 20;
-            cursor: grab;
-            user-select: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            transition: border-color 0.2s ease;
-        }
-
-        .topology-node:active { cursor: grabbing; }
-        .topology-node:hover { border-color: var(--color-teal); }
-
-        .node-title {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 4px;
-        }
-
-        .node-metric {
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--color-teal);
-        }
-
-        .node-anchor {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: var(--color-teal);
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .node-anchor.in { left: -4px; }
-        .node-anchor.out { right: -4px; }
-
-        /* Animated Glowing Pulse for SVG wires */
-        .wire-path {
-            fill: none;
-            stroke-width: 3;
-            stroke-linecap: round;
-            transition: stroke 0.3s ease;
-        }
-
-        .wire-pulse {
-            fill: none;
-            stroke-width: 3;
-            stroke-linecap: round;
-            stroke-dasharray: 8, 12;
-            animation: pulse-flow 1s linear infinite;
-        }
-
-        @keyframes pulse-flow {
-            from { stroke-dashoffset: 40; }
-            to { stroke-dashoffset: 0; }
-        }
-
-        main {
-            flex: 1;
-            padding: 24px;
-            max-width: 1800px;
-            margin: 0 auto;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        /* Dual Column Layout */
-        .dual-workspace-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-        }
-
-        .system-column {
-            background: rgba(16, 16, 22, 0.4);
-            border: 1px solid #1a1a24;
-            border-radius: 14px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            backdrop-filter: blur(8px);
-        }
-
-        .system-dab {
-            border-top: 3px solid var(--color-teal);
-        }
-
-        .system-psfb {
-            border-top: 3px solid var(--color-purple-in);
-        }
-
-        .system-section-title {
-            font-size: 16px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid #23232e;
-            padding-bottom: 10px;
-            margin-bottom: 4px;
-        }
-
-        .system-dab .system-section-title {
-            color: var(--color-teal);
-        }
-
-        .system-psfb .system-section-title {
-            color: var(--color-purple-in);
-        }
-
-        .title-accent-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-
-        .system-dab .title-accent-dot {
-            background-color: var(--color-teal);
-            box-shadow: var(--glow-teal);
-        }
-
-        .system-psfb .title-accent-dot {
-            background-color: var(--color-purple-in);
-            box-shadow: var(--glow-purple);
-        }
-
-        .system-section-title .subtitle {
-            font-size: 11px;
-            font-weight: 400;
-            color: var(--text-secondary);
-            margin-left: 8px;
-        }
-
-        .status-badge {
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 8px;
-            border-radius: 4px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            margin-left: auto; /* Push to the right */
-        }
-
-        .status-badge.standby {
-            background-color: rgba(84, 110, 122, 0.1);
-            color: #8c8c9e;
-            border: 1px solid #2b383f;
-        }
-
-        .status-badge.running {
-            background-color: rgba(0, 255, 102, 0.1);
-            color: var(--color-green);
-            border: 1px solid var(--color-green);
-            box-shadow: var(--glow-green);
-            animation: pulse-badge 1.5s infinite alternate;
-        }
-
-        @keyframes pulse-badge {
-            from { opacity: 0.8; box-shadow: 0 0 5px rgba(0, 255, 102, 0.2); }
-            to { opacity: 1; box-shadow: var(--glow-green); }
-        }
-
-        /* Alarms styling */
-        .alarm-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
-
-        .alarm-card {
-            background-color: var(--bg-card);
-            border: 1px solid #23232e;
-            border-radius: 8px;
-            padding: 10px 14px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 4px;
-            min-height: 52px;
-            transition: all 0.3s ease;
-        }
-
-        .alarm-card .alarm-title {
-            font-size: 10px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 700;
-        }
-
-        .alarm-card .alarm-val {
-            font-size: 11px;
-            font-weight: bold;
-            color: #546e7a;
-        }
-
-        .alarm-card.fault-active {
-            border-color: var(--color-red);
-            background-color: rgba(255, 23, 68, 0.1);
-            animation: pulse-red-border 1s infinite alternate;
-        }
-        
-        .alarm-card.fault-active .alarm-val {
-            color: var(--color-red);
-            text-shadow: var(--glow-red);
-        }
-
-        @keyframes pulse-red-border {
-            from { border-color: rgba(255, 23, 68, 0.3); box-shadow: none; }
-            to { border-color: var(--color-red); box-shadow: 0 0 10px rgba(255, 23, 68, 0.3); }
-        }
-
-        /* Telemetry Cards styling */
-        .telemetry-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-
-        .telemetry-card {
-            background: var(--bg-card);
-            border: 1px solid #23232e;
-            border-radius: 10px;
-            padding: 14px 16px;
-            position: relative;
-            overflow: hidden;
-            backdrop-filter: blur(8px);
-            transition: border-color 0.3s ease;
-        }
-
-        .telemetry-card:hover {
-            border-color: #2e2e3f;
-        }
-
-        .card-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-
-        .card-label {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .card-unit {
-            font-size: 10px;
-            background-color: #171721;
-            border: 1px solid #23232e;
-            border-radius: 4px;
-            padding: 1px 5px;
-            color: var(--text-secondary);
-            font-weight: bold;
-        }
-
-        .card-val {
-            font-family: var(--font-mono);
-            font-size: 28px;
-            font-weight: 400;
-            line-height: 1.1;
-            letter-spacing: -0.5px;
-            margin-top: 4px;
-        }
-
-        .card-footer {
-            margin-top: 6px;
-            font-size: 10px;
-            color: var(--text-secondary);
-            display: flex;
-            justify-content: space-between;
-        }
-
-        /* DAB Color Theme values */
-        .system-dab .card-vin .card-val { color: var(--color-teal); text-shadow: var(--glow-teal); }
-        .system-dab .card-iin .card-val { color: var(--color-teal); }
-        .system-dab .card-pin .card-val { color: var(--color-teal); }
-        
-        .system-dab .card-vout .card-val { color: var(--color-green); text-shadow: var(--glow-green); }
-        .system-dab .card-iout .card-val { color: var(--color-green); }
-        .system-dab .card-pout .card-val { color: var(--color-green); }
-
-        .system-dab .card-eff .card-val { color: var(--color-yellow); text-shadow: var(--glow-yellow); }
-        .system-dab .card-phase .card-val { color: var(--color-purple); }
-
-        /* PSFB Color Theme values */
-        .system-psfb .card-vin .card-val { color: var(--color-purple-in); text-shadow: var(--glow-purple); }
-        .system-psfb .card-iin .card-val { color: var(--color-purple-in); }
-        .system-psfb .card-pin .card-val { color: var(--color-purple-in); }
-        
-        .system-psfb .card-vout .card-val { color: var(--color-orange-out); text-shadow: var(--glow-orange); }
-        .system-psfb .card-iout .card-val { color: var(--color-orange-out); }
-        .system-psfb .card-pout .card-val { color: var(--color-orange-out); }
-
-        .system-psfb .card-eff .card-val { color: #ff5722; text-shadow: 0 0 15px rgba(255, 87, 34, 0.4); }
-        .system-psfb .card-phase .card-val { color: var(--color-purple-in); }
-
-        /* Thermals styling */
-        .thermals-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 4px;
-        }
-
-        .hotspot-card {
-            background-color: rgba(10, 10, 12, 0.6);
-            border: 1px solid #1c1c24;
-            border-radius: 8px;
-            padding: 10px 14px;
-        }
-
-        .hotspot-label {
-            font-size: 10px;
-            color: var(--text-secondary);
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .hotspot-temp {
-            font-family: var(--font-mono);
-            font-size: 20px;
-            font-weight: bold;
-            color: var(--text-primary);
-        }
-
-        .hotspot-temp.warning {
-            color: var(--color-yellow);
-        }
-
-        .hotspot-temp.critical {
-            color: var(--color-red);
-            text-shadow: var(--glow-red);
-        }
-
-        .progress-bar-bg {
-            background-color: #171721;
-            height: 5px;
-            border-radius: 3px;
-            margin-top: 6px;
-            overflow: hidden;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            width: 0%;
-            background-color: var(--color-teal);
-            border-radius: 3px;
-            transition: width 0.3s ease, background-color 0.3s ease;
-        }
-
-        .system-psfb .progress-bar-fill {
-            background-color: var(--color-purple-in);
-        }
-
-        /* Charts section grid */
-        .charts-section-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .chart-box {
-            background-color: rgba(16, 16, 22, 0.9);
-            border: 1px solid #23232e;
-            border-radius: 12px;
-            padding: 16px;
-            position: relative;
-        }
-
-        .chart-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            padding: 0 4px;
-        }
-
-        .chart-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .chart-legend {
-            display: flex;
-            gap: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            flex-wrap: wrap;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .legend-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 2px;
-        }
-
-        .canvas-wrapper {
-            position: relative;
-            width: 100%;
-            height: 220px;
-        }
-
-        canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-            background-color: #0b0b0e;
-            border-radius: 6px;
-            border: 1px solid #1a1a24;
-        }
-
-        /* Incident Report Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(6px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-box {
-            background: #101018;
-            border: 1px solid #2A2A3C;
-            border-radius: 14px;
-            width: 720px;
-            max-width: 92vw;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-            padding: 24px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.6);
-        }
-
-        .modal-title {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--color-teal);
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .modal-content-area {
-            flex: 1;
-            overflow-y: auto;
-            background: #09090D;
-            border: 1px solid #1A1A26;
-            border-radius: 8px;
-            padding: 16px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: #C0CAF5;
-            white-space: pre-wrap;
-            line-height: 1.5;
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        /* Footer Info */
-        footer {
-            padding: 15px 30px;
-            background-color: #08080a;
-            border-top: 1px solid #1a1a24;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-top: 24px;
-        }
-
-        @media (max-width: 1400px) {
-            .dual-workspace-grid {
-                grid-template-columns: 1fr;
-            }
-            .charts-section-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* ============ TABLET TIER (<= 1024px) ============
-           Rows that were single-line flex on desktop are allowed to wrap so
-           nothing is forced past the viewport edge. */
-        @media (max-width: 1024px) {
-            header {
-                padding: 12px 18px;
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-            h1 { font-size: 17px; }
-            .header-logo-section { min-width: 0; }
-
-            .dvr-control-dock {
-                padding: 10px 18px;
-                flex-wrap: wrap;
-                gap: 12px;
-            }
-            /* Scrubber gets its own full-width row instead of competing
-               with the mode/speed button groups for space. */
-            .dvr-scrubber-container {
-                flex: 1 0 100%;
-                order: 1;
-            }
-
-            main {
-                padding: 18px;
-                gap: 16px;
-            }
-
-            .topology-header {
-                flex-wrap: wrap;
-                gap: 6px;
-            }
-            .topology-pan-hint {
-                display: inline-block;
-                font-size: 11px;
-                font-weight: 400;
-                color: var(--text-secondary);
-            }
-
-            .system-section-title {
-                flex-wrap: wrap;
-                gap: 6px;
-            }
-            .system-section-title .subtitle { margin-left: 0; }
-
-            .chart-header {
-                flex-wrap: wrap;
-                gap: 8px;
-            }
-
-            .modal-footer { flex-wrap: wrap; }
-
-            footer {
-                padding: 14px 18px;
-                flex-wrap: wrap;
-                gap: 8px;
-            }
-        }
-
-        /* ============ PHONE TIER (<= 600px) ============ */
-        @media (max-width: 600px) {
-            header {
-                padding: 10px 12px;
-                gap: 8px;
-            }
-            h1 {
-                font-size: 14px;
-                line-height: 1.25;
-            }
-
-            .dvr-control-dock {
-                padding: 10px 12px;
-                gap: 10px;
-            }
-            /* Each control group becomes a full-width row. */
-            .dvr-mode-toggle { flex: 1 0 100%; }
-            .dvr-mode-toggle .dvr-btn { flex: 1; justify-content: center; }
-            .dvr-speed-group { flex: 1 1 auto; }
-            .dvr-speed-group .speed-btn { flex: 1; }
-            /* The AI report button is the only direct .dvr-btn child of the dock. */
-            .dvr-control-dock > .dvr-btn {
-                flex: 1 0 100%;
-                justify-content: center;
-            }
-            .dvr-scrubber-container { flex-wrap: wrap; }
-            /* Label + timecode share row 1; the slider takes row 2 full-bleed. */
-            .dvr-scrubber-input {
-                order: 1;
-                flex: 1 0 100%;
-            }
-            .dvr-time-label {
-                min-width: 0;
-                margin-left: auto;
-            }
-
-            main {
-                padding: 12px;
-                gap: 14px;
-            }
-
-            .node-topology-section { padding: 12px; }
-            .system-column {
-                padding: 14px;
-                gap: 12px;
-            }
-
-            .alarm-row { gap: 6px; }
-            .alarm-card { padding: 8px 9px; }
-
-            .telemetry-grid { gap: 8px; }
-            .telemetry-card { padding: 11px 12px; }
-            .card-top { gap: 6px; }
-            .card-val { font-size: 22px; }
-            .card-footer {
-                flex-wrap: wrap;
-                gap: 2px 8px;
-                font-size: 9px;
-            }
-
-            .thermals-row { gap: 8px; }
-            .hotspot-card { padding: 8px 11px; }
-            .hotspot-temp { font-size: 18px; }
-
-            .chart-box { padding: 12px; }
-            .canvas-wrapper { height: 190px; }
-
-            .modal-box {
-                padding: 16px;
-                max-width: 94vw;
-            }
-            .modal-content-area {
-                padding: 12px;
-                font-size: 11px;
-            }
-            /* Long markdown lines scroll inside the report box, not the page. */
-            .modal-content-area { overflow-x: auto; }
-            .modal-footer > .dvr-btn { flex: 1 1 auto; justify-content: center; }
-
-            footer {
-                padding: 12px;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 6px;
-            }
-        }
-
-        /* ============ TOUCH / COARSE POINTER ============
-           Hit-area sizing and non-hover affordances. Keyed on pointer type,
-           not width, so a touch tablet gets it too and a mouse never does.
-           The 600px arm is a safety net for phone browsers that misreport
-           pointer capability; it stays clear of desktop window widths. */
-        @media (hover: none), (pointer: coarse), (max-width: 600px) {
-            .dvr-btn {
-                min-height: 44px;
-                padding: 10px 14px;
-            }
-            .speed-btn {
-                min-height: 44px;
-                min-width: 44px;
-                padding: 8px 12px;
-                font-size: 12px;
-            }
-
-            /* Native 6px-tall range input is unhittable with a thumb; give the
-               control a 44px hit box while keeping the track visually thin. */
-            .dvr-scrubber-input {
-                height: 44px;
-                background: transparent;
-                -webkit-appearance: none;
-                appearance: none;
-                touch-action: pan-y;
-            }
-            .dvr-scrubber-input::-webkit-slider-runnable-track {
-                height: 6px;
-                border-radius: 3px;
-                background: #23232e;
-            }
-            .dvr-scrubber-input::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                appearance: none;
-                width: 26px;
-                height: 26px;
-                margin-top: -10px;
-                border-radius: 50%;
-                border: 2px solid #060608;
-                background: var(--color-teal);
-                box-shadow: var(--glow-teal);
-            }
-            .dvr-scrubber-input::-moz-range-track {
-                height: 6px;
-                border-radius: 3px;
-                background: #23232e;
-            }
-            .dvr-scrubber-input::-moz-range-thumb {
-                width: 26px;
-                height: 26px;
-                border: 2px solid #060608;
-                border-radius: 50%;
-                background: var(--color-teal);
-                box-shadow: var(--glow-teal);
-            }
-        }
-
-        @media (hover: none) {
-            /* Touch has no hover, so :hover would otherwise stick after a tap
-               and make an inactive button look selected. Active-state classes
-               are excluded so LIVE/REPLAY still read correctly. */
-            .dvr-btn:not(.active-live):not(.active-replay):hover {
-                border-color: #2e2e3f;
-                color: var(--text-primary);
-            }
-            .topology-node:hover { border-color: #2a2a3a; }
-            /* Non-hover equivalent of the node highlight: press feedback. */
-            .topology-node:active,
-            .topology-node.node-dragging { border-color: var(--color-teal); }
-        }
-
-        /* Nodes are dragged via Pointer/Touch handlers, so the browser must not
-           claim the gesture for scrolling once a drag starts on a node. */
-        .topology-node { touch-action: none; }
-    </style>
-</head>
-<body>
-
-    <header>
-        <div class="header-logo-section">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="2" width="20" height="20" rx="4" fill="url(#logoGrad)" />
-                <path d="M7 12H17M12 7V17" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
-                <defs>
-                    <linearGradient id="logoGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#00d2ff" />
-                        <stop offset="1" stop-color="#d500f9" />
-                    </linearGradient>
-                </defs>
-            </svg>
-            <h1>DAB & PSFB CONVERTER DUAL MONITORING CONSOLE</h1>
-        </div>
-        
-        <div class="mcu-status-chip">
-            <span class="status-dot" id="stream-status-dot"></span>
-            <span id="lbl-status-text">DISCONNECTED</span>
-        </div>
-    </header>
-
-    <!-- Sticky DVR Control Dock -->
-    <div class="dvr-control-dock">
-        <div class="dvr-mode-toggle">
-            <button class="dvr-btn active-live" id="btn-mode-live" onclick="setDvrMode(true)">🔴 LIVE STREAM</button>
-            <button class="dvr-btn" id="btn-mode-replay" onclick="setDvrMode(false)">⏪ REPLAY MODE</button>
-        </div>
-
-        <div class="dvr-scrubber-container">
-            <span style="font-size: 11px; font-weight: bold; color: var(--text-secondary)">DVR Timeline:</span>
-            <input type="range" class="dvr-scrubber-input" id="dvr-scrubber" min="0" max="300" step="0.1" value="300" oninput="onScrubberInput(this.value)">
-            <span class="dvr-time-label" id="lbl-dvr-time">-0.0s (NOW)</span>
-        </div>
-
-        <div class="dvr-speed-group">
-            <button class="speed-btn active" id="spd-1" onclick="setReplaySpeed(1)">1x</button>
-            <button class="speed-btn" id="spd-2" onclick="setReplaySpeed(2)">2x</button>
-            <button class="speed-btn" id="spd-5" onclick="setReplaySpeed(5)">5x</button>
-        </div>
-
-        <button class="dvr-btn" onclick="generateAiIncidentReport()">🤖 1-Click AI Incident Report</button>
+<!--
+    Telemetry console — the general one, for whatever the hub happens to be reading.
+
+    Every channel on this page was discovered from the stream. Nothing is declared here, because
+    the console cannot know what a given installation measures and guessing is how the page it
+    replaces went wrong.
+
+    What it replaces read data.temp, data.vin, data.vout, data.iin, data.iout, data.pin, data.pout,
+    data.efficiency, data.phase and data.status_flags. The hub sends none of those: its frame
+    carries nodeId, variable, value, unit and a verdict. So the primary console could not display
+    the product's own telemetry at all.
+
+    It had a general mechanism for this -- fetch('/api/config') and build the panels from the
+    answer -- and no server ever implemented /api/config, so the fetch failed on every load and the
+    page fell into a legacy path that fabricated:
+
+        latestPSFB.vout = 48.0;    // a device that had reported nothing
+        latestDAB.vout  = 96.0;
+        latestPSFB.vin  = data.vin // one converter's reading shown under the other's name
+
+    Numbers nobody measured, displayed as readings. Discovery from the stream removes the need for
+    the config endpoint entirely: the console shows what actually arrives, which is the only list
+    that is true by construction.
+-->
+<meta charset="utf-8">
+<title>Telemetry Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --bg:#0B0F17; --panel:#131A26; --panel-2:#1A2331; --line:#26324A;
+        --text:#E8EDF7; --text-2:#97A3BA; --text-3:#5F6D87;
+        --accent:#3D8BFF; --ok:#2ED47A; --warn:#FFB020; --alarm:#FF4D5E; --sim:#C77DFF;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+           font-family:Inter,"Segoe UI","Malgun Gothic",sans-serif; font-size:14px; line-height:1.5; }
+    .mono { font-family:"JetBrains Mono",ui-monospace,Consolas,monospace; }
+
+    header { display:flex; align-items:center; gap:14px; padding:16px 22px;
+             border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
+    h1 { font-size:16px; font-weight:600; margin:0; }
+    .sub { color:var(--text-3); font-size:12.5px; }
+    .chip { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--line);
+            border-radius:999px; font-size:12.5px; color:var(--text-2); background:var(--panel-2); }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--text-3); flex:none; }
+
+    #sim-banner { display:none; padding:9px 22px; background:rgba(199,125,255,.12);
+                  border-bottom:1px solid rgba(199,125,255,.35); color:var(--sim); font-size:13px; font-weight:500; }
+
+    main { padding:22px; max-width:1500px; margin:0 auto; }
+    h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-3);
+         margin:0 0 12px; font-weight:600; }
+
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:15px;
+            display:flex; flex-direction:column; gap:9px; transition:border-color .2s,opacity .3s; }
+    .card.alarm { border-color:var(--alarm); }
+    .card.stale { opacity:.5; }
+    .card .name { font-size:12px; font-weight:600; color:var(--text-2); word-break:break-all; }
+    .card .node { font-size:10.5px; color:var(--text-3); }
+    .card .val { font-size:28px; font-weight:600; letter-spacing:-.02em; line-height:1.1; }
+    .card .val .u { font-size:13px; font-weight:500; color:var(--text-3); margin-left:5px; }
+    .card canvas { width:100%; height:44px; display:block; }
+    .card .foot { display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-3); gap:8px; }
+    .card .foot .v.ok { color:var(--ok); font-weight:600; }
+    .card .foot .v.alarm { color:var(--alarm); font-weight:600; }
+
+    .panels { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:22px; }
+    @media (max-width:1000px){ .panels{grid-template-columns:1fr;} }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:16px 18px; }
+
+    select, button, input[type=range] { font-family:inherit; font-size:12.5px; }
+    select, button { background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+                     border-radius:7px; padding:6px 10px; }
+    button { cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    input[type=range] { width:100%; }
+
+    .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+    .note { color:var(--text-3); font-size:12px; }
+    .stat { font-size:12.5px; color:var(--text-2); }
+    #empty { color:var(--text-3); padding:36px 0; text-align:center; }
+</style>
+
+<header>
+    <div>
+        <h1>Telemetry Console</h1>
+        <div class="sub">채널은 수신되는 스트림에서 발견됩니다 — 선언된 목록이 아닙니다</div>
     </div>
+    <div style="flex:1"></div>
+    <span class="chip"><span class="dot" id="conn-dot"></span><span id="conn-text">연결 중…</span></span>
+    <span class="chip mono" id="stat-chip">0 채널 · 0 패킷</span>
+</header>
 
-    <main>
-        <!-- 2D Visual Node Wires Canvas Section -->
-        <div class="node-topology-section">
-            <div class="topology-header">
-                <span>🕸️ 2D Interactive Telemetry Routing & ML Score Flow Topology</span>
-                <span style="font-size: 11px; color: var(--text-secondary); font-weight: normal;">(Drag nodes to re-route dynamically)</span>
-                <span class="topology-pan-hint">↔ Swipe sideways to pan the 5-stage graph</span>
+<div id="sim-banner">합성 데이터입니다. 이 화면의 값은 시뮬레이터가 생성한 것이며 측정값이 아닙니다.</div>
+
+<main>
+    <h2>수신 중인 채널</h2>
+    <section class="grid" id="grid"></section>
+    <div id="empty">아직 도착한 채널이 없습니다.</div>
+
+    <div class="panels">
+        <div class="panel">
+            <h2>주파수 스펙트럼 · /api/spectrum</h2>
+            <div class="row">
+                <select id="spec-ch"><option value="">채널 선택</option></select>
+                <select id="spec-win">
+                    <option value="30">최근 30초</option>
+                    <option value="60" selected>최근 60초</option>
+                    <option value="180">최근 180초</option>
+                </select>
+                <button id="spec-go">계산</button>
             </div>
-            <!-- Pan viewport: wraps the graph so it scrolls in its own box on
-                 narrow screens instead of widening the page. Inner block is
-                 left at its original indent to keep this diff reviewable. -->
-            <div class="node-topology-scroll">
-            <div class="node-topology-container" id="node-topology-container">
-                <svg id="wires-svg">
-                    <path id="wire-1" class="wire-path" />
-                    <path id="wire-1-pulse" class="wire-pulse" />
-                    <path id="wire-2" class="wire-path" />
-                    <path id="wire-2-pulse" class="wire-pulse" />
-                    <path id="wire-3" class="wire-path" />
-                    <path id="wire-3-pulse" class="wire-pulse" />
-                    <path id="wire-4" class="wire-path" />
-                    <path id="wire-4-pulse" class="wire-pulse" />
-                </svg>
-
-                <div class="topology-node" id="node-1" style="left: 30px; top: 50px;">
-                    <div class="node-anchor out"></div>
-                    <div class="node-title">📡 1. MCU Ingestion</div>
-                    <div class="node-metric" id="node1-val">COM3/4 | 1000Hz</div>
-                </div>
-
-                <div class="topology-node" id="node-2" style="left: 270px; top: 50px;">
-                    <div class="node-anchor in"></div>
-                    <div class="node-anchor out"></div>
-                    <div class="node-title">⚙️ 2. Packet Parser</div>
-                    <div class="node-metric" id="node2-val">CRC-16 | OK</div>
-                </div>
-
-                <div class="topology-node" id="node-3" style="left: 510px; top: 50px;">
-                    <div class="node-anchor in"></div>
-                    <div class="node-anchor out"></div>
-                    <div class="node-title">🧠 3. Formula / Z-Score</div>
-                    <div class="node-metric" id="node3-val">Z-Score: — (판정 없음 / not scored)</div>
-                </div>
-
-                <div class="topology-node" id="node-4" style="left: 750px; top: 50px;">
-                    <div class="node-anchor in"></div>
-                    <div class="node-anchor out"></div>
-                    <div class="node-title">⚡ 4. Alerts / Stream</div>
-                    <div class="node-metric" id="node4-val">SSE :8080 | Active</div>
-                </div>
-
-                <div class="topology-node" id="node-5" style="left: 990px; top: 50px;">
-                    <div class="node-anchor in"></div>
-                    <div class="node-title">💻 5. Consoles</div>
-                    <div class="node-metric" id="node5-val">Web & WPF UI</div>
-                </div>
-            </div>
-            </div><!-- /.node-topology-scroll -->
+            <canvas id="spec-canvas" style="width:100%;height:170px;display:block"></canvas>
+            <div class="stat mono" id="spec-stat" style="margin-top:8px">아직 계산하지 않았습니다.</div>
         </div>
 
-        <!-- Side-by-Side Dual Workspace Container -->
-        <div class="dual-workspace-grid">
-            
-            <!-- ==================== LEFT COLUMN: DAB SYSTEM ==================== -->
-            <div class="system-column system-dab">
-                <div class="system-section-title">
-                    <span class="title-accent-dot"></span>
-                    DAB Converter <span class="subtitle">(380V / 96V UPS Battery)</span>
-                    <span class="status-badge standby" id="dab-state-badge">STANDBY</span>
-                </div>
-                
-                <!-- DAB Alarm Row -->
-                <div class="alarm-row">
-                    <div class="alarm-card" id="dab-card-alarm-ovp">
-                        <span class="alarm-title">OVP Status</span>
-                        <span class="alarm-val" id="dab-lbl-alarm-ovp">OVP NORMAL</span>
-                    </div>
-                    <div class="alarm-card" id="dab-card-alarm-ocp">
-                        <span class="alarm-title">OCP Status</span>
-                        <span class="alarm-val" id="dab-lbl-alarm-ocp">OCP NORMAL</span>
-                    </div>
-                    <div class="alarm-card" id="dab-card-alarm-otp">
-                        <span class="alarm-title">OTP Status</span>
-                        <span class="alarm-val" id="dab-lbl-alarm-otp">OTP NORMAL</span>
-                    </div>
-                </div>
-
-                <!-- DAB Telemetry Grid (2x4) -->
-                <div class="telemetry-grid">
-                    <div class="telemetry-card card-vin">
-                        <div class="card-top">
-                            <span class="card-label">Input Voltage</span>
-                            <span class="card-unit">Vin</span>
-                        </div>
-                        <div class="card-val" id="dab-val-vin">0.0</div>
-                        <div class="card-footer">
-                            <span>Nominal: 380 V</span>
-                            <span>Primary CDC</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-iin">
-                        <div class="card-top">
-                            <span class="card-label">Input Current</span>
-                            <span class="card-unit">Iin</span>
-                        </div>
-                        <div class="card-val" id="dab-val-iin">0.00</div>
-                        <div class="card-footer">
-                            <span>Primary DC</span>
-                            <span>VCP [1]</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-pin">
-                        <div class="card-top">
-                            <span class="card-label">Input Power</span>
-                            <span class="card-unit">Pin</span>
-                        </div>
-                        <div class="card-val" id="dab-val-pin">0.0</div>
-                        <div class="card-footer">
-                            <span>Watts</span>
-                            <span>Power In</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-vout">
-                        <div class="card-top">
-                            <span class="card-label">Output Voltage</span>
-                            <span class="card-unit">Vout</span>
-                        </div>
-                        <div class="card-val" id="dab-val-vout">0.00</div>
-                        <div class="card-footer">
-                            <span>Nominal: 96 V</span>
-                            <span>Secondary CDC</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-iout">
-                        <div class="card-top">
-                            <span class="card-label">Output Current</span>
-                            <span class="card-unit">Iout</span>
-                        </div>
-                        <div class="card-val" id="dab-val-iout">0.00</div>
-                        <div class="card-footer">
-                            <span>Secondary DC</span>
-                            <span>VCP [3]</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-pout">
-                        <div class="card-top">
-                            <span class="card-label">Output Power</span>
-                            <span class="card-unit">Pout</span>
-                        </div>
-                        <div class="card-val" id="dab-val-pout">0.0</div>
-                        <div class="card-footer">
-                            <span>Watts</span>
-                            <span>Active Out</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-eff">
-                        <div class="card-top">
-                            <span class="card-label">Efficiency</span>
-                            <span class="card-unit">EFF</span>
-                        </div>
-                        <div class="card-val" id="dab-val-efficiency">0.0</div>
-                        <div class="card-footer">
-                            <span>Calibrated</span>
-                            <span>% Ratio</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-phase">
-                        <div class="card-top">
-                            <span class="card-label">Phase Shift</span>
-                            <span class="card-unit">Shift</span>
-                        </div>
-                        <div class="card-val" id="dab-val-phase">0.0</div>
-                        <div class="card-footer">
-                            <span>Degrees (°)</span>
-                            <span>Control</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- DAB Thermals -->
-                <div class="thermals-row">
-                    <div class="hotspot-card">
-                        <div class="hotspot-label">MOSFET Temp (T1)</div>
-                        <div class="hotspot-temp" id="dab-val-temp1">0.0 °C</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="dab-pb-temp1"></div>
-                        </div>
-                    </div>
-                    <div class="hotspot-card">
-                        <div class="hotspot-label">Transformer Temp (T2)</div>
-                        <div class="hotspot-temp" id="dab-val-temp2">0.0 °C</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="dab-pb-temp2"></div>
-                        </div>
-                    </div>
-                </div>
+        <div class="panel">
+            <h2>되감기 · /api/dvr/replay</h2>
+            <div class="row">
+                <button id="dvr-load">타임라인 불러오기</button>
+                <span class="note" id="dvr-range">—</span>
             </div>
-
-            <!-- ==================== RIGHT COLUMN: PSFB SYSTEM ==================== -->
-            <div class="system-column system-psfb">
-                <div class="system-section-title">
-                    <span class="title-accent-dot"></span>
-                    PSFB Converter <span class="subtitle">(380V / 48V High Power)</span>
-                    <span class="status-badge standby" id="psfb-state-badge">STANDBY</span>
-                </div>
-                
-                <!-- PSFB Alarm Row -->
-                <div class="alarm-row">
-                    <div class="alarm-card" id="psfb-card-alarm-ovp">
-                        <span class="alarm-title">OVP Status</span>
-                        <span class="alarm-val" id="psfb-lbl-alarm-ovp">OVP NORMAL</span>
-                    </div>
-                    <div class="alarm-card" id="psfb-card-alarm-ocp">
-                        <span class="alarm-title">OCP Status</span>
-                        <span class="alarm-val" id="psfb-lbl-alarm-ocp">OCP NORMAL</span>
-                    </div>
-                    <div class="alarm-card" id="psfb-card-alarm-otp">
-                        <span class="alarm-title">OTP Status</span>
-                        <span class="alarm-val" id="psfb-lbl-alarm-otp">OTP NORMAL</span>
-                    </div>
-                </div>
-
-                <!-- PSFB Telemetry Grid (2x4) -->
-                <div class="telemetry-grid">
-                    <div class="telemetry-card card-vin">
-                        <div class="card-top">
-                            <span class="card-label">Input Voltage</span>
-                            <span class="card-unit">Vin</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-vin">0.0</div>
-                        <div class="card-footer">
-                            <span>Nominal: 380 V</span>
-                            <span>Primary CDC</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-iin">
-                        <div class="card-top">
-                            <span class="card-label">Input Current</span>
-                            <span class="card-unit">Iin</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-iin">0.00</div>
-                        <div class="card-footer">
-                            <span>Primary DC</span>
-                            <span>VCP [1]</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-pin">
-                        <div class="card-top">
-                            <span class="card-label">Input Power</span>
-                            <span class="card-unit">Pin</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-pin">0.0</div>
-                        <div class="card-footer">
-                            <span>Watts</span>
-                            <span>Power In</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-vout">
-                        <div class="card-top">
-                            <span class="card-label">Output Voltage</span>
-                            <span class="card-unit">Vout</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-vout">0.00</div>
-                        <div class="card-footer">
-                            <span>Nominal: 48 V</span>
-                            <span>Secondary CDC</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-iout">
-                        <div class="card-top">
-                            <span class="card-label">Output Current</span>
-                            <span class="card-unit">Iout</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-iout">0.00</div>
-                        <div class="card-footer">
-                            <span>Secondary DC</span>
-                            <span>VCP [3]</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-pout">
-                        <div class="card-top">
-                            <span class="card-label">Output Power</span>
-                            <span class="card-unit">Pout</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-pout">0.0</div>
-                        <div class="card-footer">
-                            <span>Watts</span>
-                            <span>Active Out</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-eff">
-                        <div class="card-top">
-                            <span class="card-label">Efficiency</span>
-                            <span class="card-unit">EFF</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-efficiency">0.0</div>
-                        <div class="card-footer">
-                            <span>Calibrated</span>
-                            <span>% Ratio</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-card card-phase">
-                        <div class="card-top">
-                            <span class="card-label">Phase Shift</span>
-                            <span class="card-unit">Shift</span>
-                        </div>
-                        <div class="card-val" id="psfb-val-phase">0.0</div>
-                        <div class="card-footer">
-                            <span>Degrees (°)</span>
-                            <span>Control</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PSFB Thermals -->
-                <div class="thermals-row">
-                    <div class="hotspot-card">
-                        <div class="hotspot-label">MOSFET Temp (T1)</div>
-                        <div class="hotspot-temp" id="psfb-val-temp1">0.0 °C</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="psfb-pb-temp1"></div>
-                        </div>
-                    </div>
-                    <div class="hotspot-card">
-                        <div class="hotspot-label">Transformer Temp (T2)</div>
-                        <div class="hotspot-temp" id="psfb-val-temp2">0.0 °C</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="psfb-pb-temp2"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Dual Chart Real-Time Analytics -->
-        <div class="charts-section-grid">
-            <!-- Voltage Chart Box -->
-            <div class="chart-box">
-                <div class="chart-header">
-                    <div class="chart-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        Dual-Converter Voltage Trends
-                    </div>
-                    <div class="chart-legend">
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-teal);"></span>
-                            <span>DAB Vin (V)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-green);"></span>
-                            <span>DAB Vout (V)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-purple-in);"></span>
-                            <span>PSFB Vin (V)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-orange-out);"></span>
-                            <span>PSFB Vout (V)</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="canvas-wrapper">
-                    <canvas id="canvas-voltages"></canvas>
-                </div>
-            </div>
-
-            <!-- Current Chart Box -->
-            <div class="chart-box">
-                <div class="chart-header">
-                    <div class="chart-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        Dual-Converter Current Trends
-                    </div>
-                    <div class="chart-legend">
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-teal);"></span>
-                            <span>DAB Iin (A)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-green);"></span>
-                            <span>DAB Iout (A)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-purple-in);"></span>
-                            <span>PSFB Iin (A)</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: var(--color-orange-out);"></span>
-                            <span>PSFB Iout (A)</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="canvas-wrapper">
-                    <canvas id="canvas-currents"></canvas>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- AI Incident Report Modal -->
-    <div class="modal-overlay" id="incident-report-modal">
-        <div class="modal-box">
-            <div class="modal-title">🤖 1-Click AI Post-Mortem Incident Report</div>
-            <div class="modal-content-area" id="incident-report-text">Loading report...</div>
-            <div class="modal-footer">
-                <button class="dvr-btn" onclick="copyIncidentReport()">📋 Copy Markdown</button>
-                <button class="dvr-btn" onclick="downloadIncidentReport()">💾 Download .md</button>
-                <button class="dvr-btn active-live" onclick="closeIncidentModal()">Close</button>
-            </div>
+            <input type="range" id="dvr-scrub" min="0" max="100" value="100" disabled>
+            <div class="stat mono" id="dvr-stat" style="margin-top:10px">되감기는 호스트가 보관 중인 프레임을 읽습니다.</div>
+            <div class="stat mono" id="dvr-frames" style="margin-top:8px"></div>
         </div>
     </div>
+</main>
 
-    <footer>
-        <div>🌐 Dual-Converter Web Streaming client Console</div>
-        <div id="lbl-footer-time">Live Syncing - Wait Connection</div>
-    </footer>
+<script src="telemetry-client.js"></script>
+<script>
+(function () {
+    'use strict';
 
-    <script>
-        // High-Performance HTML5 Canvas Custom Scrolling Chart
-        class StreamingCanvasChart {
-            constructor(canvasId, channelColors, maxPoints = 300) {
-                this.canvas = document.getElementById(canvasId);
-                if (!this.canvas) return;
-                this.ctx = this.canvas.getContext('2d');
-                this.colors = channelColors;
-                this.maxPoints = maxPoints;
-                this.buffers = channelColors.map(() => []);
-                this.autoScalePadding = 0.1;
-                
-                this.resizeCanvas();
-                this._resizeHandler = () => this.resizeCanvas();
-                window.addEventListener('resize', this._resizeHandler);
+    var HISTORY = 80;
+    var STALE_MS = 10000;
+
+    var channels = {};   // key -> {node, variable, unit, value, z, isAnomaly, at, series[]}
+    var order = [];      // discovery order, so cards do not reshuffle as data arrives
+    var packets = 0;
+
+    var grid = document.getElementById('grid');
+    var empty = document.getElementById('empty');
+
+    function key(node, variable) { return node + '␟' + variable; }
+    function domId(k) { return 'c' + k.replace(/[^a-zA-Z0-9]/g, '-'); }
+
+    // ---- connection ------------------------------------------------------
+    var CONN = {
+        CONNECTED:['WS 연결됨','var(--ok)'],
+        CONNECTED_SSE:['SSE 연결됨 (WebSocket 불가)','var(--warn)'],
+        DISCONNECTED:['연결 끊김 — 재시도 중','var(--alarm)'],
+        RETRYING_SLOWLY:['연결 끊김 — 재시도 간격 확대','var(--alarm)'],
+        ERROR:['연결 오류 — 재시도 중','var(--alarm)']
+    };
+    function setConnection(s) {
+        var c = CONN[s] || [s, 'var(--text-3)'];
+        document.getElementById('conn-text').textContent = c[0];
+        document.getElementById('conn-dot').style.background = c[1];
+    }
+
+    // ---- channel discovery ----------------------------------------------
+    function discover(k, ch) {
+        order.push(k);
+        empty.style.display = 'none';
+
+        var el = document.createElement('div');
+        el.className = 'card';
+        el.id = domId(k);
+        el.innerHTML =
+            '<div><div class="name">' + esc(ch.variable) + '</div>' +
+            '<div class="node mono">' + esc(ch.node) + '</div></div>' +
+            '<div class="val" id="v-' + domId(k) + '">—</div>' +
+            '<canvas id="s-' + domId(k) + '"></canvas>' +
+            '<div class="foot"><span id="z-' + domId(k) + '">수신 대기</span>' +
+            '<span id="a-' + domId(k) + '"></span></div>';
+        grid.appendChild(el);
+
+        var opt = document.createElement('option');
+        opt.value = ch.node + '.' + ch.variable;   // the key the series store uses
+        opt.textContent = ch.node + '.' + ch.variable;
+        document.getElementById('spec-ch').appendChild(opt);
+    }
+
+    function esc(s) {
+        return String(s).replace(/[&<>"]/g, function (c) {
+            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c];
+        });
+    }
+
+    function onPacket(p) {
+        if (!p || typeof p.variable !== 'string' || typeof p.value !== 'number') return;
+
+        packets++;
+        if (p.simulated === true) document.getElementById('sim-banner').style.display = 'block';
+
+        var node = p.nodeId || '(node 없음)';
+        var k = key(node, p.variable);
+        var ch = channels[k];
+
+        if (!ch) {
+            ch = channels[k] = { node: node, variable: p.variable, series: [] };
+            discover(k, ch);
+        }
+
+        ch.unit = p.unit || '';
+        ch.value = p.value;
+        // A frame with no score was not judged. Substituting zero here would state a verdict the
+        // engine deliberately withheld during warm-up.
+        ch.z = (typeof p.anomalyScore === 'number') ? p.anomalyScore : null;
+        ch.isAnomaly = p.isAnomaly === true;
+        ch.at = Date.now();
+
+        ch.series.push(p.value);
+        if (ch.series.length > HISTORY) ch.series.shift();
+
+        render(k, ch);
+        document.getElementById('stat-chip').textContent =
+            order.length + ' 채널 · ' + packets.toLocaleString() + ' 패킷';
+    }
+
+    function render(k, ch) {
+        var id = domId(k);
+        var card = document.getElementById(id);
+        card.classList.remove('stale');
+        card.classList.toggle('alarm', ch.isAnomaly);
+
+        var v = document.getElementById('v-' + id);
+        v.innerHTML = fmt(ch.value) + '<span class="u">' + esc(ch.unit) + '</span>';
+        v.style.color = ch.isAnomaly ? 'var(--alarm)' : 'var(--text)';
+
+        document.getElementById('z-' + id).textContent =
+            ch.z === null ? '기준선 학습 중' : ('z = ' + ch.z.toFixed(2) + 'σ');
+
+        var a = document.getElementById('a-' + id);
+        a.className = 'v ' + (ch.z === null ? '' : (ch.isAnomaly ? 'alarm' : 'ok'));
+        a.textContent = ch.z === null ? '' : (ch.isAnomaly ? '이상' : '정상');
+
+        spark('s-' + id, ch.series, ch.isAnomaly);
+    }
+
+    // Significant figures rather than a fixed width: this console does not know whether a channel
+    // is a 1200 rpm or a 0.02 g, and a fixed 2 decimals makes one of them unreadable.
+    function fmt(x) {
+        var a = Math.abs(x);
+        if (a >= 1000) return x.toFixed(0);
+        if (a >= 10) return x.toFixed(1);
+        if (a >= 1) return x.toFixed(2);
+        return x.toFixed(4);
+    }
+
+    function spark(id, data, alarm) {
+        var c = document.getElementById(id);
+        if (!c || data.length < 2) return;
+        var w = c.width = c.clientWidth, h = c.height = 44;
+        var ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        var lo = Math.min.apply(null, data), hi = Math.max.apply(null, data);
+        if (lo === hi) { lo -= 1; hi += 1; }
+        ctx.strokeStyle = alarm ? '#FF4D5E' : '#3D8BFF';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (var i = 0; i < data.length; i++) {
+            var x = (i / (data.length - 1)) * w;
+            var y = h - 3 - ((data[i] - lo) / (hi - lo)) * (h - 6);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+
+    // A channel that has gone quiet keeps its last value but says how old it is. A frozen reading
+    // and a live one must not look the same.
+    setInterval(function () {
+        var now = Date.now();
+        order.forEach(function (k) {
+            var ch = channels[k];
+            var card = document.getElementById(domId(k));
+            if (!card || !ch.at) return;
+            var stale = now - ch.at > STALE_MS;
+            card.classList.toggle('stale', stale);
+            if (stale) {
+                document.getElementById('z-' + domId(k)).textContent =
+                    Math.round((now - ch.at) / 1000) + '초간 수신 없음';
             }
+        });
+    }, 1000);
 
-            resizeCanvas() {
-                if (!this.canvas) return;
-                const rect = this.canvas.parentElement.getBoundingClientRect();
-                this.canvas.width = rect.width * window.devicePixelRatio;
-                this.canvas.height = rect.height * window.devicePixelRatio;
-                this.canvas.style.width = rect.width + 'px';
-                this.canvas.style.height = rect.height + 'px';
-                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-                this.draw();
-            }
+    // ---- spectrum --------------------------------------------------------
+    document.getElementById('spec-go').addEventListener('click', function () {
+        var ch = document.getElementById('spec-ch').value;
+        var win = document.getElementById('spec-win').value;
+        var stat = document.getElementById('spec-stat');
 
-            appendData(values) {
-                values.forEach((val, idx) => {
-                    if (idx < this.buffers.length) {
-                        this.buffers[idx].push(val);
-                        if (this.buffers[idx].length > this.maxPoints) {
-                            this.buffers[idx].shift();
-                        }
-                    }
-                });
-                this.draw();
-            }
+        if (!ch) { stat.textContent = '채널을 먼저 선택하세요.'; return; }
+        stat.textContent = '계산 중…';
 
-            draw() {
-                if (!this.canvas) return;
-                const width = this.canvas.width / window.devicePixelRatio;
-                const height = this.canvas.height / window.devicePixelRatio;
-                const ctx = this.ctx;
-
-                ctx.clearRect(0, 0, width, height);
-
-                ctx.strokeStyle = '#161622';
-                ctx.lineWidth = 1;
-                
-                const gridSpacingX = width / 10;
-                for (let i = 1; i < 10; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(i * gridSpacingX, 0);
-                    ctx.lineTo(i * gridSpacingX, height);
-                    ctx.stroke();
-                }
-
-                const gridSpacingY = height / 5;
-                for (let i = 1; i < 5; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, i * gridSpacingY);
-                    ctx.lineTo(width, i * gridSpacingY);
-                    ctx.stroke();
-                }
-
-                if (this.buffers.length === 0 || this.buffers[0].length === 0) {
-                    ctx.fillStyle = '#4f4f60';
-                    ctx.font = "11px 'Outfit'";
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('NO SYSTEM TELEMETRY STREAM RECEIVED', width / 2, height / 2);
+        fetch('/api/spectrum?channel=' + encodeURIComponent(ch) + '&windowSec=' + win)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.Status !== 'Success') {
+                    stat.textContent = '스펙트럼 없음: ' + (d.Reason || '알 수 없는 이유');
+                    clearCanvas('spec-canvas');
                     return;
                 }
+                drawSpectrum(d);
+                stat.textContent =
+                    d.Samples + ' 샘플 · 측정 샘플레이트 ' + d.SampleRateHz.toFixed(2) + ' Hz · ' +
+                    'bin ' + d.BinHz.toFixed(4) + ' Hz · ' +
+                    (d.PeakHz ? ('최대 ' + d.PeakHz.toFixed(4) + ' Hz (주기 ' + (1 / d.PeakHz).toFixed(2) + ' s)')
+                              : 'DC 외 피크 없음');
+            })
+            .catch(function (e) { stat.textContent = '요청 실패: ' + e.message; });
+    });
 
-                let minVal = Infinity;
-                let maxVal = -Infinity;
-                this.buffers.forEach(buf => {
-                    buf.forEach(v => {
-                        if (v < minVal) minVal = v;
-                        if (v > maxVal) maxVal = v;
-                    });
+    function clearCanvas(id) {
+        var c = document.getElementById(id);
+        c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    }
+
+    function drawSpectrum(d) {
+        var c = document.getElementById('spec-canvas');
+        var w = c.width = c.clientWidth, h = c.height = 170;
+        var ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+
+        // Bin 0 is the mean and is not plotted: it dwarfs every other bin and is not a frequency
+        // the signal contains.
+        var mags = d.Magnitudes.slice(1);
+        if (!mags.length) return;
+        var max = Math.max.apply(null, mags);
+        if (max <= 0) return;
+
+        ctx.fillStyle = '#3D8BFF';
+        for (var i = 0; i < mags.length; i++) {
+            var x = (i / mags.length) * w;
+            var bh = (mags[i] / max) * (h - 22);
+            ctx.fillRect(x, h - 16 - bh, Math.max(1, w / mags.length - 0.5), bh);
+        }
+
+        ctx.fillStyle = '#5F6D87';
+        ctx.font = '10px JetBrains Mono, monospace';
+        ctx.fillText('0 Hz', 2, h - 4);
+        ctx.textAlign = 'right';
+        ctx.fillText(d.NyquistHz.toFixed(2) + ' Hz', w - 2, h - 4);
+        ctx.textAlign = 'left';
+    }
+
+    // ---- DVR -------------------------------------------------------------
+    var dvr = { start: 0, duration: 0 };
+
+    document.getElementById('dvr-load').addEventListener('click', function () {
+        var stat = document.getElementById('dvr-stat');
+        stat.textContent = '불러오는 중…';
+
+        fetch('/api/dvr/replay?window=10')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                dvr.start = d.timelineStartSec;
+                dvr.duration = d.maxDurationSec;
+                document.getElementById('dvr-range').textContent =
+                    dvr.duration.toFixed(1) + '초 분량 보관 중';
+                var slider = document.getElementById('dvr-scrub');
+                slider.disabled = dvr.duration <= 0;
+                slider.value = 100;
+                stat.textContent = dvr.duration > 0
+                    ? '슬라이더를 움직여 그 시점의 프레임을 읽습니다.'
+                    : '보관된 프레임이 없습니다.';
+                if (dvr.duration > 0) scrub();
+            })
+            .catch(function (e) { stat.textContent = '요청 실패: ' + e.message; });
+    });
+
+    document.getElementById('dvr-scrub').addEventListener('input', scrub);
+
+    function scrub() {
+        if (dvr.duration <= 0) return;
+        var pct = Number(document.getElementById('dvr-scrub').value) / 100;
+        var t = dvr.duration * pct;
+
+        fetch('/api/dvr/replay?t=' + t.toFixed(2) + '&window=4')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                document.getElementById('dvr-stat').textContent =
+                    't = ' + t.toFixed(1) + 's · 프레임 ' + d.totalFrames + '개 (창 ' + d.windowSec + 's)';
+
+                // Latest value per channel inside the window, so the panel reads like a snapshot of
+                // that moment rather than a list of every frame in it.
+                var latest = {};
+                (d.frames || []).forEach(function (f) {
+                    var prev = latest[f.ChannelName];
+                    if (!prev || f.TimestampSec >= prev.TimestampSec) latest[f.ChannelName] = f;
                 });
 
-                if (minVal === maxVal) {
-                    minVal -= 1.0;
-                    maxVal += 1.0;
-                }
-                const range = maxVal - minVal;
-                minVal -= range * this.autoScalePadding;
-                maxVal += range * this.autoScalePadding;
-                const finalRange = maxVal - minVal;
-
-                ctx.fillStyle = '#75758a';
-                ctx.font = "9px 'Share Tech Mono'";
-                ctx.textAlign = 'left';
-                ctx.fillText(maxVal.toFixed(1), 8, 12);
-                ctx.fillText(minVal.toFixed(1), 8, height - 6);
-
-                this.buffers.forEach((buf, channelIdx) => {
-                    ctx.strokeStyle = this.colors[channelIdx];
-                    ctx.lineWidth = 2;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    ctx.beginPath();
-
-                    const pointsCount = buf.length;
-                    const stepX = width / (this.maxPoints - 1);
-                    const startX = width - (pointsCount - 1) * stepX;
-
-                    buf.forEach((val, i) => {
-                        const x = startX + i * stepX;
-                        const y = height - ((val - minVal) / finalRange) * height;
-                        if (i === 0) {
-                            ctx.moveTo(x, y);
-                        } else {
-                            ctx.lineTo(x, y);
-                        }
-                    });
-
-                    ctx.stroke();
-                });
-            }
-
-            destroy() {
-                window.removeEventListener('resize', this._resizeHandler);
-            }
-        }
-
-        // ==================== WORK PACKAGE 2: 2D VISUAL NODE WIRES ====================
-        function setupDraggableNodes() {
-            const container = document.getElementById('node-topology-container');
-            const nodes = document.querySelectorAll('.topology-node');
-
-            nodes.forEach(node => {
-                let isDragging = false;
-                let offsetX = 0, offsetY = 0;
-
-                // Shared by mouse and touch so both input classes drive the
-                // exact same drag maths.
-                const beginDrag = (clientX, clientY) => {
-                    isDragging = true;
-                    const rect = node.getBoundingClientRect();
-                    offsetX = clientX - rect.left;
-                    offsetY = clientY - rect.top;
-                    node.style.zIndex = 50;
-                    node.classList.add('node-dragging');
-                };
-
-                const moveDrag = (clientX, clientY) => {
-                    if (!isDragging) return;
-                    const containerRect = container.getBoundingClientRect();
-                    let x = clientX - containerRect.left - offsetX;
-                    let y = clientY - containerRect.top - offsetY;
-
-                    x = Math.max(0, Math.min(containerRect.width - 170, x));
-                    y = Math.max(0, Math.min(containerRect.height - 60, y));
-
-                    node.style.left = x + 'px';
-                    node.style.top = y + 'px';
-                    drawAllWires();
-                };
-
-                const endDrag = () => {
-                    if (isDragging) {
-                        isDragging = false;
-                        node.style.zIndex = 20;
-                        node.classList.remove('node-dragging');
-                    }
-                };
-
-                node.addEventListener('mousedown', (e) => {
-                    beginDrag(e.clientX, e.clientY);
-                });
-
-                document.addEventListener('mousemove', (e) => {
-                    moveDrag(e.clientX, e.clientY);
-                });
-
-                document.addEventListener('mouseup', endDrag);
-
-                // Touch path: without these the node graph is undraggable on
-                // every phone and tablet, since touch fires no mousemove.
-                node.addEventListener('touchstart', (e) => {
-                    if (e.touches.length !== 1) return;
-                    const t = e.touches[0];
-                    beginDrag(t.clientX, t.clientY);
-                }, { passive: true });
-
-                document.addEventListener('touchmove', (e) => {
-                    if (!isDragging || e.touches.length !== 1) return;
-                    // Stop the gesture from also panning the scroll viewport.
-                    if (e.cancelable) e.preventDefault();
-                    const t = e.touches[0];
-                    moveDrag(t.clientX, t.clientY);
-                }, { passive: false });
-
-                document.addEventListener('touchend', endDrag);
-                document.addEventListener('touchcancel', endDrag);
-            });
-
-            window.addEventListener('resize', drawAllWires);
-            drawAllWires();
-        }
-
-        function drawBezierWire(x1, y1, x2, y2, zScore, wireId) {
-            const dx = Math.abs(x2 - x1) * 0.5;
-            const pathData = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-
-            const wire = document.getElementById(wireId);
-            const pulse = document.getElementById(wireId + '-pulse');
-            if (!wire || !pulse) return;
-
-            wire.setAttribute('d', pathData);
-            pulse.setAttribute('d', pathData);
-
-            let strokeColor = '#00d2ff';
-            let pulseColor = '#ffffff';
-            let glowFilter = 'none';
-
-            // No verdict: render neutral grey. Falling through to the severity ladder would paint
-            // an unscored link the same confident blue as one an analyzer examined and cleared.
-            if (zScore === null || !isFinite(zScore)) {
-                wire.setAttribute('stroke', '#4a5568');
-                pulse.setAttribute('stroke', '#4a5568');
-                wire.style.filter = 'none';
-                return;
-            }
-
-            if (zScore >= 3.5) {
-                strokeColor = '#ff1744';
-                pulseColor = '#ff2e63';
-                glowFilter = 'drop-shadow(0 0 8px #ff1744)';
-            } else if (zScore >= 2.0) {
-                strokeColor = '#ff9100';
-                pulseColor = '#ffea00';
-                glowFilter = 'drop-shadow(0 0 6px #ff9100)';
-            } else {
-                strokeColor = '#00d2ff';
-                pulseColor = '#66fcf1';
-                glowFilter = 'drop-shadow(0 0 4px #00d2ff)';
-            }
-
-            wire.setAttribute('stroke', strokeColor);
-            pulse.setAttribute('stroke', pulseColor);
-            wire.style.filter = glowFilter;
-        }
-
-        function drawAllWires() {
-            const getAnchorPos = (nodeId, isOut) => {
-                const node = document.getElementById(nodeId);
-                if (!node) return { x: 0, y: 0 };
-                const left = parseFloat(node.style.left) || 0;
-                const top = parseFloat(node.style.top) || 0;
-                return {
-                    x: isOut ? left + 170 : left,
-                    y: top + 30
-                };
-            };
-
-            // `currentZScore || 0.4` was wrong twice over: it invented a score when none had been
-            // reported, and `||` also turned a genuine 0.0 — a channel an analyzer examined and
-            // found perfectly calm — into 0.4.
-            const zScore = (typeof currentZScore === 'number' && isFinite(currentZScore)) ? currentZScore : null;
-
-            const p1out = getAnchorPos('node-1', true);
-            const p2in = getAnchorPos('node-2', false);
-            drawBezierWire(p1out.x, p1out.y, p2in.x, p2in.y, zScore, 'wire-1');
-
-            const p2out = getAnchorPos('node-2', true);
-            const p3in = getAnchorPos('node-3', false);
-            drawBezierWire(p2out.x, p2out.y, p3in.x, p3in.y, zScore, 'wire-2');
-
-            const p3out = getAnchorPos('node-3', true);
-            const p4in = getAnchorPos('node-4', false);
-            drawBezierWire(p3out.x, p3out.y, p4in.x, p4in.y, zScore, 'wire-3');
-
-            const p4out = getAnchorPos('node-4', true);
-            const p5in = getAnchorPos('node-5', false);
-            drawBezierWire(p4out.x, p4out.y, p5in.x, p5in.y, zScore, 'wire-4');
-
-            const node3Val = document.getElementById('node3-val');
-            if (node3Val) {
-                if (zScore === null) {
-                    node3Val.innerText = 'Z-Score: — (판정 없음 / not scored)';
-                    node3Val.style.color = '#8892b0';
-                    node3Val.style.textShadow = 'none';
-                    return;
-                }
-
-                node3Val.innerText = `Z-Score: ${zScore.toFixed(1)}σ`;
-                if (zScore >= 3.5) {
-                    node3Val.style.color = '#ff1744';
-                    node3Val.style.textShadow = '0 0 10px #ff1744';
-                } else if (zScore >= 2.0) {
-                    node3Val.style.color = '#ff9100';
-                    node3Val.style.textShadow = '0 0 8px #ff9100';
-                } else {
-                    node3Val.style.color = 'var(--color-teal)';
-                    node3Val.style.textShadow = 'none';
-                }
-            }
-        }
-
-        // ==================== WORK PACKAGE 3: DVR TIME-TRAVEL & REPLAY ====================
-        let isLiveMode = true;
-        let replaySpeed = 1;
-        let dvrBuffer = []; // { t, data, zScore }
-        // null until the server reports a verdict. Starting at a literal meant the console showed a
-        // specific, calm-looking sigma for a hub it had not yet heard from.
-        let currentZScore = null;
-        let replayTimer = null;
-
-        function setDvrMode(live) {
-            isLiveMode = live;
-            const btnLive = document.getElementById('btn-mode-live');
-            const btnReplay = document.getElementById('btn-mode-replay');
-            const scrubber = document.getElementById('dvr-scrubber');
-
-            if (live) {
-                btnLive.className = 'dvr-btn active-live';
-                btnReplay.className = 'dvr-btn';
-                scrubber.value = 300;
-                document.getElementById('lbl-dvr-time').innerText = '-0.0s (NOW)';
-                if (replayTimer) clearInterval(replayTimer);
-            } else {
-                btnLive.className = 'dvr-btn';
-                btnReplay.className = 'dvr-btn active-replay';
-                startReplayLoop();
-            }
-        }
-
-        function setReplaySpeed(spd) {
-            replaySpeed = spd;
-            ['spd-1', 'spd-2', 'spd-5'].forEach(id => {
-                document.getElementById(id).classList.remove('active');
-            });
-            document.getElementById(`spd-${spd}`).classList.add('active');
-
-            if (!isLiveMode) {
-                startReplayLoop();
-            }
-        }
-
-        function onScrubberInput(val) {
-            if (isLiveMode) setDvrMode(false);
-            const offsetSec = (300 - parseFloat(val)) / 10.0;
-            document.getElementById('lbl-dvr-time').innerText = offsetSec === 0 ? '-0.0s (NOW)' : `-${offsetSec.toFixed(1)}s`;
-
-            if (dvrBuffer.length > 0) {
-                const targetIdx = Math.max(0, Math.min(dvrBuffer.length - 1, Math.floor((val / 300.0) * (dvrBuffer.length - 1))));
-                const frame = dvrBuffer[targetIdx];
-                if (frame) updateUI(frame.data);
-            }
-        }
-
-        function startReplayLoop() {
-            if (replayTimer) clearInterval(replayTimer);
-            replayTimer = setInterval(() => {
-                if (isLiveMode) return;
-                const scrubber = document.getElementById('dvr-scrubber');
-                let val = parseFloat(scrubber.value) + (0.1 * replaySpeed * 10);
-                if (val >= 300) {
-                    val = 300;
-                    setDvrMode(true);
-                } else {
-                    scrubber.value = val;
-                    onScrubberInput(val);
-                }
-            }, 100);
-        }
-
-        async function generateAiIncidentReport() {
-            const modal = document.getElementById('incident-report-modal');
-            const textArea = document.getElementById('incident-report-text');
-            modal.classList.add('active');
-            textArea.innerText = "⏳ Generating AI incident report from DVR frame buffer...";
-
-            try {
-                const res = await fetch('/api/dvr/report');
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.markdown) {
-                        textArea.innerText = json.markdown;
-                        return;
-                    }
-                }
-            } catch(e) {
-                // Fallback to client-side DVR synthesis
-            }
-
-            // Only frames the server actually scored can be called normal or anomalous. A frame with
-            // a null zScore was never examined, and counting it as "below threshold" would report
-            // an all-clear nothing established.
-            const scored = dvrBuffer.filter(f => typeof f.zScore === 'number' && isFinite(f.zScore));
-            const unscored = dvrBuffer.length - scored.length;
-            const anomalies = scored.filter(f => f.zScore >= 2.0);
-            const criticals = scored.filter(f => f.zScore >= 3.5);
-            const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-
-            let report = `# 🚨 Telemetry Incident Post-Mortem Report\n`;
-            report += `> **생성 일시**: ${nowStr}\n`;
-            report += `> **DVR 패킷**: 총 ${dvrBuffer.length}건 (판정 완료 ${scored.length}건 / 판정 없음 ${unscored}건)\n`;
-            report += `> **이상치**: ${anomalies.length}건 (Critical ${criticals.length}건)\n\n`;
-            report += `---\n\n`;
-            report += `## 📊 1. 관측 요약\n\n`;
-
-            // The paragraph that stood here asserted a specific root cause — "primary bus voltage
-            // transient ripple noise로 인한 복합 열-전압 편차" — attributed to an "ML anomaly engine
-            // 분석 결과" that never ran, with a fabricated sigma interpolated into it. Every
-            // exported report carried it, whatever the data said. What follows is counted, not
-            // narrated; a real diagnosis belongs to whatever actually performs one.
-            if (scored.length === 0) {
-                report += dvrBuffer.length === 0
-                    ? `이 구간에 기록된 패킷이 없어 판단할 근거가 없습니다.\n\n`
-                    : `기록된 ${dvrBuffer.length}건 중 서버가 판정한 패킷이 없어 이 구간은 평가할 수 없습니다.\n\n`;
-            } else if (anomalies.length === 0) {
-                report += `판정된 ${scored.length}건 중 임계치(2.0σ)를 초과한 패킷이 없습니다.\n\n`;
-            } else {
-                const worst = anomalies.reduce((a, b) => (b.zScore > a.zScore ? b : a));
-                const worstDev = (worst.data && worst.data.device) || '(채널 미상)';
-                report += `판정된 ${scored.length}건 중 ${anomalies.length}건이 2.0σ를 초과했습니다. `;
-                report += `최대 편차는 \`${worstDev}\` 채널의 ${worst.zScore.toFixed(2)}σ입니다.\n\n`;
-            }
-
-            if (unscored > 0) {
-                report += `> ⚠️ 판정 없는 ${unscored}건은 위 집계에서 제외되었습니다. 분석기가 검사한 적이 없으므로 Z-Score 0은 "정상"이 아니라 "판정 없음"입니다.\n\n`;
-            }
-
-            report += `## 🔍 2. 비정상 지표 상세 타임라인 (Critical Anomalies)\n\n`;
-            report += `| 타임스탬프 | 채널명 | 측정값 | Z-Score (σ) | 이상 여부 |\n`;
-            report += `|------------|--------|--------|-------------|-----------|\n`;
-
-            if (anomalies.length === 0) {
-                report += `| - | - | - | - | 해당 없음 |\n`;
-            } else {
-                anomalies.slice(-10).forEach(f => {
-                    const dev = (f.data && f.data.device) || 'DAB';
-                    const val = (f.data && (f.data.temp || f.data.vin)) || 0;
-                    report += `| ${f.t.toFixed(1)}s | \`${dev}\` | **${typeof val === 'number' ? val.toFixed(2) : val}** | \`${f.zScore.toFixed(2)}σ\` | ${(f.zScore >= 3.5 ? '🚨 CRITICAL' : '⚠️ WARNING')} |\n`;
-                });
-            }
-
-            report += `\n## 🛡️ 3. 근본 원인 (Root Cause Analysis) & 권장 조치사항\n\n`;
-            report += `1. **신호 케이블 & 접지부 점검**: 비정상 전압 Z-Score 스파이크는 Ground Loop 유입 시 발생합니다.\n`;
-            report += `2. **서킷 브레이커 & Throttling 정책 확인**: 50,000 pkts/s 폭주 대비 Circuit Breaker 정상 작동 확인.\n`;
-            report += `3. **OTA 펌웨어 재전송 권장**: Edge MCU 클록 동기화 버퍼 조치를 위한 원격 OTA 플래싱 실행.\n\n`;
-            report += `---\n*보고서 생성기: TelemetryDashboard IncidentReportGenerator v2.0*\n`;
-
-            textArea.innerText = report;
-        }
-
-        function closeIncidentModal() {
-            document.getElementById('incident-report-modal').classList.remove('active');
-        }
-
-        function copyIncidentReport() {
-            const text = document.getElementById('incident-report-text').innerText;
-            navigator.clipboard.writeText(text);
-            alert("Incident Report copied to clipboard!");
-        }
-
-        function downloadIncidentReport() {
-            const text = document.getElementById('incident-report-text').innerText;
-            const blob = new Blob([text], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `IncidentReport_${new Date().toISOString().slice(0,10)}.md`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        // Global State & UI control
-        let eventSource = null;
-        const statusDot = document.getElementById('stream-status-dot');
-        const statusText = document.getElementById('lbl-status-text');
-
-        let dynamicMode = false;
-        let dynamicSubsystems = [];
-        let canvasCharts = {}; // subName -> StreamingCanvasChart instance
-        let sampleCount = 0;
-
-        // Legacy states cache
-        const latestDAB = { vin: 0, iin: 0, pin: 0, vout: 0, iout: 0, pout: 0, efficiency: 0, phase: 0, temp1: 0, temp2: 0, status_flags: 8 };
-        const latestPSFB = { vin: 0, iin: 0, pin: 0, vout: 0, iout: 0, pout: 0, efficiency: 0, phase: 0, temp1: 0, temp2: 0, status_flags: 8 };
-        let hasDAB = false;
-        let hasPSFB = false;
-        let legacyVoltageChart = null;
-        let legacyCurrentChart = null;
-
-        async function initDashboard() {
-            setupDraggableNodes();
-
-            try {
-                const res = await fetch('/api/config');
-                if (res.ok) {
-                    const config = await res.json();
-                    if (config && config.length > 0) {
-                        dynamicSubsystems = config;
-                        dynamicMode = true;
-                        buildDynamicUI(config);
-                    }
-                }
-            } catch (e) {
-                console.log("Configuration dynamic API offline or missing. Falling back to default static panels.");
-            }
-
-            if (!dynamicMode) {
-                legacyVoltageChart = new StreamingCanvasChart('canvas-voltages', ['#00d2ff', '#00ff66', '#ba68c8', '#ff9100']);
-                legacyCurrentChart = new StreamingCanvasChart('canvas-currents', ['#00d2ff', '#00ff66', '#ba68c8', '#ff9100']);
-            }
-
-            connectToTelemetryStream();
-        }
-
-        function buildDynamicUI(subsystems) {
-            document.querySelector('h1').textContent = "UNIVERSAL EMBEDDED SYSTEM TELEMETRY MONITORING CONSOLE";
-            
-            const grid = document.querySelector('.dual-workspace-grid');
-            grid.innerHTML = '';
-            
-            const chartsGrid = document.querySelector('.charts-section-grid');
-            chartsGrid.innerHTML = '';
-
-            const colors = ['#00d2ff', '#ba68c8', '#ff9100', '#00ff66', '#e040fb', '#ffea00'];
-
-            subsystems.forEach((sub, subIdx) => {
-                const subColor = colors[subIdx % colors.length];
-                const prefix = sub.name.toLowerCase();
-
-                const col = document.createElement('div');
-                col.className = `system-column system-${prefix}`;
-                col.style.borderTop = `3px solid ${subColor}`;
-
-                const header = document.createElement('div');
-                header.className = 'system-section-title';
-                header.innerHTML = `
-                    <span class="title-accent-dot" style="background-color: ${subColor}; box-shadow: 0 0 10px ${subColor}"></span>
-                    ${sub.display_name} <span class="subtitle">(${sub.name})</span>
-                    <span class="status-badge standby" id="${prefix}-state-badge">STANDBY</span>
-                `;
-                col.appendChild(header);
-
-                const alarmRow = document.createElement('div');
-                alarmRow.className = 'alarm-row';
-                const alarmsList = [
-                    { id: 'ovp', name: 'OVP' },
-                    { id: 'ocp', name: 'OCP' },
-                    { id: 'otp', name: 'OTP' }
-                ];
-                alarmsList.forEach(al => {
-                    const card = document.createElement('div');
-                    card.className = 'alarm-card';
-                    card.id = `${prefix}-card-alarm-${al.id}`;
-                    card.innerHTML = `
-                        <span class="alarm-title">${al.name} Status</span>
-                        <span class="alarm-val" id="${prefix}-lbl-alarm-${al.id}">${al.name} NORMAL</span>
-                    `;
-                    alarmRow.appendChild(card);
-                });
-                col.appendChild(alarmRow);
-
-                const telGrid = document.createElement('div');
-                telGrid.className = 'telemetry-grid';
-                sub.variables.forEach(v => {
-                    const card = document.createElement('div');
-                    card.className = `telemetry-card`;
-                    card.innerHTML = `
-                        <div class="card-top">
-                            <span class="card-label">${v.display_name}</span>
-                            <span class="card-unit">${v.unit || 'VAL'}</span>
-                        </div>
-                        <div class="card-val" id="${prefix}-val-${v.name.toLowerCase()}" style="color: ${subColor}; text-shadow: 0 0 10px ${subColor}33;">0.0</div>
-                        <div class="card-footer">
-                            <span>Key: ${v.name}</span>
-                            <span>Scale: Real-time</span>
-                        </div>
-                    `;
-                    telGrid.appendChild(card);
-                });
-                col.appendChild(telGrid);
-
-                const tempVars = sub.variables.filter(v => v.name.toLowerCase().includes('temp') || v.name.toLowerCase().startsWith('t'));
-                if (tempVars.length > 0) {
-                    const thermalsRow = document.createElement('div');
-                    thermalsRow.className = 'thermals-row';
-                    
-                    tempVars.slice(0, 2).forEach((v, vIdx) => {
-                        const hCard = document.createElement('div');
-                        hCard.className = 'hotspot-card';
-                        hCard.innerHTML = `
-                            <div class="hotspot-label">${v.display_name}</div>
-                            <div class="hotspot-temp" id="${prefix}-val-temp${vIdx + 1}">25.0 °C</div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="${prefix}-pb-temp${vIdx + 1}" style="background-color: ${subColor}; width: 20%;"></div>
-                            </div>
-                        `;
-                        thermalsRow.appendChild(hCard);
-                    });
-                    col.appendChild(thermalsRow);
-                }
-
-                grid.appendChild(col);
-
-                const chartBox = document.createElement('div');
-                chartBox.className = 'chart-box';
-
-                const numericalVars = sub.variables.filter(v => v.is_numerical);
-                const chartChanColors = numericalVars.map((v, idx) => {
-                    return colors[(subIdx + idx) % colors.length];
-                });
-
-                let legendHtml = '';
-                numericalVars.forEach((v, idx) => {
-                    legendHtml += `
-                        <div class="legend-item">
-                            <span class="legend-dot" style="background-color: ${chartChanColors[idx]};"></span>
-                            <span>${v.display_name} (${v.unit || 'unit'})</span>
-                        </div>
-                    `;
-                });
-
-                chartBox.innerHTML = `
-                    <div class="chart-header">
-                        <div class="chart-title">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            ${sub.display_name} Real-Time Waveforms
-                        </div>
-                        <div class="chart-legend">
-                            ${legendHtml}
-                        </div>
-                    </div>
-                    <div class="canvas-wrapper">
-                        <canvas id="canvas-chart-${prefix}"></canvas>
-                    </div>
-                `;
-
-                chartsGrid.appendChild(chartBox);
-
-                setTimeout(() => {
-                    canvasCharts[sub.name] = new StreamingCanvasChart(`canvas-chart-${prefix}`, chartChanColors);
-                }, 50);
-            });
-        }
-
-        let wsClient = null;
-
-        function connectToTelemetryStream() {
-            const isHttp = window.location.protocol.startsWith('http');
-            const wsHost = isHttp ? (window.location.host || 'localhost:8080') : 'localhost:8080';
-            const wsUrl = `ws://${wsHost}/ws`;
-
-            function handlePacket(data) {
-                // A frame without anomalyScore was not scored. The old fallback derived one from
-                // `Math.abs((temp - 25.0) / 5.0)` — a hand-written formula with a baseline and a
-                // sigma no analyzer ever computed — or else used the literal 0.4. The headless host
-                // deliberately omits verdict fields during analyzer warm-up so they are not sent as
-                // a confident 0.0; filling that gap here would undo exactly that.
-                const z = data.anomalyScore !== undefined && isFinite(parseFloat(data.anomalyScore))
-                    ? parseFloat(data.anomalyScore)
-                    : null;
-                currentZScore = z;
-                dvrBuffer.push({ t: Date.now() / 1000.0, data: data, zScore: z });
-                if (dvrBuffer.length > 3000) dvrBuffer.shift();
-
-                drawAllWires();
-
-                if (isLiveMode) {
-                    updateUI(data);
-                }
-            }
-
-            try {
-                wsClient = new WebSocket(wsUrl);
-                wsClient.onopen = function() {
-                    console.log("WebSocket stream connected: " + wsUrl);
-                    statusDot.classList.add('active');
-                    statusText.textContent = "ONLINE WS STREAMING";
-                    statusText.style.color = "#00ff66";
-                    document.getElementById('lbl-footer-time').textContent = "Stream sync active (WebSocket) - " + new Date().toLocaleTimeString();
-                };
-                wsClient.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handlePacket(data);
-                    } catch (e) {
-                        console.error("WebSocket payload decoding error: ", e);
-                    }
-                };
-                wsClient.onerror = function() {
-                    fallbackToSSE();
-                };
-                wsClient.onclose = function() {
-                    fallbackToSSE();
-                };
-            } catch (e) {
-                fallbackToSSE();
-            }
-
-            function fallbackToSSE() {
-                if (eventSource) return;
-                const streamUrl = (isHttp ? window.location.origin : 'http://localhost:8080') + '/stream';
-                console.log("Connecting via EventSource fallback: " + streamUrl);
-                try {
-                    eventSource = new EventSource(streamUrl);
-                    eventSource.onopen = function() {
-                        statusDot.classList.add('active');
-                        statusText.textContent = "ONLINE SSE STREAMING";
-                        statusText.style.color = "#00ff66";
-                        document.getElementById('lbl-footer-time').textContent = "Stream sync active (SSE) - " + new Date().toLocaleTimeString();
-                    };
-                    eventSource.onerror = function() {
-                        statusDot.classList.remove('active');
-                        statusText.textContent = "DISCONNECTED / RETRYING";
-                        statusText.style.color = "#ff5252";
-                        document.getElementById('lbl-footer-time').textContent = "Connection interrupted. Reconnecting...";
-                    };
-                    eventSource.onmessage = function(event) {
-                        try {
-                            const data = JSON.parse(event.data);
-                            handlePacket(data);
-                        } catch (e) {
-                            console.error("SSE payload decoding error: ", e);
-                        }
-                    };
-                } catch(err) {
-                    console.warn("SSE fallback failed:", err);
-                }
-            }
-        }
-
-        function updateUI(data) {
-            if (!dynamicMode) {
-                updateUILegacy(data);
-                return;
-            }
-
-            const device = data.device;
-            if (!device) return;
-
-            sampleCount++;
-            const prefix = device.toLowerCase();
-            const sub = dynamicSubsystems.find(s => s.name === device);
-            if (!sub) return;
-
-            sub.variables.forEach(v => {
-                const elId = `${prefix}-val-${v.name.toLowerCase()}`;
-                const el = document.getElementById(elId);
-                if (el && data[v.name] !== undefined) {
-                    const val = data[v.name];
-                    if (typeof val === 'number') {
-                        el.textContent = val.toFixed(v.is_numerical ? 2 : 0);
-                    } else {
-                        el.textContent = String(val);
-                    }
-                }
-            });
-
-            const flags = parseInt(data.status_flags) || 0;
-            const isOVP = !!(flags & 1);
-            const isOCP = !!(flags & 2);
-            const isOTP = !!(flags & 4);
-            const isStandby = !!(flags & 8);
-
-            const cardOVP = document.getElementById(`${prefix}-card-alarm-ovp`);
-            const lblOVP = document.getElementById(`${prefix}-lbl-alarm-ovp`);
-            if (cardOVP && lblOVP) {
-                if (isOVP) {
-                    cardOVP.className = "alarm-card fault-active";
-                    lblOVP.textContent = "OVP FAULT";
-                } else {
-                    cardOVP.className = "alarm-card";
-                    lblOVP.textContent = "OVP NORMAL";
-                }
-            }
-
-            const cardOCP = document.getElementById(`${prefix}-card-alarm-ocp`);
-            const lblOCP = document.getElementById(`${prefix}-lbl-alarm-ocp`);
-            if (cardOCP && lblOCP) {
-                if (isOCP) {
-                    cardOCP.className = "alarm-card fault-active";
-                    lblOCP.textContent = "OCP FAULT";
-                } else {
-                    cardOCP.className = "alarm-card";
-                    lblOCP.textContent = "OCP NORMAL";
-                }
-            }
-
-            const cardOTP = document.getElementById(`${prefix}-card-alarm-otp`);
-            const lblOTP = document.getElementById(`${prefix}-lbl-alarm-otp`);
-            if (cardOTP && lblOTP) {
-                if (isOTP) {
-                    cardOTP.className = "alarm-card fault-active";
-                    lblOTP.textContent = "OTP FAULT";
-                } else {
-                    cardOTP.className = "alarm-card";
-                    lblOTP.textContent = "OTP NORMAL";
-                }
-            }
-
-            const stateBadge = document.getElementById(`${prefix}-state-badge`);
-            if (stateBadge) {
-                if (!isStandby) {
-                    stateBadge.className = "status-badge running";
-                    stateBadge.textContent = "RUNNING";
-                } else {
-                    stateBadge.className = "status-badge standby";
-                    stateBadge.textContent = "STANDBY";
-                }
-            }
-
-            const tempVars = sub.variables.filter(v => v.name.toLowerCase().includes('temp') || v.name.toLowerCase().startsWith('t'));
-            tempVars.slice(0, 2).forEach((v, vIdx) => {
-                const tempVal = parseFloat(data[v.name]) || 25.0;
-                const lblTemp = document.getElementById(`${prefix}-val-temp${vIdx + 1}`);
-                const pbTemp = document.getElementById(`${prefix}-pb-temp${vIdx + 1}`);
-                if (lblTemp && pbTemp) {
-                    lblTemp.textContent = tempVal.toFixed(1) + " °C";
-                    const percent = Math.min(100, Math.max(0, (tempVal / 120) * 100));
-                    pbTemp.style.width = percent + "%";
-                    if (tempVal >= 90) {
-                        lblTemp.className = "hotspot-temp critical";
-                        pbTemp.style.backgroundColor = "var(--color-red)";
-                    } else if (tempVal >= 75) {
-                        lblTemp.className = "hotspot-temp warning";
-                        pbTemp.style.backgroundColor = "var(--color-yellow)";
-                    } else {
-                        lblTemp.className = "hotspot-temp";
-                        pbTemp.style.backgroundColor = "#00ff66";
-                    }
-                }
-            });
-
-            const subChart = canvasCharts[sub.name];
-            if (subChart) {
-                const numericalVars = sub.variables.filter(v => v.is_numerical);
-                const values = numericalVars.map(v => parseFloat(data[v.name]) || 0.0);
-                subChart.appendData(values);
-            }
-
-            document.getElementById('lbl-footer-time').textContent = "Active - Received " + sampleCount + " telemetry records";
-        }
-
-        function updateUILegacy(data) {
-            const device = data.device || "DAB";
-            sampleCount++;
-
-            if (device === "DAB") {
-                hasDAB = true;
-                Object.assign(latestDAB, data);
-                if (!hasPSFB) {
-                    latestPSFB.vin = data.vin;
-                    latestPSFB.vout = 48.0;
-                    latestPSFB.temp1 = data.temp1;
-                    latestPSFB.temp2 = data.temp2;
-                }
-            } else {
-                hasPSFB = true;
-                Object.assign(latestPSFB, data);
-                if (!hasDAB) {
-                    latestDAB.vin = data.vin;
-                    latestDAB.vout = 96.0;
-                    latestDAB.temp1 = data.temp1;
-                    latestDAB.temp2 = data.temp2;
-                }
-            }
-
-            const prefix = device.toLowerCase();
-
-            const vinEl = document.getElementById(prefix + '-val-vin');
-            const iinEl = document.getElementById(prefix + '-val-iin');
-            const pinEl = document.getElementById(prefix + '-val-pin');
-            const voutEl = document.getElementById(prefix + '-val-vout');
-            const ioutEl = document.getElementById(prefix + '-val-iout');
-            const poutEl = document.getElementById(prefix + '-val-pout');
-            const effEl = document.getElementById(prefix + '-val-efficiency');
-            const phaseEl = document.getElementById(prefix + '-val-phase');
-
-            if (vinEl && data.vin !== undefined) vinEl.textContent = data.vin.toFixed(1);
-            if (iinEl && data.iin !== undefined) iinEl.textContent = data.iin.toFixed(2);
-            if (pinEl && data.pin !== undefined) pinEl.textContent = data.pin.toFixed(1);
-            if (voutEl && data.vout !== undefined) voutEl.textContent = data.vout.toFixed(2);
-            if (ioutEl && data.iout !== undefined) ioutEl.textContent = data.iout.toFixed(2);
-            if (poutEl && data.pout !== undefined) poutEl.textContent = data.pout.toFixed(1);
-            if (effEl && data.efficiency !== undefined) effEl.textContent = data.efficiency.toFixed(1);
-            if (phaseEl && data.phase !== undefined) phaseEl.textContent = data.phase.toFixed(1);
-
-            const temp1 = data.temp1 || 25.0;
-            const temp2 = data.temp2 || 30.0;
-            const lblT1 = document.getElementById(prefix + '-val-temp1');
-            const lblT2 = document.getElementById(prefix + '-val-temp2');
-            const pbT1 = document.getElementById(prefix + '-pb-temp1');
-            const pbT2 = document.getElementById(prefix + '-pb-temp2');
-
-            if (lblT1 && pbT1) {
-                lblT1.textContent = temp1.toFixed(1) + " °C";
-                applyTempStying(temp1, lblT1, pbT1, device);
-            }
-            if (lblT2 && pbT2) {
-                lblT2.textContent = temp2.toFixed(1) + " °C";
-                applyTempStying(temp2, lblT2, pbT2, device);
-            }
-
-            const flags = parseInt(data.status_flags) || 0;
-            const isOVP = !!(flags & 1);
-            const isOCP = !!(flags & 2);
-            const isOTP = !!(flags & 4);
-            const isStandby = !!(flags & 8);
-
-            const cardOVP = document.getElementById(prefix + '-card-alarm-ovp');
-            const lblOVP = document.getElementById(prefix + '-lbl-alarm-ovp');
-            if (cardOVP && lblOVP) {
-                if (isOVP) {
-                    cardOVP.className = "alarm-card fault-active";
-                    lblOVP.textContent = "OVP FAULT";
-                } else {
-                    cardOVP.className = "alarm-card";
-                    lblOVP.textContent = "OVP NORMAL";
-                }
-            }
-
-            const cardOCP = document.getElementById(prefix + '-card-alarm-ocp');
-            const lblOCP = document.getElementById(prefix + '-lbl-alarm-ocp');
-            if (cardOCP && lblOCP) {
-                if (isOCP) {
-                    cardOCP.className = "alarm-card fault-active";
-                    lblOCP.textContent = "OCP FAULT";
-                } else {
-                    cardOCP.className = "alarm-card";
-                    lblOCP.textContent = "OCP NORMAL";
-                }
-            }
-
-            const cardOTP = document.getElementById(prefix + '-card-alarm-otp');
-            const lblOTP = document.getElementById(prefix + '-lbl-alarm-otp');
-            if (cardOTP && lblOTP) {
-                if (isOTP) {
-                    cardOTP.className = "alarm-card fault-active";
-                    lblOTP.textContent = "OTP FAULT";
-                } else {
-                    cardOTP.className = "alarm-card";
-                    lblOTP.textContent = "OTP NORMAL";
-                }
-            }
-
-            const stateBadge = document.getElementById(prefix + '-state-badge');
-            if (stateBadge) {
-                if (!isStandby) {
-                    stateBadge.className = "status-badge running";
-                    stateBadge.textContent = "RUNNING";
-                } else {
-                    stateBadge.className = "status-badge standby";
-                    stateBadge.textContent = "STANDBY";
-                }
-            }
-
-            if (legacyVoltageChart) {
-                legacyVoltageChart.appendData([
-                    latestDAB.vin,
-                    latestDAB.vout,
-                    latestPSFB.vin,
-                    latestPSFB.vout
-                ]);
-            }
-            if (legacyCurrentChart) {
-                legacyCurrentChart.appendData([
-                    latestDAB.iin,
-                    latestDAB.iout,
-                    latestPSFB.iin,
-                    latestPSFB.iout
-                ]);
-            }
-
-            document.getElementById('lbl-footer-time').textContent = "Active - Received " + sampleCount + " telemetry records";
-        }
-
-        function applyTempStying(temp, element, bar, device) {
-            const percent = Math.min(100, Math.max(0, (temp / 120) * 100));
-            bar.style.width = percent + "%";
-            
-            if (temp >= 90) {
-                element.className = "hotspot-temp critical";
-                bar.style.backgroundColor = "var(--color-red)";
-            } else if (temp >= 75) {
-                element.className = "hotspot-temp warning";
-                bar.style.backgroundColor = "var(--color-yellow)";
-            } else {
-                element.className = "hotspot-temp";
-                bar.style.backgroundColor = (device === "DAB") ? "var(--color-teal)" : "var(--color-purple-in)";
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', initDashboard);
-    </script>
-</body>
-</html>
+                var names = Object.keys(latest).sort();
+                document.getElementById('dvr-frames').innerHTML = names.length
+                    ? names.map(function (n) {
+                        var f = latest[n];
+                        // HasVerdict distinguishes "scored 0.0" from "never examined". A frame the
+                        // recorder stored without a verdict must not be shown as a calm 0.00 sigma.
+                        var verdict = f.HasVerdict
+                            ? (f.ZScore.toFixed(2) + 'σ' + (f.IsAnomaly ? ' 이상' : ''))
+                            : '판정 없음';
+                        return esc(n) + ' = ' + fmt(f.Value) + '  <span style="color:var(--text-3)">'
+                            + verdict + '</span>';
+                    }).join('<br>')
+                    : '<span style="color:var(--text-3)">이 창에는 프레임이 없습니다.</span>';
+            })
+            .catch(function (e) { document.getElementById('dvr-stat').textContent = '요청 실패: ' + e.message; });
+    }
+
+    // ---- start -----------------------------------------------------------
+    if (typeof TelemetryClient !== 'undefined') {
+        TelemetryClient.onStatusChange(setConnection);
+        TelemetryClient.onData(onPacket);
+        TelemetryClient.connect('ws://' + location.hostname + ':' + (location.port || '8080') + '/ws');
+    } else {
+        setConnection('ERROR');
+        document.getElementById('conn-text').textContent =
+            'telemetry-client.js 를 불러오지 못했습니다 — 호스트를 통해 열어주세요';
+    }
+})();
+</script>

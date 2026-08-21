@@ -373,6 +373,41 @@ independently in Python, and comparing with what the endpoint measured over the 
 
 All four within half a bin.
 
+### The primary console could not display the product's own telemetry
+`stream_client.html` is what the host serves by default and what "runs on every computer" rests on.
+It read `data.temp`, `data.vin`, `data.vout`, `data.iin`, `data.iout`, `data.pin`, `data.pout`,
+`data.efficiency`, `data.phase` and `data.status_flags` — **the hub sends none of them.** Its frame
+carries `nodeId`, `variable`, `value`, `unit` and a verdict.
+
+It had a general mechanism for exactly this: `fetch('/api/config')`, build the panels from the
+answer. **No server ever implemented `/api/config`**, so the fetch failed on every load and the page
+fell into a legacy path that fabricated:
+
+```js
+latestPSFB.vout = 48.0;     // a device that had reported nothing
+latestDAB.vout  = 96.0;
+latestPSFB.vin  = data.vin  // one converter's reading shown under the other's name
+```
+
+Numbers nobody measured, displayed as readings, on the console most users would ever see.
+
+The replacement **discovers channels from the stream**, which removes the need for the config
+endpoint entirely: what is on screen is what arrived, a list that is true by construction. One card
+per channel with its own unit and verdict, a spectrum panel over `/api/spectrum`, and a DVR scrubber
+over `/api/dvr/replay`. Warm-up reads `기준선 학습 중`; a DVR frame stored without a verdict reads
+`판정 없음` rather than a calm 0.00σ; a channel that goes quiet dims and says how long it has been
+silent.
+
+Verified by `verify_console.js` against a running host — ten checks, including that four channels
+discovered themselves and each card held its own reading:
+
+```
+4 cards for 4 channels: ambient.temperature, ambient.humidity, machine.vibration, machine.speed
+29.8°C | 52.0% | 0.0600g | 1401rpm
+spectrum: 294 samples, measured 9.59 Hz, peak 0.1311 Hz (period 7.63 s)
+DVR: 30.6 s buffered, 172 frames in a 4 s window
+```
+
 ### The flaky suite was one story
 Failures moved around across full runs — a storage benchmark, a debounce test, a JavaScript load, a
 downsample allocation, a streaming throughput, a circuit breaker — never the same one twice, each
