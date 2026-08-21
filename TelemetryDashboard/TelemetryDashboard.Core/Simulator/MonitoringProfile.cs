@@ -117,6 +117,17 @@ public sealed class MonitoringProfile
     /// </remarks>
     public IReadOnlyList<string> Computed { get; init; } = [];
 
+    /// <summary>
+    /// Engineering limits on this system's channels, as <c>channel[unit] in lo..hi</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not the same as a channel's <see cref="ProfileChannel.Minimum"/> and
+    /// <see cref="ProfileChannel.Maximum"/>, which bound what an operator may set. These bound what
+    /// the machine may safely do, and the two differ on purpose: a slider that reaches past a
+    /// ceiling is how a fault gets injected.
+    /// </remarks>
+    public IReadOnlyList<string> Limits { get; init; } = [];
+
     /// <summary>The name an operator would use for this profile.</summary>
     /// <remarks>
     /// The picker draws its rows through a display path, so the visible text was always right — but

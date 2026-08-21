@@ -91,6 +91,22 @@ internal static class PowerConverterUpsProfile
         // What is declared below is safe on any inputs, because each name states an operation
         // rather than a physical relationship: a product of two channels is that product whatever
         // the channels are doing.
+        // What the machine may safely do, which is not what the sliders above may be set to. The
+        // bus slider reaches 450 V and the ceiling here is 420: that gap is how an over-voltage is
+        // injected on purpose, and a profile that used one pair of numbers for both would alarm on
+        // every deliberate test and on nothing else.
+        //
+        // Units are stated so a rule cannot be applied to a channel reporting something else. A
+        // limit in kV against a bus in volts never fires, and a limit that never fires has no
+        // symptom at all -- it looks exactly like a healthy machine.
+        Limits =
+        [
+            "grid.voltage[V] in 320..430",
+            "dab.bus_voltage[V] in 370..420",
+            "psfb.output_voltage[V] in 45..51",
+            "dab.input_current[A] < 36",
+            "psfb.output_current[A] < 240"
+        ],
         Computed =
         [
             "dab.p_in[W] = dab.bus_voltage * dab.input_current",

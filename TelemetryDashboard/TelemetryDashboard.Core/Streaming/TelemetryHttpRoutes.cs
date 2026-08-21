@@ -88,6 +88,10 @@ public static class TelemetryHttpRoutes
                     ).ConfigureAwait(false);
                 return;
 
+            case "/api/limits":
+                await WriteJsonAsync(response, LimitsEndpoint.Query(server.Limits)).ConfigureAwait(false);
+                return;
+
             case "/api/spectrum":
                 await WriteJsonAsync(response, SpectrumEndpoint.Compute(
                     server.Series,
@@ -123,6 +127,12 @@ public static class TelemetryHttpRoutes
         subscribedClients = server.SubscribedClientCount,
         reducedFramesSent = server.ReducedFramesSent,
         reducedPointsSent = server.ReducedPointsSent,
+        // Null when no limits are declared, for the same reason: a quiet alarm list on an
+        // unprotected host and one on a healthy host are not the same fact.
+        limits = server.Limits is { } limits
+            ? new { declared = limits.Rules.Count, breached = limits.AnyBreached }
+            : null,
+
         // Null when nothing is computing, so a reader can tell "no derived channels configured"
         // from "configured and publishing nothing".
         computed = server.ComputedCounters is { } counters
@@ -135,7 +145,7 @@ public static class TelemetryHttpRoutes
                 fault = counters.FaultMessage
             }
             : null,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>

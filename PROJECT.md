@@ -36,6 +36,7 @@ Two portability details that were silently broken and are now explicit:
 | 1 | Auto-Healing & RingBuffer | `Infrastructure.Serial.AutoReconnectEngine`, `Core.Collections.RingBuffer<T>`, `Serial.ZeroLossPacketBuffer` | M1 | Built |
 | 2 | Time-Sync Jitter Buffer | `Core.Services.TimeSyncJitterBuffer` via `/api/aligned` | M1 | Built |
 | 2b | Computed Channels | `Core.Analytics.ComputedChannel` via `/api/computed`; published live by `Host.Ingest.ComputedChannelPump` | M2 | Built |
+| 2c | Engineering Limits | `Core.Analytics.ChannelLimit` + `LimitMonitor` via `/api/limits`, declared by profile or `--limit` | M3 | Built |
 | 3 | Circuit Breaker & Clamping | `Core.Resilience.TelemetryCircuitBreaker` | M1 | Built |
 | 4 | AES-256-GCM & Ed25519 | `Core.Security.AesSecurityProvider`, `Ed25519`, `Ed25519Point`, `MeshPacketCodec` | M1 | Built |
 | 5 | Gorilla Bit Compression | `Core.Services.GorillaCompressor` | M1 | Built |
@@ -655,7 +656,51 @@ Three defects came out of this, all mine and all found by running it:
   and did not affect the output rate; inputs at 9 Hz produced exactly 5.00 Hz, the tick rate. The
   published rate is the lower of the two, and the comment says so now.
 
-**Suite: 1,078 passing, 0 failing** (1,010 portable + 68 desktop) — about 2 m 35 s with
+### The alarm a rolling detector cannot raise
+`SensorNode.Thresholds` existed, `UpdateVariable` compared against it, and `PacketFlags.AlarmExceeded`
+was defined — and nothing in production ever filled the dictionary. Only tests did. So the flag was
+never set in a running program, and the engineering-limit path was a complete, tested, unreachable
+feature. `AlertUXService` had the same evaluation again, in the WPF project, where the headless host
+cannot reach it.
+
+A z-score asks how unusual a reading is against the channel's own recent history, so a bus that
+settles above its ceiling and stays there becomes normal to it within a minute — the rolling
+baseline follows the fault in. No tuning removes that; "unusual" and "unsafe" are different
+questions. Measured on a live host, a channel running steadily 42–119 V above a hard limit:
+
+```
+grid.voltage, 107 consecutive frames, 342–419 V
+  scored by the detector : 107        |z| never above 1.94
+  flagged as anomalous   : 0
+  outside the 300 V limit: 107
+```
+
+`--limit "channel[unit] in lo..hi"` and the profile's own `Limits` list now declare bands that do
+not move, evaluated on the ingest path before the analytics and independent of them. The wire frame
+carries `limitBreach` separately from `isAnomaly`, and the console labels a breach as a breach —
+the limit wins the label when both apply, because "outside the safe band" is actionable and
+"unusual lately" is a hint.
+
+**A profile's slider range is not its alarm band, and conflating them would have been the easy
+mistake.** The bundled bus slider reaches 450 V and its ceiling is 420: that gap is how an
+over-voltage gets injected on purpose. One pair of numbers for both would alarm on every deliberate
+test and on nothing else.
+
+**A limit that cannot fire is the one alarm failure with no symptom at all.** So the unit is stated
+in the rule and checked against what the channel reports; a rule in kV against a bus in volts is
+disarmed and says so, once, loudly. `/api/limits` reports every rule with four states — `Watching`,
+`Breached`, `Unarmed` (unit disagrees) and `Never` (nothing ever matched it) — and counts the last
+two at the top, because that is the number an operator needs before trusting a quiet alarm list.
+Verified live: eight rules, one breached, two unarmed.
+
+Two harness defects surfaced, both of which reported a working page as broken. `verify_console.js`
+stopped capturing after four distinct channels, which used to mean four raw ones and now means a
+single tick of derived channels arriving in one burst — it captures a fixed window instead. And its
+breach check read the card's `innerHTML`, where the label is assigned as `textContent` on a child;
+that is an assertion about the shim, which is the fourth time that particular trap has been walked
+into and the first time it was walked into in the direction of a false failure.
+
+**Suite: 1,107 passing, 0 failing** (1,039 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

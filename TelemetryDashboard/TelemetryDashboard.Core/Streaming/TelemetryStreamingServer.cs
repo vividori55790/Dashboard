@@ -63,6 +63,14 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     public IReadOnlyList<Analytics.ComputedChannel> Computed { get; set; } =
         Array.Empty<Analytics.ComputedChannel>();
 
+    /// <summary>Engineering limits in force on this host, or null when none were declared.</summary>
+    /// <remarks>
+    /// Null rather than an empty monitor, so <c>/api/limits</c> can distinguish "this host is not
+    /// checking limits" from "it is checking and nothing is out of band". Those look identical from
+    /// a quiet alarm list and mean opposite things about whether the machine is protected.
+    /// </remarks>
+    public Analytics.LimitMonitor? Limits { get; set; }
+
     /// <summary>The pump publishing those channels, when one is running.</summary>
     /// <remarks>
     /// Null when this host computes nothing, which <c>/api/status</c> reports as such rather than

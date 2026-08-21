@@ -53,7 +53,48 @@ public sealed class IngestPublisher
         _detectors = detectors ?? AnalyticsSetup.Shared.Panel;
         Guard = guard ?? throw new ArgumentNullException(nameof(guard));
         _archive = archive;
+        _limits = server.Limits;
     }
+
+    /// <summary>Engineering limits in force, or null when the host declared none.</summary>
+    private readonly LimitMonitor? _limits;
+
+    /// <summary>
+    /// Says a limit was crossed, once per crossing rather than once per sample.
+    /// </summary>
+    /// <remarks>
+    /// A line per sample during an excursion is how an alarm gets muted: a converter held above its
+    /// ceiling for a minute at 9 Hz is five hundred identical lines, and the one that mattered is
+    /// the first. The count is available at <c>/api/limits</c> for anyone who wants to know how
+    /// long it lasted.
+    /// <para>
+    /// A unit mismatch is said once too, and it is the more urgent of the two: the rule is not
+    /// firing at all, and a silent alarm has no other symptom.
+    /// </para>
+    /// </remarks>
+    private void AnnounceLimit(
+        string channel, ChannelLimit rule, LimitTransition transition, double value, string? unit)
+    {
+        switch (transition)
+        {
+            case LimitTransition.Entered:
+                Console.WriteLine($"[limit] {channel}: {rule.Explain(value)}  ({rule.Declaration})");
+                break;
+
+            case LimitTransition.Cleared:
+                Console.WriteLine($"[limit] {channel}: back inside {rule.Declaration}");
+                break;
+
+            case LimitTransition.UnitMismatch when _unitWarned.Add(channel + "|" + rule.Declaration):
+                Console.Error.WriteLine(
+                    $"[limit] {channel} is NOT being checked against '{rule.Declaration}': " +
+                    $"the limit is written in {rule.Unit} and the channel reports " +
+                    $"{(string.IsNullOrWhiteSpace(unit) ? "no unit" : unit)}.");
+                break;
+        }
+    }
+
+    private readonly System.Collections.Generic.HashSet<string> _unitWarned = new(StringComparer.Ordinal);
 
     /// <summary>The rate guard protecting the stream, the console and the recorder.</summary>
     public IngestRateGuard Guard { get; }
@@ -115,6 +156,23 @@ public sealed class IngestPublisher
         if (!Guard.Allow(channel)) return ValueTask.CompletedTask;
 
         Coverage.RecordSample(node);
+
+        // Before the analytics, and independent of them. An engineering limit is a fact about the
+        // reading; a z-score is a judgement about the channel's recent history, and a bus that
+        // settles at 460 V and stays there becomes normal to the second within a minute. Merging
+        // them would let the detector's baseline decide whether a datasheet limit had been passed.
+        IReadOnlyList<(ChannelLimit Rule, LimitTransition Transition)> limits =
+            _limits?.Evaluate(channel, packet.Value, packet.Unit, packet.Timestamp)
+            ?? Array.Empty<(ChannelLimit, LimitTransition)>();
+
+        bool breached = false;
+        foreach ((ChannelLimit rule, LimitTransition transition) in limits)
+        {
+            if (transition is LimitTransition.Entered or LimitTransition.Sustained) breached = true;
+            AnnounceLimit(channel, rule, transition, packet.Value, packet.Unit);
+        }
+
+        if (breached) packet.Flags |= PacketFlags.AlarmExceeded;
 
         AnomalyResult analysis = _analytics.AnalyzeChannel(channel, packet.Value);
 

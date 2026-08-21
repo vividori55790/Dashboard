@@ -107,7 +107,8 @@ public static class Program
             Console.WriteLine("                queryable at /api/history?channel=<id>&from=<iso>&to=<iso>");
         }
 
-        ComputedChannelSetup.Attach(options, console.Server);
+        // Before the pump: the publisher reads the limit monitor when it is constructed.
+        HostFeatureSetup.Attach(options, console.Server);
 
         TelemetryIngestPump? pump = source is null
             ? null

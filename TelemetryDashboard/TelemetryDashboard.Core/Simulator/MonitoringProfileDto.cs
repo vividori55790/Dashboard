@@ -24,6 +24,7 @@ internal sealed class ProfileDto
     public List<ChannelDto>? Channels { get; init; }
     public List<ScenarioDto>? Scenarios { get; init; }
     public List<string>? Computed { get; init; }
+    public List<string>? Limits { get; init; }
 }
 
 internal sealed class NodeDto

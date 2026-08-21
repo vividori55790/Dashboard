@@ -108,6 +108,20 @@ public sealed class TelemetryFrame
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Derived { get; init; }
 
+    /// <summary>
+    /// Present and true when the reading is outside a declared engineering limit.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from <see cref="IsAnomaly"/>, which is a judgement about how unusual
+    /// the reading is against the channel's own recent history. A bus that settles above its
+    /// ceiling and stays there stops being unusual within a minute — the rolling baseline follows
+    /// the fault in — and is still outside the limit at every sample. Merging the two would let a
+    /// detector's baseline decide whether a datasheet limit had been passed.
+    /// </remarks>
+    [JsonPropertyName("limitBreach")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LimitBreach { get; init; }
+
     /// <summary>Analyzer and settings behind the verdict, so a stored frame can be re-scored.</summary>
     [JsonPropertyName("analyzerId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -134,6 +148,7 @@ public sealed class TelemetryFrame
             Value = packet.Value,
             Unit = packet.Unit,
             Derived = packet.Flags.HasFlag(PacketFlags.IsDerived) ? true : null,
+            LimitBreach = packet.Flags.HasFlag(PacketFlags.AlarmExceeded) ? true : null,
             AnomalyScore = judged ? analysis.ZScore : null,
             IsAnomaly = judged ? analysis.IsAnomaly : null,
             // Independent of the verdict: a channel can be scored confidently and still have no

@@ -149,6 +149,22 @@ public static class CommandLineParser
                     draft.Computed.Add(rawComputed);
                     break;
 
+                // Parsed at the command line for the same reason as --computed, and more urgently:
+                // a limit that does not parse is a limit that never fires, and a silent alarm has
+                // no other symptom.
+                case "--limit":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawLimit)) return ArgumentCursor.MissingValue(argument);
+                    try
+                    {
+                        TelemetryDashboard.Core.Analytics.ChannelLimit.Parse(rawLimit);
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ArgumentCursor.Fail($"--limit {rawLimit}: {ex.Message}");
+                    }
+                    draft.Limits.Add(rawLimit);
+                    break;
+
                 case "--archive":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawArchive)) return ArgumentCursor.MissingValue(argument);
                     draft.ArchivePath = Path.GetFullPath(rawArchive);

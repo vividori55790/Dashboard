@@ -58,6 +58,16 @@ public static class UsageText
                                 --computed "psfb.efficiency[%] = 100 * psfb.output_voltage *
                                 psfb.output_current / (dab.bus_voltage * dab.input_current)"
                                 Served at /api/computed, and always marked derived.
+              --limit <decl>    Enforce an engineering limit, written as
+                                "channel[unit] in lo..hi", or a channel followed by >, >=, <
+                                or <= and a number. Repeatable. This is the alarm a rolling
+                                detector cannot raise: a z-score asks how unusual a reading is
+                                against the channel's own recent history, so a bus that settles
+                                above its ceiling becomes normal to it within a minute. A limit
+                                asks whether the reading is safe, which does not move. The unit
+                                is checked against what the channel reports and the rule is
+                                disarmed if they disagree, because a limit that can never fire
+                                looks exactly like a healthy machine. State at /api/limits.
               --replay <file>   Play a recorded CSV back through the live pipeline instead of
                                 reading a source. Routing, analytics, the console, the spectrum
                                 and the DVR all behave as they do live; every frame says REPLAY,

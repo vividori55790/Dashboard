@@ -121,6 +121,7 @@ check('the chip follows the socket',
 
 // Variables that arrived marked derived, so the label check knows what to look for.
 const derivedByVariable = new Set();
+const breachedByVariable = new Set();
 const seen = new Set();
 const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
     let buf = '';
@@ -134,17 +135,19 @@ const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
             let p; try { p = JSON.parse(line.slice(6)); } catch { continue; }
             if (typeof p.variable !== 'string') continue;
             if (p.derived === true) derivedByVariable.add(p.variable);
+            if (p.limitBreach === true) breachedByVariable.add(p.variable);
             seen.add(p.variable);
             dataCb(p);
         }
-        // Waits for a derived channel too. Stopping at four raw channels ended the
-        // capture before any derived sample arrived, so the label check below had
-        // nothing to test and said so -- correctly, but for the harness's reason.
-        if (seen.size >= 4 && derivedByVariable.size > 0) { req.destroy(); afterStream(); }
+        // No early stop. Counting channels was wrong twice over: four channels used to mean four
+        // raw ones, and once derived channels existed a single tick published four of them in one
+        // burst -- so the capture ended having seen nothing else, and the checks below reported a
+        // console that was working as broken. A fixed window sees whatever the host actually
+        // sends, in the proportions it sends it.
     });
 });
 req.on('error', e => { console.error('FAIL: cannot read stream:', e.message); process.exit(1); });
-setTimeout(() => { req.destroy(); afterStream(); }, 20000);
+setTimeout(() => { req.destroy(); afterStream(); }, 6000);
 
 let done = false;
 function afterStream() {
@@ -185,6 +188,33 @@ function afterStream() {
             derivedCards.length === derivedStreamed.length
             && derivedStreamed.every(v => cardMarkup.some(m => m.includes('class="derived"') && m.includes(v))),
             `${derivedCards.length} labelled for ${derivedStreamed.length} derived: ${derivedStreamed.join(', ')}`);
+    }
+
+    // A limit breach must be visible, and visibly not the same thing as an anomaly. The z-score
+    // cannot raise this alarm at all: a channel sitting steadily outside a hard limit is not
+    // unusual for itself, which is exactly why the limit exists.
+    const breachedVars = [...breachedByVariable];
+    if (breachedVars.length === 0) {
+        check('a limit breach reached the stream, without which this check tests nothing',
+            false,
+            'rerun the host with a limit the data breaches, e.g. --limit "grid.voltage[V] < 300"');
+    } else {
+        // Read from the verdict element, not from the card's innerHTML. The label is assigned as
+        // textContent on a child the card created, so the card's markup string never contains it —
+        // asserting on that string was an assertion about this shim, and it failed a page that was
+        // doing the right thing.
+        const verdictOf = card => {
+            const el = [...elements.entries()].find(([k]) => k === 'a-' + card._id);
+            return el ? String(el[1].textContent) : '';
+        };
+
+        const labelled = elements.get('grid').children
+            .filter(c => verdictOf(c) === '한계 초과')
+            .map(c => String(c.innerHTML));
+
+        check('a channel outside its limit is labelled as such rather than as an anomaly',
+            labelled.length >= 1 && breachedVars.every(v => labelled.some(m => m.includes(v))),
+            `${labelled.length} card(s) labelled for ${breachedVars.length} breached: ${breachedVars.join(', ')}`);
     }
 
     // The endpoints the console calls, exercised for real.

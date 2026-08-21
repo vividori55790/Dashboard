@@ -58,6 +58,9 @@
             display:flex; flex-direction:column; gap:9px; transition:border-color .2s,opacity .3s; }
     .card.alarm { border-color:var(--alarm); }
     .card.stale { opacity:.5; }
+    .card.breach { border-color: var(--alarm); box-shadow: inset 3px 0 0 var(--alarm); }
+    .v.breach { color: var(--alarm); font-weight: 700; }
+
     .derived {
         display: inline-block; margin-left: 6px; padding: 1px 6px;
         font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
@@ -226,6 +229,11 @@
         // engine deliberately withheld during warm-up.
         ch.z = (typeof p.anomalyScore === 'number') ? p.anomalyScore : null;
         ch.isAnomaly = p.isAnomaly === true;
+        // Kept apart from isAnomaly, because they answer different questions. A z-score says the
+        // reading is unusual for this channel lately; a limit says it is outside what the machine
+        // may safely do. A bus that settles above its ceiling stops being unusual within a minute
+        // and never stops being unsafe.
+        ch.limitBreach = p.limitBreach === true;
         ch.at = Date.now();
 
         ch.series.push(p.value);
@@ -241,6 +249,7 @@
         var card = document.getElementById(id);
         card.classList.remove('stale');
         card.classList.toggle('alarm', ch.isAnomaly);
+        card.classList.toggle('breach', ch.limitBreach);
 
         var v = document.getElementById('v-' + id);
         v.innerHTML = fmt(ch.value) + '<span class="u">' + esc(ch.unit) + '</span>';
@@ -250,8 +259,15 @@
             ch.z === null ? '기준선 학습 중' : ('z = ' + ch.z.toFixed(2) + 'σ');
 
         var a = document.getElementById('a-' + id);
-        a.className = 'v ' + (ch.z === null ? '' : (ch.isAnomaly ? 'alarm' : 'ok'));
-        a.textContent = ch.z === null ? '' : (ch.isAnomaly ? '이상' : '정상');
+        // The limit wins the label when both apply: "outside the safe band" is actionable and
+        // "unusual lately" is a hint, and a reader who sees only one of them should see that one.
+        if (ch.limitBreach) {
+            a.className = 'v breach';
+            a.textContent = '한계 초과';
+        } else {
+            a.className = 'v ' + (ch.z === null ? '' : (ch.isAnomaly ? 'alarm' : 'ok'));
+            a.textContent = ch.z === null ? '' : (ch.isAnomaly ? '이상' : '정상');
+        }
 
         spark('s-' + id, ch.series, ch.isAnomaly);
     }

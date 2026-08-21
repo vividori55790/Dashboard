@@ -164,6 +164,19 @@ public sealed class HostOptions
     /// </remarks>
     public IReadOnlyList<string> Computed { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Engineering limits, as <c>channel[unit] in lo..hi</c> or a single comparison.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the profile's channel ranges on purpose, and the distinction matters: a
+    /// profile's Minimum and Maximum bound what an operator may <em>set</em> on a slider, while
+    /// these bound what the machine may safely <em>do</em>. They are frequently different numbers —
+    /// a slider that reaches 450 V on a bus whose ceiling is 420 V is a deliberate way to inject a
+    /// fault — and conflating them turns every test excursion into an alarm and every alarm into
+    /// something the operator learns to ignore.
+    /// </remarks>
+    public IReadOnlyList<string> Limits { get; init; } = Array.Empty<string>();
+
     /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
     /// <remarks>
     /// Everything downstream behaves exactly as it does live, because from its side nothing is

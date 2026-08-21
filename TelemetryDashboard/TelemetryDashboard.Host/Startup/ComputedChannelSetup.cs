@@ -60,18 +60,15 @@ public static class ComputedChannelSetup
 
     /// <summary>Resolves the derived channels and hands them to the running server.</summary>
     /// <remarks>
-    /// The profile is resolved through the same helper the simulator and the dashboard export use,
-    /// so the derived channels a run serves describe the machine that run is generating.
+    /// The profile is passed in rather than resolved here, so every feature of a run is configured
+    /// from one reading of it.
     /// </remarks>
-    public static void Attach(HostOptions options, Core.Streaming.TelemetryStreamingServer server)
+    public static void Attach(
+        HostOptions options, Core.Streaming.TelemetryStreamingServer server, MonitoringProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(server);
 
-        ProfileResolution.Result profile = options.Simulate
-            ? ProfileResolution.Resolve(options.ProfileId, AppContext.BaseDirectory)
-            : default;
-
-        Result resolved = Resolve(options, profile.Profile);
+        Result resolved = Resolve(options, profile);
         server.Computed = resolved.Channels;
 
         foreach (string line in BannerLines(resolved)) Console.WriteLine(line);

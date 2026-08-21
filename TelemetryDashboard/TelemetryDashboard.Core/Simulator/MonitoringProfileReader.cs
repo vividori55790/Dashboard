@@ -50,6 +50,9 @@ internal static class MonitoringProfileReader
         List<string>? computed = ReadComputed(dto, name, channels, problems);
         if (computed is null) return null;
 
+        List<string>? limits = ReadLimits(dto, name, problems);
+        if (limits is null) return null;
+
         return new MonitoringProfile
         {
             Id = dto.Id!,
@@ -58,8 +61,41 @@ internal static class MonitoringProfileReader
             Nodes = nodes,
             Channels = channels,
             Scenarios = scenarios,
-            Computed = computed
+            Computed = computed,
+            Limits = limits
         };
+    }
+
+    /// <summary>
+    /// Reads the engineering limits, checking each one parses.
+    /// </summary>
+    /// <remarks>
+    /// The channel is deliberately <em>not</em> checked against the profile's own channel list, as
+    /// computed inputs are. A limit legitimately names a derived channel the profile computes, or a
+    /// quantity a device reports that no profile declares, and refusing those would force the
+    /// author to describe every channel before being allowed to protect it. What the profile can
+    /// say honestly is whether the rule parses; <c>/api/limits</c> reports the ones nothing ever
+    /// matched, which is where a misspelling is actually visible.
+    /// </remarks>
+    private static List<string>? ReadLimits(ProfileDto dto, string name, List<string> problems)
+    {
+        var accepted = new List<string>();
+        if (dto.Limits is not { Count: > 0 }) return accepted;
+
+        foreach (string declaration in dto.Limits)
+        {
+            try
+            {
+                Analytics.ChannelLimit.Parse(declaration);
+                accepted.Add(declaration);
+            }
+            catch (FormatException ex)
+            {
+                problems.Add($"'{name}' — 한계값 '{declaration}': {ex.Message}");
+            }
+        }
+
+        return accepted;
     }
 
     /// <summary>
