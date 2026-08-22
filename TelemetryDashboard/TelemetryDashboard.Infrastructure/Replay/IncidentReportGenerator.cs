@@ -101,7 +101,7 @@ public class IncidentReportGenerator
         }
         Directory.CreateDirectory(targetDirectory);
         string filePath = Path.Combine(targetDirectory, filename);
-        File.WriteAllText(filePath, markdownReportContent, Encoding.UTF8);
+        File.WriteAllText(filePath, markdownReportContent, TelemetryDashboard.Core.Services.Utf8Files.WithoutBom);
         return filePath;
     }
 }

@@ -123,7 +123,7 @@ public sealed class NotionClient : INotionClient
         }
 
         string payload = BuildPagePayload("offline-backup", title, packets);
-        File.WriteAllText(targetPath, payload, Encoding.UTF8);
+        File.WriteAllText(targetPath, payload, TelemetryDashboard.Core.Services.Utf8Files.WithoutBom);
         return targetPath;
     }
 }

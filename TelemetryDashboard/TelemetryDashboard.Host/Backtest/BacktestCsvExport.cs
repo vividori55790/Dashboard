@@ -21,8 +21,6 @@ namespace TelemetryDashboard.Host.Backtest;
 /// </remarks>
 public static class BacktestCsvExport
 {
-    private static readonly UTF8Encoding NoBomUtf8 = new(encoderShouldEmitUTF8Identifier: false);
-
     /// <summary>Writes one row per session: the mark, the position and the price it was marked at.</summary>
     public static void WriteEquity(string path, BacktestResult result)
     {
@@ -72,6 +70,6 @@ public static class BacktestCsvExport
         // three-line Python csv.DictReader -- saw the first column named with the mark still attached, and raised a
         // KeyError on "Date". This export exists so a result can be checked somewhere that is not
         // this program, and a header only this program can read defeats the entire purpose of it.
-        File.WriteAllText(path, content, NoBomUtf8);
+        File.WriteAllText(path, content, Core.Services.Utf8Files.WithoutBom);
     }
 }

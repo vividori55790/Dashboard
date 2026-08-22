@@ -25,6 +25,7 @@ public sealed class OutboundRelays : IAsyncDisposable
 {
     private readonly List<string> _banner = new();
     private SlackAlertRelay? _slack;
+    private IncidentCaptureRelay? _incidents;
     private MqttTelemetryRelay? _mqtt;
     private EmergencyInterlockRelay? _emergency;
 
@@ -34,13 +35,25 @@ public sealed class OutboundRelays : IAsyncDisposable
     public IReadOnlyList<string> BannerLines => _banner;
 
     /// <summary>Whether anything at all is relaying.</summary>
-    public bool IsActive => _slack is not null || _mqtt is not null || _emergency is not null;
+    public bool IsActive =>
+        _slack is not null || _mqtt is not null || _emergency is not null || _incidents is not null;
+
+    /// <summary>The incident capture, or null when it was not asked for or could not run.</summary>
+    public IncidentCaptureRelay? Incidents => _incidents;
 
     /// <summary>Builds and subscribes the configured relays.</summary>
+    /// <param name="archive">
+    /// The durable store, when one is open. The incident capture reads its window out of it, so
+    /// without one that relay cannot run and the operator is told rather than left with a directory
+    /// of empty reports.
+    /// </param>
     public static async Task<OutboundRelays> StartAsync(
-        HostOptions options, TelemetryIngestPump? pump, ISerialManager? serialManager = null)
+        HostOptions options, TelemetryIngestPump? pump, ISerialManager? serialManager = null,
+        Core.Interfaces.IDataLogger? archive = null)
     {
         var relays = new OutboundRelays();
+
+        relays._incidents = Startup.IncidentCaptureSetup.Create(options, archive, relays._banner);
 
         if (options.SlackWebhook is not null)
         {
@@ -113,6 +126,7 @@ public sealed class OutboundRelays : IAsyncDisposable
         }
 
         if (_slack is not null) pump.SampleScored += _slack.OnSampleScored;
+        if (_incidents is not null) pump.SampleScored += _incidents.OnSampleScored;
         if (_mqtt is not null) pump.SampleScored += _mqtt.OnSampleScored;
         if (_emergency is not null) pump.SampleScored += _emergency.OnSampleScored;
     }

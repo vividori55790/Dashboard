@@ -51,7 +51,10 @@ public class TelemetryCsvRecorder : IDisposable
         CurrentFilePath = Path.Combine(targetDir, fileName);
 
         _fileStream = new FileStream(CurrentFilePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
-        _writer = new StreamWriter(_fileStream, Encoding.UTF8) { AutoFlush = false };
+        // No byte-order mark: this file is read back by this product's own replay, whose header
+        // check looks for a line beginning "Timestamp_ISO" -- which a mark defeats, so the header
+        // fell through to be parsed as a data row and was dropped. See Services.Utf8Files.
+        _writer = new StreamWriter(_fileStream, Services.Utf8Files.WithoutBom) { AutoFlush = false };
 
         // Write CSV Header
         // Predicted_Value with its own horizon column, because the old Predicted_60s header was a

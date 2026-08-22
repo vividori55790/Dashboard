@@ -32,6 +32,11 @@ internal static class SessionCsvRowParser
         timestampSec = 0.0;
 
         if (string.IsNullOrWhiteSpace(line)) return false;
+
+        // Recordings written before the mark was removed still carry it, and it arrives as an
+        // ordinary leading character once the file has been decoded -- so the header stopped
+        // matching and was parsed as a data row.
+        line = TelemetryDashboard.Core.Services.Utf8Files.StripMark(line);
         if (line.StartsWith(HeaderPrefix, StringComparison.OrdinalIgnoreCase)) return false;
 
         string[] fields = line.Split(',');

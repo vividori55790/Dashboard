@@ -92,6 +92,17 @@ public sealed class HostOptions
     public int DriftWindowSeconds { get; init; }
 
     /// <summary>
+    /// Directory to write an incident report into when a limit is crossed, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// Needs an archive: the report is the window before the crossing, and that comes out of it.
+    /// The one moment in a run that unambiguously means "capture what led to this" is the crossing
+    /// itself, and until now nothing acted on it -- the report existed only if somebody asked
+    /// /api/incident with the right timestamp, which nobody does at three in the morning.
+    /// </remarks>
+    public string? IncidentDirectory { get; init; }
+
+    /// <summary>
     /// Directory scanned for plugin assemblies, or null for <c>plugins/</c> beside the executable.
     /// </summary>
     /// <remarks>

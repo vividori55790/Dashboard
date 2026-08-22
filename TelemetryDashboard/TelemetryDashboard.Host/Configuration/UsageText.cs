@@ -69,6 +69,17 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --incident-dir <dir>
+                                Write an incident report into <dir> the moment a --limit is
+                                crossed: the sixty seconds of every channel leading up to it, plus
+                                five after, with a verdict per channel. Needs --archive, which is
+                                where the window comes from; refused without it.
+                                The report has been available at /api/incident all along, and only
+                                to somebody who asked at the right moment with the right timestamp.
+                                An alarm at three in the morning names that moment and nobody is
+                                awake to type it. One report per rule per
+                                {IncidentCaptureRelay.DefaultCooldown.TotalMinutes:0} min, so a
+                                flapping limit cannot fill the disk.
               --watch-drift <s> Derive a '<channel>.drift' channel: how far the channel's recent
                                 average has run ahead of its long-run one, in the channel's own
                                 unit, with <s> seconds as the long memory. Off by default.

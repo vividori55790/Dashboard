@@ -39,6 +39,11 @@ public static class CommandLineParser
                     draft.WatchIntervals = true;
                     break;
 
+                case "--incident-dir":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawIncident)) return ArgumentCursor.MissingValue(argument);
+                    draft.IncidentDirectory = System.IO.Path.GetFullPath(rawIncident);
+                    break;
+
                 case "--watch-drift":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawDrift)) return ArgumentCursor.MissingValue(argument);
                     if (!int.TryParse(rawDrift, out draft.DriftWindowSeconds) || draft.DriftWindowSeconds < 10)

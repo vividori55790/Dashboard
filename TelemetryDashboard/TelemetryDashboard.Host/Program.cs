@@ -118,7 +118,7 @@ public static class Program
         // After the pump exists, so a relay is subscribed to the stream that is actually running
         // rather than reporting itself armed over nothing.
         await using OutboundRelays relays = await OutboundRelays.StartAsync(
-            options, pump, IngestSetup.SerialManagerOf(source)).ConfigureAwait(false);
+            options, pump, IngestSetup.SerialManagerOf(source), archive?.Store).ConfigureAwait(false);
         foreach (string line in relays.BannerLines) Console.WriteLine(line);
 
         StartupBanner.PrintFooter();
