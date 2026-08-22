@@ -96,7 +96,7 @@ function makeEl(id) {
 
 ['chain', 'conn-dot', 'conn-text', 'node-chip', 'sim-banner', 'log', 'table',
  'derived-panel', 'derived-table', 'control-panel', 'control-rows', 'control-scenarios',
- 'control-status']
+ 'control-status', 'flow-panel', 'power-flow']
     .forEach(id => elements.set(id, makeEl(id)));
 
 const tbody = makeEl('tbody');
@@ -151,11 +151,22 @@ const TelemetryClient = {
     onStatusChange(cb) { statusCb = cb; cb('DISCONNECTED', false); return this; }
 };
 
+const intervals = [];
+const fedToFlow = {};
+const PowerFlow = {
+    mount() { fedToFlow._mounted = true; },
+    update(state) { Object.assign(fedToFlow, state); }
+};
+
 const sandbox = {
     document,
+    PowerFlow,
     console,
     TelemetryClient,
-    setInterval: () => 0,
+    // Held, not discarded. The page repaints the diagram on a timer rather than on every packet,
+    // so a stub that swallows the callback tests the timer instead of the wiring -- and reports a
+    // console that feeds nothing when in fact it had not been given a chance to.
+    setInterval: fn => { intervals.push(fn); return 0; },
     fetch: sandboxFetch,
     Promise,
     location: { search: '', port: String(port), hostname: 'localhost' },
@@ -203,6 +214,8 @@ check('the chip reports a connection once the socket opens',
 
 // ---- real packets ---------------------------------------------------------
 const seen = new Set();
+// Variables that arrived marked derived, so the diagram check knows what to look for.
+const derivedSeen = new Set();
 const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
     let buf = '';
     res.on('data', chunk => {
@@ -216,9 +229,14 @@ const req = http.get({ host: 'localhost', port, path: '/stream' }, res => {
             try { pkt = JSON.parse(line.slice(6)); } catch { continue; }
             if (typeof pkt.variable !== 'string') continue;
             seen.add(pkt.variable);
+            if (pkt.derived === true) derivedSeen.add(pkt.variable);
             dataCb(pkt);
         }
-        if (STAGES.every(s => seen.has(s))) { req.destroy(); finish(); }
+        // A derived channel too. Stopping at the six chain stages ended the capture before any
+        // computed sample arrived, so the diagram check below saw only measured channels and
+        // reported a console that feeds the wrong thing -- the same early-stop mistake already
+        // found and fixed in verify_console.js.
+        if (STAGES.every(s => seen.has(s)) && derivedSeen.size > 0) { req.destroy(); finish(); }
     });
 });
 req.on('error', e => { console.error('FAIL: cannot read host stream:', e.message); process.exit(1); });
@@ -351,6 +369,28 @@ async function finish() {
     check('each row names the range the profile allows, not a generic slider',
         controlMarkup.includes('350') && controlMarkup.includes('450'),
         'the bus row should carry its own bounds');
+
+    // ---- the power-flow diagram --------------------------------------------
+    // Whether it draws correctly is verify_power_flow.js's job. What this checks is the wiring:
+    // that the console feeds it the same packets the cards get, derived channels included. A
+    // diagram polling for itself would show a different instant from the cards beside it, and
+    // nothing on screen would say which one was right.
+    // One tick of everything the page scheduled, which is what a browser would have done many
+    // times over by now.
+    intervals.forEach(fn => { try { fn(); } catch { /* reported by the checks below */ } });
+
+    check('the diagram was mounted by the console',
+        fedToFlow._mounted === true,
+        'PowerFlow.mount should be called once at load');
+
+    const fedIds = Object.keys(fedToFlow).filter(k => k !== '_mounted');
+    check('the console feeds the diagram the channels it receives',
+        fedIds.some(k => k.indexOf('dab.bus_voltage') >= 0),
+        fedIds.join(', '));
+
+    check('derived channels reach the diagram too, not just the measured ones',
+        fedIds.some(k => derivedSeen.has(k)),
+        'derived on the wire: ' + [...derivedSeen].join(', '));
 
     console.log(`\n${failures === 0 ? 'all checks passed' : failures + ' check(s) failed'}`);
     process.exit(failures === 0 ? 0 : 1);

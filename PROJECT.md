@@ -859,6 +859,43 @@ because those probe packets carry no `limitBreach` and repainted every card as h
 destroying the state it was about to assert on. The probe now runs last, and the ordering is
 written down where it matters.
 
+### A picture of where the power is going, and where it is not
+The console showed six numbers and no relationship between them. `power_flow.js` draws the chain —
+계통 → DAB → PSFB → 서버 — with the power on each link, animated so direction and magnitude read at
+a glance, and efficiency on the conversion.
+
+The hard part is not the drawing. **A link with no data and a link carrying zero watts look
+identical if you draw both as a still line**, so the picture would invent a fact for every channel
+that had gone quiet. Unknown is drawn as a dashed grey outline with an open arrowhead and the words
+`값 없음`, and the legend on the diagram says outright that this is not 0 W. A sample older than ten
+seconds is dimmed and carries its age, because a frozen value must not look live. Derived
+quantities are tagged `계산값`, and the module **does not compute a missing power from V and I
+itself** — those arrive at different instants and only the host aligns them.
+
+Efficiency above 100% is displayed as given. On the simulator that happens, because its channels
+wander independently on purpose; the diagram labels it `100 % 초과 · 보정 없음` rather than clamping
+it, since clamping would hide a real property of the data.
+
+Verified in a real browser against a live host, and by `verify_power_flow.js` against a DOM stub for
+the states a live host will not produce on demand: mounted with nothing, one input missing, a
+sample a minute old, a breach, and an efficiency of 116.1%.
+
+```
+9.10 kW  →  효율 94.5 %  →  8.60 kW        계통→DAB 구간: 값 없음 (그 전력을 재는 채널이 없음)
+```
+
+The console feeds it the same packets the cards get rather than letting it poll: a diagram on its
+own clock shows a different instant from the cards beside it, and nothing on screen would say which
+one was right.
+
+Three harness defects, all of them reporting a working page as broken. `verify_power_flow.js` first
+matched the diagram's own legend — the prose explaining that 값 없음 is not 0 W — as though it were
+a reading, so the module failed for documenting the property the harness existed to enforce. The
+console harness stubbed `setInterval` to a no-op and then checked what the timer feeds, reporting a
+console that feeds nothing when it had simply never been ticked. And it stopped capturing once the
+six chain stages had arrived, which is before any computed sample does — the same early-stop
+mistake found and fixed in the other harness a cycle earlier.
+
 **Suite: 1,150 passing, 0 failing** (1,082 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent

@@ -235,7 +235,7 @@
             var numT = svgEl('tspan', null, num);
             var unitT = svgEl('tspan', { dx: 4, 'class': 'pf-unit' }, num);
             var status = textEl(rg, bx + BOX_W - PAD, ry + 22, 'pf-status', 'end');
-            var idT = textEl(rg, bx + PAD, ry + 36, 'pf-id pf-mono', 'start');
+            var idT = textEl(rg, bx + PAD, ry + 38, 'pf-id pf-mono', 'start');
             setText(idT, r.id);
             setText(svgEl('title', null, rg), r.label);
             rows.push({ def: r, g: rg, num: num, numT: numT, unitT: unitT, status: status });
