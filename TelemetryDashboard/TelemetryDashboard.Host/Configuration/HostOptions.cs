@@ -203,6 +203,16 @@ public sealed class HostOptions
     /// </remarks>
     public IReadOnlyList<string> EmergencyLimits { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Known waveforms to drive channels with, as <c>channel=shape@frequencyHz:amplitude</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only meaningful for a generated source, which is the only thing whose values this host
+    /// decides. On a real rig the channel reads what the converter is doing, and a flag that
+    /// claimed otherwise would be describing a machine it does not control.
+    /// </remarks>
+    public IReadOnlyList<string> Signals { get; init; } = Array.Empty<string>();
+
     /// <summary>A recorded CSV to play back instead of reading a live source, or null.</summary>
     /// <remarks>
     /// Everything downstream behaves exactly as it does live, because from its side nothing is

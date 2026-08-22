@@ -37,6 +37,18 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
 {
     private readonly MonitoringProfile _profile;
     private readonly ConcurrentDictionary<string, double> _setpoints = new(StringComparer.Ordinal);
+
+    /// <summary>Channels driven by a declared waveform instead of drift, one generator each.</summary>
+    /// <remarks>
+    /// Per channel because a generator carries its own phase; sharing one would lock every injected
+    /// channel to the same instant of the same wave, which is a correlation nobody asked for and the
+    /// exact thing the drift model is careful not to invent.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, Analytics.SignalGeneratorService> _signals =
+        new(StringComparer.Ordinal);
+
+    /// <summary>When the previous tick ran, so a waveform advances by real time.</summary>
+    private DateTime? _lastTickUtc;
     private readonly Channel<RawPacket> _channel;
     private readonly TimeSpan _interval;
     private readonly Random _random = new(Seed);
@@ -97,6 +109,27 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
 
     /// <summary>Port name stamped on every frame; the node id, since there is no real port.</summary>
     public string PortName => "SIM";
+
+    /// <summary>
+    /// Drives a channel with a known waveform instead of the drift model.
+    /// </summary>
+    /// <remarks>
+    /// The waveform rides on the setpoint and stays inside the profile's range, so a signal is a
+    /// deviation rather than a replacement: the channel still reads as itself, and moving the
+    /// setpoint moves the whole waveform with it.
+    /// </remarks>
+    /// <returns>False when the profile declares no such channel.</returns>
+    public bool InjectSignal(Analytics.InjectedSignal signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!_profile.Channels.Any(c => c.Id == signal.Channel)) return false;
+
+        _signals[signal.Channel] = signal.Arm();
+        return true;
+    }
+
+    /// <summary>Per-channel sample rate, which is also what a spectrum of that channel will measure.</summary>
+    public double SampleRateHz => 1000.0 / Math.Max(1, _interval.TotalMilliseconds);
 
     /// <summary>Moves one channel's setpoint, clamped to the range the profile declares.</summary>
     /// <returns>The value actually applied, which differs when the request was out of range.</returns>
@@ -220,9 +253,20 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
             {
                 DateTime now = DateTime.UtcNow;
 
+                // Real elapsed time, not the interval that was asked for. Task.Delay plus the work
+                // between ticks runs slower than the nominal period -- measured at 9.479 Hz against
+                // a requested 10 -- so advancing an injected waveform's phase by _interval made a
+                // declared 2 Hz signal come out at 1.888 Hz. The spectrum reported that correctly
+                // and the reference was the thing that was wrong, which is the one defect a
+                // reference must not have.
+                double elapsed = _lastTickUtc is { } previous
+                    ? (now - previous).TotalSeconds
+                    : _interval.TotalSeconds;
+                _lastTickUtc = now;
+
                 foreach (ProfileChannel channel in _profile.Channels)
                 {
-                    string frame = Frame(channel, step);
+                    string frame = Frame(channel, step, elapsed);
                     if (_channel.Writer.TryWrite(new RawPacket(PortName, frame, now))) FramesGenerated++;
                 }
 
@@ -255,9 +299,9 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
     /// they do over measured data. A simulator that skipped them would leave the parsing path
     /// untested by the only source most installations ever exercise.
     /// </remarks>
-    private string Frame(ProfileChannel channel, int step)
+    private string Frame(ProfileChannel channel, int step, double elapsedSeconds)
     {
-        double value = Wander(channel, step);
+        double value = Wander(channel, step, elapsedSeconds);
         string body = string.Create(CultureInfo.InvariantCulture,
             $"TELE,{NodeId},{Sanitise(channel.Id)},{Math.Round(value, Math.Clamp(channel.Decimals, 0, 6))},{channel.Unit}");
 
@@ -274,9 +318,20 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
     /// quantity is. Channels are given different periods so they do not all peak together, which
     /// would look like a correlation nobody put there.
     /// </remarks>
-    private double Wander(ProfileChannel channel, int step)
+    private double Wander(ProfileChannel channel, int step, double elapsedSeconds)
     {
         double setpoint = _setpoints.TryGetValue(channel.Id, out double s) ? s : channel.Nominal;
+
+        // A declared signal replaces the drift entirely, noise included. Adding noise to a
+        // reference waveform would put a floor under every spectrum measured against it, and the
+        // reason to inject a known tone is to have something exact to compare with.
+        if (_signals.TryGetValue(channel.Id, out Analytics.SignalGeneratorService? generator))
+        {
+            return Math.Clamp(
+                setpoint + generator.GetNextSample(elapsedSeconds),
+                channel.Minimum, channel.Maximum);
+        }
+
         double span = channel.Maximum - channel.Minimum;
 
         if (span <= 0) return setpoint;

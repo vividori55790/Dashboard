@@ -39,6 +39,7 @@ internal sealed class HostOptionsDraft
         Computed = new List<string>(defaults.Computed);
         Limits = new List<string>(defaults.Limits);
         EmergencyLimits = new List<string>(defaults.EmergencyLimits);
+        Signals = new List<string>(defaults.Signals);
         ReplayPath = defaults.ReplayPath;
         ReplaySpeed = defaults.ReplaySpeed;
         EmergencyStop = defaults.EmergencyStop;
@@ -55,6 +56,7 @@ internal sealed class HostOptionsDraft
     public List<string> Computed;
     public List<string> Limits;
     public List<string> EmergencyLimits;
+    public List<string> Signals;
     public string? ClientFile;
     public string? SerialPort;
     public string? RecordingDirectory;
@@ -106,6 +108,7 @@ internal sealed class HostOptionsDraft
         Computed = Computed,
         Limits = Limits,
         EmergencyLimits = EmergencyLimits,
+        Signals = Signals,
         ReplayPath = ReplayPath,
         ReplaySpeed = ReplaySpeed,
         EmergencyStop = EmergencyStop,

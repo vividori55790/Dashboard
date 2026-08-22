@@ -86,6 +86,16 @@ public static class UsageText
                                   curl -X POST -d "" ".../api/control?cmd=setpoint&channel=dab.bus_voltage&value=440"
                                 A host reading a real device offers none of it: acting on that
                                 machine is the emergency interlock's job, armed separately.
+              --signal <decl>   Drive a channel with a known waveform instead of the simulator's
+                                drift, written as "channel=shape@frequencyHz:amplitude" -- e.g.
+                                "dab.bus_voltage=sine@2:20". Repeatable, and only with a generated
+                                source. This exists so the analysis can be checked rather than
+                                trusted: ask for 2 Hz and /api/spectrum should report 2 Hz. It did,
+                                to 0.55 of its own bin width -- and the first run found the
+                                generator, not the analyser, to be the thing that was wrong.
+                                Shapes: sine, square, triangle, sawtooth, noise. A rate above the
+                                simulator's Nyquist limit is refused, but only the fundamental is
+                                checked: every shape but sine has harmonics, and those fold too.
               --limit <decl>    Enforce an engineering limit, written as
                                 "channel[unit] in lo..hi", or a channel followed by >, >=, <
                                 or <= and a number. Repeatable. This is the alarm a rolling

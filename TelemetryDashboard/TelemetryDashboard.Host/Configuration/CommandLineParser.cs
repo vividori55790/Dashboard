@@ -181,6 +181,23 @@ public static class CommandLineParser
                     draft.Limits.Add(rawTrip);
                     break;
 
+                // A reference signal, refused here if it cannot be one. A declaration that does not
+                // parse, or a rate above what the simulator samples at, produces a spectrum peak
+                // that is real, wrong and has no symptom -- and this feature exists precisely to be
+                // the thing other measurements are checked against.
+                case "--signal":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawSignal)) return ArgumentCursor.MissingValue(argument);
+                    try
+                    {
+                        TelemetryDashboard.Core.Analytics.InjectedSignal.Parse(rawSignal);
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ArgumentCursor.Fail($"--signal {rawSignal}: {ex.Message}");
+                    }
+                    draft.Signals.Add(rawSignal);
+                    break;
+
                 case "--archive":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawArchive)) return ArgumentCursor.MissingValue(argument);
                     draft.ArchivePath = Path.GetFullPath(rawArchive);
@@ -304,6 +321,13 @@ public static class CommandLineParser
         // is the only flag that transmits to hardware, so the port it writes to has to be one the
         // operator named -- and the controller behind it defaults to a rule aimed at COM3, which
         // would otherwise be where an unqualified --emergency-stop ended up pointing.
+        if (draft.Signals.Count > 0 && !generates)
+        {
+            return ArgumentCursor.Fail(
+                "--signal needs a generated source (--simulate or --serial loopback). On a real rig "
+                + "the channel reads what the converter is doing, and this host does not decide it.");
+        }
+
         if (draft.EmergencyLimits.Count > 0 && !draft.EmergencyStop)
         {
             return ArgumentCursor.Fail(

@@ -939,7 +939,42 @@ touched the class they were named for. That is the same pattern as `SessionRepla
 `FailureSnapshotExtractorHelper` before them: a substitute standing in for the thing under test can
 only confirm itself.
 
-**Suite: 1,140 passing, 0 failing** (1,072 portable + 68 desktop) — about 2 m 35 s with
+### A known signal, so the spectrum can be checked instead of trusted
+`SignalGeneratorService` had been written, tested and constructed by nothing. What its absence cost
+was not a feature but a **reference**. The simulator emits exactly one shape per channel — a slow
+sine around the setpoint plus noise, at a period derived from a hash — so `/api/spectrum` had never
+had a ground truth to be measured against. An operator reading a peak at 0.14 Hz had no way to know
+whether that was the converter oscillating or the analyser being wrong; the evidence was that the
+number looked plausible.
+
+`--signal dab.bus_voltage=sine@2:20` drives a channel with a declared waveform. Then the question
+has an answer:
+
+```
+declared   2 Hz sine, ±20 V about the setpoint
+measured   2.0018 Hz          bin width 0.0185 Hz  ->  0.10 of a bin
+```
+
+**Its first run found the reference itself was wrong.** The same request came back as 1.8883 Hz —
+six bins out, on an endpoint whose bin width is 0.0185 Hz, so not a rounding artefact. The analyser
+was right: the generator advanced its phase by the interval it *asked* for while the simulator
+actually ticks at 9.479 Hz against a nominal 10, which puts a declared 2 Hz at
+`2 × 9.479/10 = 1.896` in wall-clock terms. A waveform is defined against the clock the samples are
+stamped with, so the phase now advances by real elapsed time. A reference that is wrong is worse
+than no reference.
+
+**A square wave gave a second, independent confirmation.** Sampled at 9.5 Hz, its third harmonic
+landed at 3.011 Hz with 0.328 of the fundamental's magnitude, against a theoretical 1/3. The two
+peaks that were not harmonics turned out to be predicted exactly: the fifth (5 Hz) and seventh
+(7 Hz) are both past the 4.75 Hz Nyquist limit and came back folded to 4.498 Hz and 2.491 Hz, at
+0.185 and 0.128 against theoretical 1/5 and 1/7.
+
+That last part is a limitation worth stating rather than hiding: the Nyquist refusal at start-up
+checks **the fundamental only**. Every shape but a sine carries harmonics and those fold too, so a
+square is a useful reference for edge detection and not a clean one for a spectrum. Nothing here
+can make it so, and the help text says as much.
+
+**Suite: 1,160 passing, 0 failing** (1,092 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

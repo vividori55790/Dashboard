@@ -37,5 +37,8 @@ public static class HostFeatureSetup
         ComputedChannelSetup.Attach(options, server, profile);
         LimitSetup.Attach(options, server, profile);
         ControlSetup.Attach(server, source);
+
+        SignalSetup.Result signals = SignalSetup.Apply(options, source);
+        foreach (string line in SignalSetup.BannerLines(signals)) Console.WriteLine(line);
     }
 }

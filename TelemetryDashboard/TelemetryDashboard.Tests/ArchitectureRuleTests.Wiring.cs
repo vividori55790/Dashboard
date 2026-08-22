@@ -152,7 +152,16 @@ public partial class ArchitectureRuleTests
         // it and the whole stack -- routing, analytics, console, spectrum, alignment, DVR -- works
         // on recorded data. Wiring it found that the row parser dropped the NodeId column, so two
         // devices reporting the same channel name collapsed into one series on replay.
-        "SignalGeneratorService",
+        // SignalGeneratorService retired from this baseline: --signal drives a channel with a
+        // declared waveform through InjectedSignal, so the analysis half of the product can be
+        // checked instead of trusted. The simulator emits one shape per channel at a period
+        // derived from a hash, so /api/spectrum had never had a ground truth to be measured
+        // against -- the evidence that its peaks were right was that they looked plausible.
+        // Its first run found the reference itself wrong: a declared 2 Hz came back at 1.888,
+        // six bins out, because the generator advanced phase by the interval it asked for
+        // rather than the time that passed, and the simulator ticks at 9.5 Hz against a
+        // nominal 10. The analyser was right. Fixed at the cause, the same signal reads
+        // 2.0103 Hz -- 0.55 of a bin.
         // SlackClient, MqttPublisher and GitHubUpdater retired from this baseline: the headless
         // host now relays anomalies to a webhook (--slack-webhook), republishes every scored sample
         // to a broker (--mqtt) and checks a release feed at start-up (--check-updates). Before
