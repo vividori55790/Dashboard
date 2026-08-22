@@ -12,6 +12,15 @@ namespace TelemetryDashboard.Tests;
 /// in a running program. "Built" had come to mean "the tests pass" rather than "a user can reach
 /// it", and only a manual audit ever caught the difference.
 ///
+/// Reachability is judged per <em>file</em>, not per type: a type counts as reached when something
+/// outside its declaring file names any type that file declares. Judging it per type -- which this
+/// did until a full audit of the baseline -- calls a helper dead whenever it lives beside the entry
+/// point that uses it, and that was sixteen of thirty-four entries.
+///
+/// What that costs is the reverse case: a genuinely dead type sharing a file with a live one is
+/// now invisible here. That trade is deliberate. A rule whose list is half false positives stops
+/// being read, and the entries it was hiding behind them are the ones worth acting on.
+///
 /// The baseline below is deliberately large: it is the honest state of the codebase the day the
 /// rule was written, not an aspiration. <see cref="EveryUnwiredTypeInTheBaselineIsStillUnwired"/>
 /// forces an entry out the moment its type gains a reference, so the list can only shrink.
@@ -35,12 +44,34 @@ public partial class ArchitectureRuleTests
     /// </remarks>
     private static readonly HashSet<string> UnwiredTypes = new(StringComparer.Ordinal)
     {
+        // Eighteen entries left this baseline at once when reachability moved from per-type to
+        // per-file, and none of them by being wired: AppTheme, BinaryOpNode, CommandItem,
+        // DropResult, DvrFrameEventArgs, EventLogEntry, FunctionCallNode, NodeStatus, NumberNode,
+        // PeerHubDisplayModel, PluginItemModel, ReplayRowItem, NodePowerToggle, RelayCommand,
+        // SamplingChannelRow, VariableNode, Win32Native, WindowBackdropType.
+        //
+        // They were never dead. Each lives beside the entry point that uses it -- an AST node built
+        // by the parser in the same file, a row model built by its service, an enum owned by the
+        // service that reads it -- and the old rule asked whether some *other file* named the type.
+        // Half of this list was that, which made the metric misleading in the direction that costs
+        // the most: it hid the entries worth acting on behind noise, and it did so for months.
+        //
+        // Two of them, NodePowerToggle and RelayCommand, carried a comment blaming XAML binding.
+        // That diagnosis was wrong -- they are plain C# in the same file as their user -- and a
+        // wrong explanation in a governance list is worse than none, because it stops the next
+        // reader from looking.
+        //
+        // Three of them are not honestly alive either: Win32Native's WndProc is called from tests
+        // and from nothing else (there is no HwndSource.AddHook anywhere, so the Win32 hot-plug
+        // path has never run and PortPresencePoller is what actually works); DvrFrameEventArgs is
+        // raised only by a push API no production caller uses; NodeStatus types a property nothing
+        // reads or writes. The corrected rule cannot see any of that, which is the blind spot it
+        // trades for honesty, and they are recorded here rather than left to be rediscovered.
         // Surfaced only once StripComments was added: each of these had been counted as wired
         // because a sibling file mentioned it in a <see cref="..."/>. The audit that produced this
         // baseline undercounted for exactly that reason.
         "AlertUXService",
         "AnomalyEngine",              // superseded by TelemetryMlAnalyticsEngine on the live path
-        "AppTheme",
         // AstNode retired from this baseline: ComputedChannel holds one and asks it what
         // channels it reads, which is what /api/computed needs before it can align them. The
         // expression engine had been reachable only from a WPF dialog and from DataRouter's
@@ -52,8 +83,6 @@ public partial class ArchitectureRuleTests
         // port opens, so a dropped cable is now retried instead of ending the run. Making it work
         // needed a real fix first -- the read loop swallowed the failure, leaving the port marked
         // Connected forever and reconnection impossible.
-        "BinaryOpNode",
-        "CommandItem",
         // DashboardExporter retired from this baseline: TelemetryDashboard.Host writes a standalone
         // HTML console behind --export-dashboard, built from the profile in force. Feature 6 was
         // marked Built since M2 while nothing constructed it, so the page had never been opened --
@@ -61,15 +90,12 @@ public partial class ArchitectureRuleTests
         // widget that filled a missing field in from the temperature and then from zero.
         "DeltaCursorService",
         "DerivedNumericProjection",
-        "DropResult",
-        "DvrFrameEventArgs",
         // EmergencyMcuController retired from this baseline: EmergencyInterlockRelay constructs it
         // behind --emergency-stop, so the one feature that acts on the machine rather than watching
         // it can now be reached from a running program. It stays off by default and is refused
         // without --serial, because the controller ships a rule that auto-executes against a port
         // literally named COM3 -- a host that armed itself would be writing to whatever happened to
         // be there.
-        "EventLogEntry",
         // ExtensionRegistry retired from this baseline: installing exists now, so the host has
         // something to register. ExtensionLoader fills it from the extension store and asks it
         // GetCompatibleExtensions(hostApiVersion) to decide what may load, which is the one place
@@ -86,7 +112,6 @@ public partial class ArchitectureRuleTests
         // reach it -- the headless host must never reference the WPF project, so the one place a
         // spectrum is useful to every client could not have it. Its first run against live data
         // found a defect in the series store, which was writing every channel into one series.
-        "FunctionCallNode",
         "HeatmapInterpolationService",
         "KestrelWebServer",
         // ManifestIndexMarketplace retired from this baseline: TelemetryDashboard.Host's
@@ -105,24 +130,11 @@ public partial class ArchitectureRuleTests
         // Publishing a report needs a trigger the headless host does not have yet: unlike an alert
         // or a stream sample, there is no moment in a run that obviously means "publish now".
         "NotionClient",
-        "NodeStatus",
-        "NumberNode",
-        "PeerHubDisplayModel",
-        "PluginItemModel",
         "PortablePackageChecker",
         // Redundant with PythonScriptEngine, which is what the sandbox actually loads. Both embed
         // IronPython; keeping two entry points to one interpreter is the thing to fix, not to wire.
         "PythonNetAdapter",
-        "ReplayRowItem",
-        // Bound from XAML only, which this rule's tokeniser cannot see: a view model reached as
-        // {Binding Caption} or {Binding IsOn} inside a DataTemplate appears nowhere as a type name.
-        // Listed rather than "fixed", because the honest statement is that the rule is blind here,
-        // not that these types are dead. Both are verifiably live: the node switches they back were
-        // driven from a running window and produced real commands.
-        "NodePowerToggle",
-        "RelayCommand",
         "SampleTelemetryPlugin",
-        "SamplingChannelRow",
         "ScopeViewModel",
         // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
         // source behind --replay, so a recording can be played back through the pipeline that wrote
@@ -155,9 +167,6 @@ public partial class ArchitectureRuleTests
         // ordinary reading, and clamped silently to the nearest sample for any instant outside its
         // buffer. A test asserted the first of those as the required behaviour.
         "Twin3DService",              // the 3D viewport control it holds state for is not in the shell
-        "VariableNode",
-        "Win32Native",
-        "WindowBackdropType",
         "WorkspaceLayoutState",
         "WorkspaceManager",
     };
@@ -236,9 +245,26 @@ public partial class ArchitectureRuleTests
         declared = DeclaredPublicTypes();
         Dictionary<string, HashSet<string>> mentions = TypeMentions(declared.Keys);
 
+        // A file is reached when something outside it names one of the types it declares.
+        var reachedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string name, string file) in declared)
+        {
+            if (FrameworkEntryPoints.Contains(name)
+                || mentions[name].Any(f => !string.Equals(f, file, StringComparison.OrdinalIgnoreCase)))
+            {
+                reachedFiles.Add(file);
+            }
+        }
+
+        // Then a type is unreachable only when its declaring file is unreachable too. Asking
+        // whether the type itself is named from outside -- which is what this did -- reported
+        // every helper that lives beside its own entry point as dead: an AST node built by the
+        // parser in the same file, a row model built by its service, an enum owned by the service
+        // that reads it. Sixteen of the thirty-four entries on the baseline were that, so half the
+        // list was noise and the metric it produced was misleading in the direction that matters.
         return declared
             .Where(d => !FrameworkEntryPoints.Contains(d.Key))
-            .Where(d => !mentions[d.Key].Any(f => !string.Equals(f, d.Value, StringComparison.OrdinalIgnoreCase)))
+            .Where(d => !reachedFiles.Contains(d.Value))
             .Select(d => d.Key)
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
