@@ -85,6 +85,7 @@ public partial class MainWindow : Window
         StartStreamingServer();
         PopulatePortAndBaud();
         RegisterDefaultCommands();
+        SetupAlerts();
         SetupSimulatorTimer();
 
         // Before the first tick, because the tick asks the active profile which channels to plot.

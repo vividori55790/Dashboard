@@ -628,6 +628,27 @@
         </Border>
 
         <!-- Overlays last so they sit above the workspace they cover. -->
+        <!-- Alarm banner. Over the workspace rather than in a panel, because the panel it used to
+             write into is beside the chart the operator is watching, not in it. A critical alert
+             stays until it is dismissed: one that clears itself is one they can be shown and still
+             never see. -->
+        <Border x:Name="AlertBanner" Grid.Row="2" Visibility="Collapsed"
+                HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="16,16,16,0"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusS}" Padding="14,10"
+                Panel.ZIndex="50">
+            <DockPanel>
+                <TextBlock x:Name="AlertBannerIcon" DockPanel.Dock="Left"
+                           Style="{StaticResource IconText}" Text="&#xE7BA;"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button DockPanel.Dock="Right" Content="확인" Click="BtnDismissAlert_Click"
+                        AutomationProperties.Name="Dismiss alert"
+                        Style="{StaticResource RibbonCommand}" Margin="12,0,0,0"/>
+                <TextBlock x:Name="AlertBannerText" Style="{StaticResource MonoText}"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" Text=""/>
+            </DockPanel>
+        </Border>
+
         <controls:CommandPaletteOverlay x:Name="CommandPalette" Grid.Row="2"
                                         VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                                         Visibility="Collapsed"/>

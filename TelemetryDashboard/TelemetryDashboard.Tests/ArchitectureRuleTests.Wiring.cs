@@ -70,7 +70,15 @@ public partial class ArchitectureRuleTests
         // Surfaced only once StripComments was added: each of these had been counted as wired
         // because a sibling file mentioned it in a <see cref="..."/>. The audit that produced this
         // baseline undercounted for exactly that reason.
-        "AlertUXService",
+        // AlertUXService retired from this baseline: MainWindow holds one, raises a banner from it
+        // and drains its spoken queue through System.Speech -- a package this project already
+        // referenced and no file used. An alarm used to add a line to the event log beside the
+        // chart the operator was watching, and on the hardware path it did not even do that: the
+        // engine scored every reading and only the simulated path read the verdict.
+        //
+        // The service had a gap of its own. It documents that the layer above does the speaking and
+        // observes the state here, and exposed only a count -- so text could be queued, throttled
+        // and sanitised, and never read by anything. TakeNextVoiceAlert is that drain.
         "AnomalyEngine",              // superseded by TelemetryMlAnalyticsEngine on the live path
         // AstNode retired from this baseline: ComputedChannel holds one and asks it what
         // channels it reads, which is what /api/computed needs before it can align them. The

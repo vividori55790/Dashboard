@@ -62,6 +62,21 @@ public sealed class AlertUXService
     }
 
     /// <summary>
+    /// Takes the next announcement to be spoken, or null when there is nothing waiting.
+    /// </summary>
+    /// <remarks>
+    /// The queue had no way out. This class documents that the layer above does the speaking and
+    /// that it observes the state here — and it exposed only a count, so the text could be queued,
+    /// throttled and sanitised, and never read by anything. A queue with no drain is a queue that
+    /// fills to its ceiling and stays there.
+    /// <para>
+    /// Oldest first: within the ceiling the order alerts arrived in is the order they make sense
+    /// in, and the ceiling has already dropped whatever was too old to matter.
+    /// </para>
+    /// </remarks>
+    public string? TakeNextVoiceAlert() => _voiceQueue.Count > 0 ? _voiceQueue.Dequeue() : null;
+
+    /// <summary>
     /// Turns spoken alerts off and discards anything already queued.
     /// </summary>
     /// <remarks>

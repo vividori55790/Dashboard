@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -217,6 +218,51 @@ public partial class ControlPanelControl : UserControl
         });
     }
 
+    /// <summary>Raised when the analytics engine returns an anomaly verdict for a channel.</summary>
+    /// <remarks>
+    /// An event rather than a call into the window, so this control keeps not knowing what the
+    /// application does about an alarm. What it does today is show a banner and speak; before this
+    /// it wrote a line into the log beneath the operator's attention, and on the hardware path it
+    /// did not even do that.
+    /// </remarks>
+    public event Action<string, bool>? AlertRaised;
+
+    /// <summary>
+    /// Decides whether a scored reading is an alarm, and tells anyone listening.
+    /// </summary>
+    /// <remarks>
+    /// The engine's own verdict is used rather than a threshold repeated here. A second copy of
+    /// the rule is a second place for it to drift, and this file already carried one: the
+    /// simulated path compared the z-score against a literal while the hardware path checked
+    /// nothing at all.
+    /// </remarks>
+    private readonly AnomalyAlarmGate _alarmGate = new();
+
+    private void RaiseIfAnomalous(string node, string variable, double value, AnomalyResult analysis)
+    {
+        string channel = $"{node}.{variable}";
+        AlarmTransition transition = _alarmGate.Evaluate(channel, analysis);
+
+        // Only the transition into alarm interrupts. The first version of this raised on the
+        // engine's own IsAnomaly, which is a 2.5 sigma detection bar meant for marking a chart --
+        // measured on a running window, that put a banner up on an idle machine within seconds and
+        // then replaced it on every sample. An alarm that is always on is an alarm nobody reads.
+        if (transition == AlarmTransition.Entered)
+        {
+            string message = string.Create(CultureInfo.InvariantCulture,
+                $"{channel} = {value:G6} ({analysis.ZScore:F1} sigma)");
+
+            LogTelemetryEvent(node, variable, value, analysis.ZScore, "Anomaly: " + message);
+            AlertRaised?.Invoke(message, true);
+        }
+        else if (transition == AlarmTransition.Cleared)
+        {
+            // Logged rather than raised. The operator needs to know it ended, and a banner for
+            // "nothing is wrong any more" is an interruption that carries no action.
+            LogTelemetryEvent(node, variable, value, analysis.ZScore, $"Recovered: {channel}");
+        }
+    }
+
     public void LogTelemetryEvent(string node, string variable, double value, double zScore, string message)
     {
         Dispatcher.Invoke(() =>
@@ -279,11 +325,8 @@ public partial class ControlPanelControl : UserControl
             ApplyZScore(TxtTempZScore, temperature);
             ApplyZScore(TxtVibZScore, vibration);
 
-            if (temperature.HasVerdict && temperature.ZScore >= 3.5)
-            {
-                LogTelemetryEvent("COM3", "Temp", temp, temperature.ZScore,
-                    $"CRITICAL thermal anomaly (Z={temperature.ZScore:F1}σ)");
-            }
+            RaiseIfAnomalous("COM3", "Temp", temp, temperature);
+            RaiseIfAnomalous("COM3", "Vib", vib, vibration);
 
             _sparklineBuffer.Add(temp);
             if (_sparklineBuffer.Count > 50) _sparklineBuffer.RemoveAt(0);
@@ -321,6 +364,12 @@ public partial class ControlPanelControl : UserControl
 
             TxtAnomalyStats.Text =
                 $"Stats [{node}.{variable}]: μ = {analysis.Mean:F2} | σ = {analysis.StdDev:F2} | n = {analysis.SampleCount}";
+
+            // This is the path a real device takes, and it scored every reading and then discarded
+            // the verdict: an anomaly on hardware produced no alarm, no banner and not even a log
+            // line. Only the simulated path checked, which is the wrong way round for a defect to
+            // be arranged -- the demo warned and the plant did not.
+            RaiseIfAnomalous(node, variable, value, analysis);
         });
     }
 
