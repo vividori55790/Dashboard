@@ -17,30 +17,40 @@ public sealed class PortablePackageChecker
 {
     private Mutex? _instanceMutex;
 
-    /// <summary>True when a native library can be located beside the executable or on the path.</summary>
+    /// <summary>
+    /// Full path of a native dependency, or null when this machine has no copy it could load.
+    /// </summary>
+    /// <param name="baseName">Name without prefix or extension, e.g. <c>e_sqlite3</c>.</param>
+    /// <remarks>
+    /// The one method on this class the host actually calls, and it exists because the failure it
+    /// prevents is not a degraded feature but a dead process: measured on a build with
+    /// <c>runtimes/win-x64/native/e_sqlite3.dll</c> deleted, the host printed its whole start-up
+    /// banner, bound its port, advertised every endpoint, and then died with an unhandled
+    /// TypeInitializationException the moment the archive was opened.
+    /// </remarks>
+    public string? LocateNativeLibrary(string baseName) => NativeLibraryProbe.Locate(baseName);
+
+    /// <summary>True when a native library can be located by the name it has on disk.</summary>
+    /// <remarks>
+    /// Takes the exact file name, unlike <see cref="LocateNativeLibrary"/>. Kept because a caller
+    /// checking for something whose name it already knows should not have to un-decorate it, and
+    /// the search underneath is the same corrected one — which now includes
+    /// <c>runtimes/&lt;rid&gt;/native/</c>. Looking only beside the executable and on PATH reported
+    /// every framework-dependent build as missing its dependencies, and a start-up check that cries
+    /// wolf is worse than no check at all.
+    /// </remarks>
     public bool VerifyNativeDll(string dllFileName)
     {
         if (string.IsNullOrWhiteSpace(dllFileName)) return false;
 
-        string baseDirectory = AppContext.BaseDirectory;
-        if (File.Exists(Path.Combine(baseDirectory, dllFileName))) return true;
-
-        string? pathVariable = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(pathVariable)) return false;
-
-        foreach (string directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        string baseName = Path.GetFileNameWithoutExtension(dllFileName);
+        if (baseName.StartsWith("lib", StringComparison.Ordinal) && baseName.Length > 3)
         {
-            try
-            {
-                if (File.Exists(Path.Combine(directory.Trim(), dllFileName))) return true;
-            }
-            catch (ArgumentException)
-            {
-                // A malformed PATH entry is skipped rather than aborting the scan.
-            }
+            baseName = baseName[3..];
         }
 
-        return false;
+        return NativeLibraryProbe.Locate(baseName) is not null
+            || File.Exists(Path.Combine(AppContext.BaseDirectory, dllFileName));
     }
 
     /// <summary>

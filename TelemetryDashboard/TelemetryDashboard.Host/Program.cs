@@ -96,14 +96,14 @@ public static class Program
             return ExitUsage;
         }
 
-        // Opened before the pump, so no sample is published before there is somewhere to keep it.
-        await using ArchiveSink? archive = ArchiveSink.Open(options.ArchivePath);
-        if (archive is not null)
+        // Opened before the pump, so nothing is published before there is somewhere to keep it.
+        if (!ArchiveSetup.TryOpen(options, console.Server, out ArchiveSink? opened, out string? refusal))
         {
-            console.Server.Archive = archive.Store;
-            Console.WriteLine($"  archive       {archive.DatabasePath}");
-            Console.WriteLine("                queryable at /api/history?channel=<id>&from=<iso>&to=<iso>");
+            Console.Error.WriteLine($"telemetry-host: {refusal}");
+            await console.DisposeAsync().ConfigureAwait(false);
+            return ExitUsage;
         }
+        await using ArchiveSink? archive = opened;
 
         // Before the pump: the publisher reads the limit monitor when it is constructed.
         HostFeatureSetup.Attach(options, console.Server, source);

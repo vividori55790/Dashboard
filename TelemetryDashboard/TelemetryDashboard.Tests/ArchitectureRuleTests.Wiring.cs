@@ -102,6 +102,24 @@ public partial class ArchitectureRuleTests
         // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
         // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
         // without inferring it from coordinates and getting a cursor at the origin wrong.
+        // PortablePackageChecker retired from this baseline: the host asks it, before opening the
+        // archive, whether SQLite's native library is on this machine at all. Only that one method
+        // is driven -- ParseArgs duplicates this host's own command-line parser and wiring it would
+        // give the same arguments two readers; EnsureSingleInstance would refuse a second window to
+        // an operator legitimately watching two rigs; ExtractEmbeddedResources has no caller here.
+        // Recorded rather than left for the next reader to wonder about.
+        //
+        // Wiring it found the check itself wrong. It searched beside the executable and on PATH,
+        // which is right for a self-contained single-file publish and wrong for every
+        // framework-dependent build, where natives live under runtimes/<rid>/native/ and nothing
+        // copies them up -- so it answered "missing" for a perfectly working install. A start-up
+        // check that cries wolf is worse than no check at all.
+        //
+        // What it prevents, measured on a build with runtimes/win-x64/native/e_sqlite3.dll deleted:
+        // the host printed its whole banner, bound its port, advertised all thirteen endpoints and
+        // then died with an unhandled TypeInitializationException. Not a degraded archive -- a dead
+        // process, after every sign of a healthy start. It now exits 64 with one sentence.
+        //
         // DerivedNumericProjection retired from this baseline: the headless host registers one
         // behind --watch-intervals, deriving a '<channel>.interval' channel of seconds since that
         // channel last reported. A dead sensor is otherwise indistinguishable from a steady one --
@@ -193,7 +211,6 @@ public partial class ArchitectureRuleTests
         // Publishing a report needs a trigger the headless host does not have yet: unlike an alert
         // or a stream sample, there is no moment in a run that obviously means "publish now".
         "NotionClient",
-        "PortablePackageChecker",
         // Redundant with PythonScriptEngine, which is what the sandbox actually loads. Both embed
         // IronPython; keeping two entry points to one interpreter is the thing to fix, not to wire.
         // PythonNetAdapter left this baseline by being deleted, but only after the one thing

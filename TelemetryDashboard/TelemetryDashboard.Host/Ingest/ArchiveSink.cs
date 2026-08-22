@@ -66,7 +66,24 @@ public sealed class ArchiveSink : IAsyncDisposable
         string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
-        var store = new SqliteDataLogger(path);
+        SqliteDataLogger store;
+        try
+        {
+            store = new SqliteDataLogger(path);
+        }
+        catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException
+                                      or BadImageFormatException or System.Reflection.TargetInvocationException)
+        {
+            // "Stops the start" was the intent above and the implementation did not honour it: an
+            // absent native library came out as an unhandled type initializer with a stack trace
+            // through four layers of provider, after the banner had already been printed.
+            // NativeDependencyCheck catches the known case earlier and by name; this is the net for
+            // whatever the platform does next.
+            throw new InvalidOperationException(
+                $"the archive at {path} could not be opened -- SQLite's native library did not load "
+                + $"({ex.GetType().Name}). Reinstall the package, or run without --archive.", ex);
+        }
+
         var ring = new ChannelDataLogger(RingCapacity);
         var drain = new ChannelDataLoggerDrain(ring, store);
         drain.Start();
