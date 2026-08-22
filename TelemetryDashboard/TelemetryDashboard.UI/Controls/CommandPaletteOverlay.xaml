@@ -13,11 +13,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Visibility="Collapsed">
-    <Grid>
+    <Grid MouseDown="Scrim_MouseDown">
         <!-- Scrim: the canvas colour at partial opacity, so it dims the window without introducing
              a second black of its own. -->
         <Grid.Background>
-            <SolidColorBrush Color="{StaticResource CanvasColor}" Opacity="0.72"/>
+            <SolidColorBrush Color="{Binding Color, Source={StaticResource ScrimBrush}}" Opacity="0.72"/>
         </Grid.Background>
 
         <Border MinWidth="420" MaxWidth="640" VerticalAlignment="Top" Margin="0,72,0,0"
@@ -33,17 +33,25 @@
                 </StackPanel>
 
                 <TextBox x:Name="SearchBox"
-                         TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"/>
+                         TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_KeyDown"/>
 
                 <ListBox x:Name="CommandListBox" MaxHeight="320" Margin="0,10,0,0"
                          HorizontalContentAlignment="Stretch"
-                         SelectionChanged="CommandListBox_SelectionChanged">
+                         SelectionChanged="CommandListBox_SelectionChanged"
+                         MouseDoubleClick="CommandListBox_MouseDoubleClick">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- An empty list is a state the operator can reach by typing, and it used to be
+                     the state the palette always opened in. Saying so beats an empty box. -->
+                <TextBlock x:Name="EmptyNote" Style="{StaticResource CaptionText}"
+                           Margin="0,10,0,0" Visibility="Collapsed"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           Text="No command matches what you typed."/>
 
                 <TextBlock Style="{StaticResource CaptionText}" Margin="0,10,0,0"
                            Text="Arrow keys to move · Enter to run · Esc to close"/>

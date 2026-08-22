@@ -67,7 +67,7 @@ public class F15_F16_LocalizationAndLockBoundaryTests
     [Trait("Category", "Tier2")]
     public void F16_Boundary_InvalidPassword_FailsAuthentication()
     {
-        var lockService = new PasswordLockService();
+        var lockService = new PasswordLockService(TempCredential());
         lockService.SetPassword("CorrectPassword123!");
 
         bool authenticated = lockService.Authenticate("WrongPassword");
@@ -79,7 +79,7 @@ public class F15_F16_LocalizationAndLockBoundaryTests
     [Trait("Category", "Tier2")]
     public void F16_Boundary_EmptyPasswordSubmit_FailsAuthentication()
     {
-        var lockService = new PasswordLockService();
+        var lockService = new PasswordLockService(TempCredential());
         lockService.SetPassword("CorrectPassword123!");
 
         bool authenticated = lockService.Authenticate("");
@@ -90,7 +90,7 @@ public class F15_F16_LocalizationAndLockBoundaryTests
     [Trait("Category", "Tier2")]
     public void F16_Boundary_MaxFailedPasswordAttempts_LocksOutTemporarily()
     {
-        var lockService = new PasswordLockService(maxAttempts: 3);
+        var lockService = new PasswordLockService(TempCredential(), maxAttempts: 3);
         lockService.SetPassword("Secret123");
 
         for (int i = 0; i < 3; i++)
@@ -98,14 +98,14 @@ public class F15_F16_LocalizationAndLockBoundaryTests
             lockService.Authenticate("BadPass");
         }
 
-        lockService.IsLockedOut.Should().BeTrue();
+        lockService.IsCoolingDown.Should().BeTrue("three wrong answers start a cooldown");
     }
 
     [Fact]
     [Trait("Category", "Tier2")]
     public void F16_Boundary_UninitializedPasswordHash_RequiresSetup()
     {
-        var lockService = new PasswordLockService();
+        var lockService = new PasswordLockService(TempCredential());
         lockService.IsPasswordConfigured.Should().BeFalse();
     }
 
@@ -113,10 +113,22 @@ public class F15_F16_LocalizationAndLockBoundaryTests
     [Trait("Category", "Tier2")]
     public void F16_Boundary_OperatorModeRestrictAction_BlocksEngineerView()
     {
-        var lockService = new PasswordLockService();
+        var lockService = new PasswordLockService(TempCredential());
         lockService.LockEngineerMode();
 
         bool canModifySettings = lockService.CanAccessEngineerView();
         canModifySettings.Should().BeFalse();
     }
+
+    /// <summary>
+    /// A credential path inside the temp directory, one per call.
+    /// </summary>
+    /// <remarks>
+    /// The parameterless constructor points at the operator's own AppData, and SetPassword now
+    /// writes there. These tests used it, so running the suite would have set — and then left — a
+    /// screen-lock password on the machine doing the testing, and the "no password configured yet"
+    /// case would have passed once and failed on every run after it.
+    /// </remarks>
+    private static string TempCredential() =>
+        Path.Combine(Path.GetTempPath(), "tdlock_" + Guid.NewGuid().ToString("N")[..10] + ".cred");
 }

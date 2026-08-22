@@ -43,7 +43,6 @@
             <SolidColorBrush x:Key="AccentErrorBrush" Color="{StaticResource DangerColor}"/>
 
             <SolidColorBrush x:Key="ButtonBackgroundBrush" Color="{StaticResource SurfaceAltColor}"/>
-            <SolidColorBrush x:Key="ButtonHoverBrush" Color="#20242B"/>
             <SolidColorBrush x:Key="ButtonPressedBrush" Color="{StaticResource AccentColor}"/>
             <SolidColorBrush x:Key="SystemControlBackgroundBaseLowBrush" Color="{StaticResource SurfaceAltColor}"/>
             <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="{StaticResource AccentColor}"/>

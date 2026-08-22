@@ -147,10 +147,50 @@ public partial class MainWindow
         ControlPanel.LogMessage("SYSTEM", "WebSocket URL copied to clipboard.");
     }
 
+    /// <summary>
+    /// Switches the palette, and says what actually changed rather than that a button was pressed.
+    /// </summary>
+    /// <remarks>
+    /// The log line used to read "Theme toggled." unconditionally, while the service it called
+    /// dropped the argument, swallowed the exception it raised, and addressed a library no XAML in
+    /// this application uses. A message written whether or not the work happened is worse than no
+    /// message: it is the evidence someone checks.
+    /// </remarks>
     private void BtnToggleTheme_Click(object sender, RoutedEventArgs e)
     {
         _themeService.ToggleTheme();
-        ControlPanel.LogMessage("SYSTEM", "Theme toggled.");
+
+        string detail = _themeService.NeedsRestartToShow
+            ? $"{_themeService.CurrentTheme} theme saved. WPF froze the brushes this application "
+              + "resolved at load, so the change shows on the next start rather than now."
+            : $"{_themeService.CurrentTheme} theme applied to "
+              + $"{_themeService.RepaintedBrushes} brushes.";
+
+        if (_themeService.UnknownKeys.Count > 0)
+        {
+            detail += " Not found in the resource dictionary: "
+                    + string.Join(", ", _themeService.UnknownKeys) + ".";
+        }
+
+        ControlPanel.LogMessage("SYSTEM", detail);
+
+        if (!_themeService.NeedsRestartToShow) return;
+
+        // Offered rather than done. Restarting drops a live serial connection and any recording in
+        // progress, which is not a thing to do to an operator because they pressed a theme button.
+        MessageBoxResult answer = MessageBox.Show(this,
+            $"{_themeService.CurrentTheme} 테마가 저장되었습니다."
+            + Environment.NewLine + Environment.NewLine
+            + "이 응용 프로그램은 시작할 때 색을 확정하므로 지금 화면에는 반영되지 않습니다."
+            + Environment.NewLine
+            + "지금 다시 시작할까요? 진행 중인 기록과 연결은 끊어집니다.",
+            "테마 전환", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (answer != MessageBoxResult.Yes) return;
+
+        string? entry = Environment.ProcessPath;
+        if (entry is not null) Process.Start(entry);
+        Application.Current.Shutdown();
     }
 
     /// <summary>Starts or stops the CSV recording, and says which of those actually happened.</summary>
@@ -272,11 +312,7 @@ public partial class MainWindow
         ControlPanel.LogMessage("SYSTEM", $"Language switched to {nextLang}.");
     }
 
-    private void BtnOpenCommandPalette_Click(object sender, RoutedEventArgs e)
-    {
-        _commandPaletteService.ToggleVisibility();
-        CommandPalette.Visibility = _commandPaletteService.IsVisible ? Visibility.Visible : Visibility.Collapsed;
-    }
+    private void BtnOpenCommandPalette_Click(object sender, RoutedEventArgs e) => TogglePalette();
 
     private void BtnHelp_Click(object sender, RoutedEventArgs e)
     {
@@ -286,12 +322,32 @@ public partial class MainWindow
 
     private void MainWindow_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.P && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+        if (e.Key == Key.P
+            && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+            && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
         {
-            _commandPaletteService.ToggleVisibility();
-            CommandPalette.Visibility = _commandPaletteService.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+            TogglePalette();
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// One path to the palette, from the hotkey and from the settings button alike.
+    /// </summary>
+    /// <remarks>
+    /// There were two, and both did the same three lines by hand: toggle a flag on the service,
+    /// then set Visibility from it. The overlay's own Escape and Enter handlers hid the control
+    /// without telling the service, so the flag stayed true and the next press toggled it to false
+    /// -- the palette needed two presses to reopen after any use of it.
+    /// <para>
+    /// Refused while the screen is locked. The palette can start the simulator and open dialogs,
+    /// and a lock that leaves a command launcher reachable is not locking the thing that matters.
+    /// </para>
+    /// </remarks>
+    private void TogglePalette()
+    {
+        if (LockOverlay.Visibility == Visibility.Visible) return;
+        CommandPalette.Toggle();
     }
 
     private void MainWindow_PreviewDragOver(object sender, DragEventArgs e)

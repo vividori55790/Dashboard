@@ -14,6 +14,10 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
+        // Before base.OnStartup, which is what creates the StartupUri window. StaticResource keeps
+        // whatever object it resolved, so the palette has to be in place before anything resolves.
+        Services.ThemeService.InstallStoredPaletteAtStartup(Resources, Services.UiSettings.Load());
+
         base.OnStartup(e);
         ApplyDarkThemeIfAvailable();
     }

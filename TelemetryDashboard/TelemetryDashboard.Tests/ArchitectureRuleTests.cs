@@ -467,6 +467,20 @@ public partial class ArchitectureRuleTests
         // which belongs next to the code rather than in a commit message nobody reads twice.
         "TelemetryDashboard.UI/MainWindow.Archive.cs",                             // 177 lines
 
+        // The lock screen now has two jobs -- ask for the password, or ask the operator to choose
+        // one on an installation that has none -- plus a cooldown it counts down on screen. It was
+        // 68 lines when the answer was a literal compiled into it.
+        "TelemetryDashboard.UI/Controls/PasswordLockOverlay.xaml.cs",              // 242 lines
+
+        // Keyboard handling for a palette is a switch over keys, and each arm carries the account
+        // of a key that used to do nothing -- which is the part worth keeping next to the code.
+        "TelemetryDashboard.UI/Controls/CommandPaletteOverlay.xaml.cs",            // 161 lines
+
+        // Most of the growth is the account of why a theme switch has to install the palette before
+        // the first window rather than repaint afterwards -- WPF freezes brushes loaded from BAML,
+        // which is not deducible from the code and cost a full run to find.
+        "TelemetryDashboard.UI/Services/ThemeService.cs",                          // 214 lines
+
         // Feature 12 reaching a running program for the first time. Most of the addition in each
         // file is the account of why an interlock that transmits to hardware is off by default and
         // refuses to pick its own port, which belongs beside the code that enforces it.

@@ -49,7 +49,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
-                            <Setter TargetName="Bd" Property="Background" Value="#20242B"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ButtonHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource InsetBrush}"/>
@@ -109,7 +109,7 @@
     <!-- For commands that are hard to undo or that move hardware. Red is earned, not decorative. -->
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}"/>
-        <Setter Property="BorderBrush" Value="#5C2622"/>
+        <Setter Property="BorderBrush" Value="{StaticResource DangerBorderBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
     </Style>
 

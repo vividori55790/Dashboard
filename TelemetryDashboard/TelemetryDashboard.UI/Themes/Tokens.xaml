@@ -82,6 +82,15 @@
     <SolidColorBrush x:Key="SuccessSubtleBrush" Color="#132A17"/>
     <SolidColorBrush x:Key="WarningSubtleBrush" Color="#2E2408"/>
     <SolidColorBrush x:Key="DangerSubtleBrush" Color="#33130F"/>
+    <!-- Was written as a literal inside a Setter in Controls.xaml, which meant it could not follow
+         a theme change and nothing said so. Same for the hover fill below, which lived in App.xaml. -->
+    <SolidColorBrush x:Key="DangerBorderBrush" Color="#5C2622"/>
+    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#20242B"/>
+
+    <!-- Scrims for the modal overlays. Declared here rather than inline in each overlay so a theme
+         change reaches them; the overlays set their own Opacity on the element. -->
+    <SolidColorBrush x:Key="ScrimBrush" Color="{StaticResource CanvasColor}"/>
+    <SolidColorBrush x:Key="ScrimStrongBrush" Color="{StaticResource InsetColor}"/>
 
     <!-- Chart series: the first three stay distinguishable under the common forms of colour
          blindness. Hue alone never carries the identity of a channel; the legend does. -->

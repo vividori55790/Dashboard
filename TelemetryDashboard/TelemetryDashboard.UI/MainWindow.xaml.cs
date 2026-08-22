@@ -75,6 +75,9 @@ public partial class MainWindow : Window
         _layoutManager.AttachDockingManager(DockManager);
         CommandPalette.AttachService(_commandPaletteService);
         LockOverlay.AttachService(_passwordLockService);
+        // The theme the operator chose last time, applied before anything is shown. Nothing read
+        // the stored choice back before, so the app opened dark however it had been left.
+        _themeService.ApplyStoredTheme();
         _themeService.ApplyMicaBackdrop(this);
 
         ResolveHtmlClientPath();
