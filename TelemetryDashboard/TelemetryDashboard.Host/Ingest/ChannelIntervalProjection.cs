@@ -19,7 +19,6 @@ namespace TelemetryDashboard.Host.Ingest;
 /// The gap between reports is a number, though, and once it is a channel every mechanism this
 /// product already has applies to it unchanged — a declared limit fires when a channel goes quiet
 /// for longer than it should, and the rolling statistics flag a link whose jitter has grown.
-/// Nothing new had to learn what staleness is.
 /// </para>
 /// <para>
 /// Off by default. It roughly doubles the record count, which is a real cost on a busy rig, and an
@@ -37,13 +36,28 @@ public sealed class ChannelIntervalProjection
     /// <summary>How often the sweep looks for channels that have gone overdue.</summary>
     public static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(1);
 
-    private readonly Dictionary<DataKey, DateTimeOffset> _lastSeen = new();
-    private readonly Dictionary<DataKey, double> _lastReported = new();
+    /// <summary>What is remembered about one channel between records.</summary>
+    /// <param name="Seen">When it last reported.</param>
+    /// <param name="Gap">The last interval it showed, which is what "overdue" is measured against.</param>
+    /// <param name="Source">
+    /// The port it reported on. Per channel, not per host: the sweep first took one source from its
+    /// caller — whichever port had spoken most recently — which is always right on one port and
+    /// wrong on two exactly when it matters. COM4's cable comes out, COM3 keeps talking, and every
+    /// record saying COM4 went quiet names COM3.
+    /// </param>
+    private readonly record struct ChannelTiming(DateTimeOffset Seen, double Gap, string Source);
+
+    /// <summary>
+    /// One entry per channel rather than three dictionaries keyed the same way, which would be
+    /// three chances to disagree: a timestamp updated without its port, or a gap left behind by a
+    /// reset that cleared only two of them.
+    /// </summary>
+    private readonly Dictionary<DataKey, ChannelTiming> _channels = new();
 
     /// <summary>Channels that have reported at least once.</summary>
     public int TrackedChannels
     {
-        get { lock (_lastSeen) return _lastSeen.Count; }
+        get { lock (_channels) return _channels.Count; }
     }
 
     /// <summary>Builds the pipeline stage, emitting through <paramref name="emit"/>.</summary>
@@ -56,29 +70,33 @@ public sealed class ChannelIntervalProjection
     /// <remarks>
     /// Null, not zero, for a channel's first sighting. Zero is a measurement — "these two arrived
     /// together" — and seeding every channel with one would put a false floor under any limit
-    /// watching for a link that has gone quiet.
-    /// <para>
-    /// A non-positive gap is refused for the same reason. Two records sharing a timestamp, or one
-    /// arriving stamped earlier than its predecessor after a clock correction, describe no interval
-    /// that elapsed; reporting the arithmetic would put a zero or a negative into a series whose
-    /// entire purpose is to grow when nothing is arriving.
-    /// </para>
+    /// watching for a link that has gone quiet. A non-positive gap is refused for the same reason:
+    /// two records sharing a timestamp, or one stamped earlier than its predecessor after a clock
+    /// correction, describe no interval that elapsed.
     /// </remarks>
     public double? Measure(DataRecord record)
     {
         if (record is null) return null;
 
-        lock (_lastSeen)
+        lock (_channels)
         {
-            bool seen = _lastSeen.TryGetValue(record.Key, out DateTimeOffset previous);
-            _lastSeen[record.Key] = record.Timestamp;
+            bool seen = _channels.TryGetValue(record.Key, out ChannelTiming previous);
+            string port = record.Source ?? string.Empty;
 
-            if (!seen) return null;
+            if (!seen)
+            {
+                _channels[record.Key] = new ChannelTiming(record.Timestamp, 0.0, port);
+                return null;
+            }
 
-            double seconds = (record.Timestamp - previous).TotalSeconds;
-            if (seconds <= 0) return null;
+            double seconds = (record.Timestamp - previous.Seen).TotalSeconds;
+            if (seconds <= 0)
+            {
+                _channels[record.Key] = previous with { Seen = record.Timestamp, Source = port };
+                return null;
+            }
 
-            _lastReported[record.Key] = seconds;
+            _channels[record.Key] = new ChannelTiming(record.Timestamp, seconds, port);
             return seconds;
         }
     }
@@ -90,31 +108,28 @@ public sealed class ChannelIntervalProjection
     /// Without this the feature does not do the thing it exists for, and the way it fails is quiet.
     /// A projection only speaks when a record arrives, so a channel that stops entirely stops
     /// producing intervals too: the last gap it published sits there, inside whatever limit was
-    /// declared, and the alarm never fires. The absence of values was the failure being watched for,
-    /// and watching it with something that is itself driven by values cannot work.
+    /// declared, and the alarm never fires. Watching for the absence of values with something that
+    /// is itself driven by values cannot work.
     /// <para>
     /// A channel is reported only once its silence exceeds the last gap it actually showed, so a
-    /// link running normally produces nothing here at all — the sweep speaks when a channel is
-    /// already late, and then keeps speaking so the series climbs while the link is down.
+    /// link running normally produces nothing here — the sweep speaks when a channel is already
+    /// late, and keeps speaking so the series climbs while the link is down.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<DataRecord> Sweep(DateTimeOffset now, string source = "")
+    public IReadOnlyList<DataRecord> Sweep(DateTimeOffset now)
     {
         var overdue = new List<DataRecord>();
 
-        lock (_lastSeen)
+        lock (_channels)
         {
-            foreach ((DataKey key, DateTimeOffset seen) in _lastSeen)
+            foreach ((DataKey key, ChannelTiming timing) in _channels)
             {
-                double silent = (now - seen).TotalSeconds;
-                if (silent <= 0) continue;
-
-                double expected = _lastReported.TryGetValue(key, out double gap) ? gap : 0.0;
-                if (silent <= expected) continue;
+                double silent = (now - timing.Seen).TotalSeconds;
+                if (silent <= 0 || silent <= timing.Gap) continue;
 
                 overdue.Add(DataRecord.Derived(
                     key.Stream, key.Key + KeySuffix, new DataValue.Numeric(silent, "s"),
-                    ProjectionName, now, source));
+                    ProjectionName, now, timing.Source));
             }
         }
 
@@ -124,16 +139,11 @@ public sealed class ChannelIntervalProjection
     /// <summary>Forgets every channel, so the next record starts a fresh series.</summary>
     /// <remarks>
     /// Called when the source changes. Carrying a timestamp across a reconnect would report the
-    /// length of the outage as one interval on the first sample back — which is true, and is also
-    /// the one reading guaranteed to breach whatever limit was set, at the moment the link
-    /// recovered.
+    /// length of the outage as one interval on the first sample back — true, and the one reading
+    /// guaranteed to breach whatever limit was set, at the moment the link recovered.
     /// </remarks>
     public void Reset()
     {
-        lock (_lastSeen)
-        {
-            _lastSeen.Clear();
-            _lastReported.Clear();
-        }
+        lock (_channels) _channels.Clear();
     }
 }

@@ -36,7 +36,7 @@ public sealed partial class IngestRecordPath
         {
             while (await ticker.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
-                foreach (DataRecord overdue in Intervals.Sweep(DateTimeOffset.UtcNow, LastSource))
+                foreach (DataRecord overdue in Intervals.Sweep(DateTimeOffset.UtcNow))
                 {
                     await _pipeline.DispatchAsync(overdue, cancellationToken).ConfigureAwait(false);
                 }
@@ -47,7 +47,4 @@ public sealed partial class IngestRecordPath
             // Shutdown. Nothing to unwind: the projection holds only timestamps.
         }
     }
-
-    /// <summary>Port the most recent record arrived on, so a swept record keeps its attribution.</summary>
-    private string LastSource { get; set; } = string.Empty;
 }

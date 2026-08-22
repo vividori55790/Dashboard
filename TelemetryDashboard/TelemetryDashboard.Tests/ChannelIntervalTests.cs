@@ -112,11 +112,36 @@ public class ChannelIntervalTests
         projection.Measure(Sample("RIG", "temp", T0, source: "/dev/ttyUSB0"));
         projection.Measure(Sample("RIG", "temp", T0.AddSeconds(1), source: "/dev/ttyUSB0"));
 
-        DataRecord swept = projection.Sweep(T0.AddSeconds(5), "/dev/ttyUSB0").Single();
+        DataRecord swept = projection.Sweep(T0.AddSeconds(5)).Single();
 
         swept.IsDerived.Should().BeTrue();
         swept.DerivedFrom.Should().Be(ChannelIntervalProjection.ProjectionName);
         swept.Source.Should().Be("/dev/ttyUSB0", "a multi-port rig has to know which cable went quiet");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public void TheSilentChannelIsAttributedToItsOwnPortAndNotToWhicheverSpokeLast()
+    {
+        // The defect this replaced, and the one a single-port test can never see. The sweep took
+        // one source from its caller -- "whichever port reported most recently" -- and stamped it
+        // on every record it produced. On a two-port rig that is wrong exactly when it matters:
+        // COM4's cable comes out, COM3 keeps reporting, and every record saying COM4 has gone quiet
+        // names COM3. Which cable went quiet is the one fact this feature exists to supply.
+        var projection = new ChannelIntervalProjection();
+        projection.Measure(Sample("RIG_A", "temp", T0, source: "COM3"));
+        projection.Measure(Sample("RIG_A", "temp", T0.AddSeconds(1), source: "COM3"));
+        projection.Measure(Sample("RIG_B", "temp", T0, source: "COM4"));
+        projection.Measure(Sample("RIG_B", "temp", T0.AddSeconds(1), source: "COM4"));
+
+        // COM3 keeps talking; COM4 does not.
+        projection.Measure(Sample("RIG_A", "temp", T0.AddSeconds(9), source: "COM3"));
+
+        DataRecord silent = projection.Sweep(T0.AddSeconds(10)).Should().ContainSingle().Subject;
+
+        silent.Key.Stream.Should().Be("RIG_B");
+        silent.Source.Should().Be("COM4",
+            "COM3 was the last port to speak, and it is not the one that went quiet");
     }
 
     [Fact]

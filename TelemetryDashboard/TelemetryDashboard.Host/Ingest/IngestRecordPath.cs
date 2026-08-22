@@ -109,7 +109,6 @@ public sealed partial class IngestRecordPath
         }
 
         DataRecord record = TelemetryPacketProjection.ToRecord(packet) with { Source = portName ?? string.Empty };
-        LastSource = record.Source;
         return _pipeline.DispatchAsync(record, cancellationToken);
     }
 
