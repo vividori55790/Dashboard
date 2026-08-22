@@ -79,22 +79,25 @@ public partial class ArchitectureRuleTests
         // The service had a gap of its own. It documents that the layer above does the speaking and
         // observes the state here, and exposed only a count -- so text could be queued, throttled
         // and sanitised, and never read by anything. TakeNextVoiceAlert is that drain.
-        // AnomalyEngine stays, but the entry was only half true and the other half was the useful
-        // half. It bundled two things sharing nothing -- a batch z-score evaluator, which is indeed
-        // superseded by TelemetryMlAnalyticsEngine on the live path, and the only exponentially
-        // weighted average in this codebase, which was not superseded by anything because nothing
-        // else had one.
+        // AnomalyEngine retired from this baseline: /api/incident asks it for a verdict on every
+        // channel in the window. The endpoint used to hand back thirty channels of raw numbers and
+        // say nothing about any of them, so at three in the morning somebody read every series to
+        // find the one that moved.
         //
-        // That average is now ExponentialAverage, and DriftMonitor is built on it: two averages
-        // with different memories, whose difference is the drift a rolling z-score structurally
-        // cannot see. Measured on a live host replaying a 48 V rail sagging 0.4 V over two minutes
-        // under noise sixty times its per-sample slope, beside an identical healthy channel --
-        // sagging.drift negative on 339 of 341 samples, healthy.drift on 177 of 341, while the raw
-        // channels scored peak |z| of 3.33 and 3.41 respectively. The detector this product already
-        // had rated the healthy channel the more anomalous of the two.
+        // The entry it replaces was half wrong. The class bundled two things sharing nothing: a
+        // batch z-score evaluator, and the only exponentially weighted average in the codebase.
+        // The average became ExponentialAverage and now carries DriftMonitor; the evaluator needed
+        // one addition before it could answer this question at all -- Evaluate judges the newest
+        // sample, and an incident window ends in the recovery, so it reported "normal" for exactly
+        // the channel that caused the alarm. EvaluateWindow judges the worst moment instead.
         //
-        // What is left here is the batch evaluator, and it is still reachable from nothing.
-        "AnomalyEngine",
+        // Wiring it found that a fixed 3-sigma bar cannot be applied to the maximum of a window:
+        // the largest of n draws from noise lands near sqrt(2 ln n), so a channel of pure 20 mV
+        // noise came back anomalous at 3.16 sigma over 128 samples. On a thirty-channel rig the
+        // triage list would have named ten of them every time. The bar now grows with the window.
+        //
+        // And a flat window recorded no peak at all, so it was described as too short to judge --
+        // false, and it would have put every idle channel into the "could not judge" bucket.
         // AstNode retired from this baseline: ComputedChannel holds one and asks it what
         // channels it reads, which is what /api/computed needs before it can align them. The
         // expression engine had been reachable only from a WPF dialog and from DataRouter's

@@ -23,7 +23,7 @@ namespace TelemetryDashboard.Core.Analytics;
 /// <c>Core.Services</c> namespace alongside the other service-layer contracts.
 /// </para>
 /// </remarks>
-public sealed class AnomalyEngine
+public sealed partial class AnomalyEngine
 {
     /// <summary>Deviation, in standard deviations, at which a sample is called an anomaly.</summary>
     private const double AnomalyThresholdSigma = 3.0;

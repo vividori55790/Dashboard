@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Recording;
@@ -58,6 +59,23 @@ public static class IncidentEndpoint
 
         public IReadOnlyList<double> Values { get; init; } = Array.Empty<double>();
         public IReadOnlyList<string> Timestamps { get; init; } = Array.Empty<string>();
+
+        /// <summary>Whether the detector would have called this channel anomalous inside the window.</summary>
+        public bool IsAnomaly { get; init; }
+
+        /// <summary>The worst score the rolling detector would have given anywhere in the window.</summary>
+        public double PeakZScore { get; init; }
+
+        /// <summary>What that verdict rests on, including when it is a refusal to give one.</summary>
+        /// <remarks>
+        /// This endpoint used to hand back thirty channels of raw numbers and say nothing about any
+        /// of them, which is a data dump rather than an answer: at three in the morning somebody has
+        /// to read every series to find the one that moved. The reason travels with the verdict
+        /// because "nothing was wrong here" and "there was not enough data to tell" are the same to
+        /// anyone reading only the boolean, and an operator who cannot separate them reads an
+        /// unjudged channel as a healthy one.
+        /// </remarks>
+        public string Verdict { get; init; } = string.Empty;
     }
 
     public sealed record Result
@@ -72,6 +90,21 @@ public static class IncidentEndpoint
         /// <summary>Channels that reported anything inside the window.</summary>
         public int ChannelCount { get; init; }
         public int TotalSamples { get; init; }
+
+        /// <summary>Channels the detector would have called anomalous, worst first.</summary>
+        /// <remarks>
+        /// The triage list. Separate from <see cref="Channels"/>, whose order is stable and
+        /// alphabetical so a client diffing two incidents is not reading a reordering as a change.
+        /// </remarks>
+        public IReadOnlyList<string> Anomalous { get; init; } = Array.Empty<string>();
+
+        /// <summary>Channels with too little data in the window for any verdict.</summary>
+        /// <remarks>
+        /// Counted separately from the quiet ones on purpose. A window where most channels could
+        /// not be judged is a window that answers nothing, and it should not read as a clean bill
+        /// of health.
+        /// </remarks>
+        public int UnjudgedChannels { get; init; }
 
         public IReadOnlyList<ChannelWindow> Channels { get; init; } = Array.Empty<ChannelWindow>();
     }
@@ -126,6 +159,13 @@ public static class IncidentEndpoint
             {
                 List<TelemetryPacket> ordered = g.OrderBy(p => p.Timestamp).ToList();
                 TelemetryPacket? last = ordered.LastOrDefault(p => p.Timestamp <= instant);
+                List<double> values = ordered.Select(p => p.Value).ToList();
+
+                // The worst the live detector would have scored anywhere in the window, not the
+                // verdict on its newest sample: this window runs past the fault into the recovery,
+                // so judging the last reading reports "normal" for the channel that caused the
+                // alarm. See AnomalyEngine.EvaluateWindow.
+                AnomalyEvaluation verdict = new AnomalyEngine().EvaluateWindow(values);
 
                 return new ChannelWindow
                 {
@@ -136,7 +176,10 @@ public static class IncidentEndpoint
                     Minimum = ordered.Min(p => p.Value),
                     Maximum = ordered.Max(p => p.Value),
                     ValueBefore = last?.Value,
-                    Values = ordered.Select(p => p.Value).ToList(),
+                    IsAnomaly = verdict.IsAnomaly,
+                    PeakZScore = verdict.ZScore,
+                    Verdict = verdict.Reason,
+                    Values = values,
                     Timestamps = ordered
                         .Select(p => p.Timestamp.ToString("o", CultureInfo.InvariantCulture))
                         .ToList()
@@ -151,6 +194,12 @@ public static class IncidentEndpoint
             TrailSec = trail,
             ChannelCount = channels.Count,
             TotalSamples = window.Count,
+            Anomalous = channels
+                .Where(c => c.IsAnomaly)
+                .OrderByDescending(c => c.PeakZScore)
+                .Select(c => $"{c.NodeId}.{c.Variable}")
+                .ToList(),
+            UnjudgedChannels = channels.Count(c => c.Verdict.StartsWith("Not judged", StringComparison.Ordinal)),
             Channels = channels
         };
     }
