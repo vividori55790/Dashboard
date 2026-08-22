@@ -34,11 +34,9 @@ public static class Program
     /// <summary>Starts the host and blocks until a shutdown signal arrives.</summary>
     public static async Task<int> Main(string[] args)
     {
-        // Before anything binds a socket. Installing, enabling or removing an extension is an
-        // administrative act that ends: a process that also started serving telemetry would leave
-        // an operator unable to say whether the install happened before or after this host began
-        // running a third party's code.
-        if (ExtensionCommandLine.Matches(args)) return ExtensionCommand.Run(args);
+        // Before anything binds a socket. Every subcommand ends rather than serving, and Subcommands
+        // carries the account of why that ordering matters.
+        if (Subcommands.Run(args) is { } subcommandExit) return subcommandExit;
 
         HostOptions options = CommandLineParser.Parse(args, EnvironmentVariables.Read());
 

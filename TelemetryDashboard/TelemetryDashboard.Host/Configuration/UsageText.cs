@@ -24,9 +24,15 @@ public static class UsageText
         Usage:
           TelemetryDashboard.Host [options]
           TelemetryDashboard.Host {ExtensionCommandLine.Verb} <action> [arguments]
+          TelemetryDashboard.Host {Backtest.BacktestCommandLine.Verb} <price-file> [arguments]
 
         The '{ExtensionCommandLine.Verb}' subcommand installs, enables, disables, removes and lists
         extensions, then exits without serving anything. Run it with no action for its own help.
+
+        The '{Backtest.BacktestCommandLine.Verb}' subcommand replays a daily price file through a
+        trading rule and reports what it would have done, beside buy-and-hold over the same
+        sessions and paying the same costs. It serves nothing and ends. Run it with no file for its
+        own help.
 
         Options:
           -p, --port <n>        TCP port for the streaming server.

@@ -467,6 +467,22 @@ public partial class ArchitectureRuleTests
         // which belongs next to the code rather than in a commit message nobody reads twice.
         "TelemetryDashboard.UI/MainWindow.Archive.cs",                             // 177 lines
 
+        // The backtester. Two entries, both the same shape as the ones above them.
+        //
+        // BacktestCommandLine is a parser switch, and CommandLineParser.cs sits on this list at 182
+        // lines for exactly that reason: the switch is the one readable list of what the subcommand
+        // accepts, and cutting it in half puts half the accepted flags in a file that does not
+        // contain the other half. Its typed value readers are already split out into
+        // BacktestValues.cs, which is the split that was worth making.
+        //
+        // BacktestEngine is over by two lines and stays whole on purpose. It is the walk over the
+        // series plus the fill it drives, and the property that makes the whole feature worth
+        // reading -- a decision from one bar's close is filled at the next bar's open -- is the
+        // ordering between those two things. Two lines is not a reason to move one of them into
+        // another file.
+        "TelemetryDashboard.Host/Backtest/BacktestCommandLine.cs",                 // 175 lines
+        "TelemetryDashboard.Core/Backtesting/BacktestEngine.cs",                   // 152 lines
+
         // The lock screen now has two jobs -- ask for the password, or ask the operator to choose
         // one on an installation that has none -- plus a cooldown it counts down on screen. It was
         // 68 lines when the answer was a literal compiled into it.
