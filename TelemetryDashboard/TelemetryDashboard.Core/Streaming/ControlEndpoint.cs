@@ -201,15 +201,32 @@ public static partial class ControlEndpoint
                 string.Join(", ", control.Profile.Scenarios.Select(s => s.Id)));
         }
 
+        // A scenario with nothing to apply is reported rather than answered with a bare success.
+        // Two of the bundled ones were exactly this: they carried a fault name the WPF shell reads
+        // and this host does not, declared no setpoints, and so resolved, applied nothing, and
+        // replied "Success" -- correct about every step it took, and wrong about what happened.
+        ProfileScenario? declared = control.Profile.Scenarios.FirstOrDefault(s => s.Id == scenario);
+        bool movedNothing = declared is not null && declared.Setpoints.Count == 0;
+
         return new Result
         {
             Command = "scenario",
             Channel = scenario,
             Unknown = unknown,
-            Reason = unknown.Count == 0
-                ? null
-                : "applied, but this scenario names channels the profile does not declare: "
-                  + string.Join(", ", unknown)
+            // Error, not a success with a footnote. The caller asked for an effect and got none,
+            // and a commissioning script that branches on Status would carry on to the next step
+            // believing the machine had moved -- which is the same failure in a different place.
+            Status = movedNothing ? "Error" : "Success",
+            Reason = movedNothing
+                ? $"'{scenario}' declares no setpoints, so nothing changed. "
+                  + (string.IsNullOrWhiteSpace(declared!.Fault)
+                      ? "A scenario states its effect in setpoints."
+                      : $"It names the fault '{declared.Fault}', which only the desktop shell "
+                        + "applies; this host acts on setpoints alone.")
+                : unknown.Count == 0
+                    ? null
+                    : "applied, but this scenario names channels the profile does not declare: "
+                      + string.Join(", ", unknown)
         };
     }
 

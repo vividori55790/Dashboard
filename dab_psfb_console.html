@@ -277,7 +277,15 @@
         { id: 'psfb.output_voltage', name: 'PSFB 출력 전압', unit: 'V', min: 38,  max: 54,  dp: 2 },
         { id: 'dab.input_current',   name: 'DAB 입력 전류',  unit: 'A', min: 0,   max: 40,  dp: 2 },
         { id: 'psfb.output_current', name: 'PSFB 출력 전류', unit: 'A', min: 0,   max: 260, dp: 1 },
-        { id: 'server.load',         name: '서버 부하',      unit: '%', min: 10,  max: 100, dp: 1 }
+        { id: 'server.load',         name: '서버 부하',      unit: '%', min: 10,  max: 100, dp: 1 },
+
+        // DC 버스에 병렬로 붙은 UPS 가지. 전류는 부호가 있고 양수가 충전이므로 min 이 음수이며,
+        // 막대는 그 범위 안에서의 위치를 그립니다 -- 0 A 는 막대의 왼쪽 끝이 아니라 가운데
+        // 근처입니다. 충전율은 전류를 적분한 값이라 스스로 흔들리지 않습니다.
+        { id: 'ups.battery_voltage', name: 'UPS 배터리 전압', unit: 'V', min: 42, max: 58,  dp: 2 },
+        { id: 'ups.battery_current', name: 'UPS 배터리 전류', unit: 'A', min: -220, max: 60, dp: 1 },
+        { id: 'ups.bus_current',     name: 'UPS 버스측 전류', unit: 'A', min: -12,  max: 28, dp: 2 },
+        { id: 'ups.state_of_charge', name: 'UPS 충전율',      unit: '%', min: 0,  max: 100, dp: 1 }
     ];
 
     var HISTORY = 90;          // 스파크라인이 보관하는 샘플 수

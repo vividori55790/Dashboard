@@ -206,11 +206,62 @@ internal static class MonitoringProfileReader
                 Minimum = channel.Minimum,
                 Maximum = channel.Maximum,
                 Nominal = Math.Clamp(channel.Nominal, channel.Minimum, channel.Maximum),
-                Decimals = Math.Clamp(channel.Decimals, 0, 4)
+                Decimals = Math.Clamp(channel.Decimals, 0, 4),
+                Integrates = string.IsNullOrWhiteSpace(channel.Integrates)
+                    ? null
+                    : new ChannelIntegration
+                    {
+                        Source = channel.Integrates!,
+                        PerSecond = channel.IntegralPerSecond
+                    }
             });
         }
 
-        return channels;
+        return ValidateIntegrations(channels, name, problems) ? channels : null;
+    }
+
+    /// <summary>
+    /// Checks every accumulating channel after the whole list is known.
+    /// </summary>
+    /// <remarks>
+    /// After, rather than inside the loop, because a channel is allowed to accumulate one declared
+    /// further down the file — the order channels are written in is the author's business.
+    /// <para>
+    /// A rate of zero is refused rather than accepted as "does not move". A channel that declares
+    /// itself an integral and then never changes is the failure this whole mechanism exists to
+    /// avoid: it holds still at its nominal and reads as a healthy measurement.
+    /// </para>
+    /// </remarks>
+    private static bool ValidateIntegrations(
+        List<ProfileChannel> channels, string name, List<string> problems)
+    {
+        foreach (ProfileChannel channel in channels)
+        {
+            if (channel.Integrates is not { } integration) continue;
+
+            if (!channels.Any(c => string.Equals(c.Id, integration.Source, StringComparison.OrdinalIgnoreCase)))
+            {
+                problems.Add(
+                    $"'{name}' 채널 '{channel.Id}' — 없는 채널 '{integration.Source}' 을 적분하려 합니다.");
+                return false;
+            }
+
+            if (string.Equals(channel.Id, integration.Source, StringComparison.OrdinalIgnoreCase))
+            {
+                problems.Add($"'{name}' 채널 '{channel.Id}' — 자기 자신을 적분할 수 없습니다.");
+                return false;
+            }
+
+            if (!double.IsFinite(integration.PerSecond) || integration.PerSecond == 0)
+            {
+                problems.Add(
+                    $"'{name}' 채널 '{channel.Id}' — integralPerSecond 가 0 이거나 숫자가 아닙니다. " +
+                    "적분한다고 선언하고 움직이지 않는 채널은 정상값처럼 보입니다.");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static List<ProfileScenario>? ReadScenarios(

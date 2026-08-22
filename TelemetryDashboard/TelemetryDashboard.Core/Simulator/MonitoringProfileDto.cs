@@ -43,6 +43,12 @@ internal sealed class ChannelDto
     public double Maximum { get; init; }
     public double Nominal { get; init; }
     public int Decimals { get; init; }
+
+    /// <summary>Channel this one accumulates, when it is a running total rather than a reading.</summary>
+    public string? Integrates { get; init; }
+
+    /// <summary>Movement per second per unit of <see cref="Integrates"/>. Ignored without it.</summary>
+    public double IntegralPerSecond { get; init; }
 }
 
 internal sealed class ScenarioDto

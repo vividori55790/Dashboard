@@ -1062,6 +1062,93 @@ tests were fixed at the cause rather than loosened — the JavaScript load timeo
 machine pushed its own burst outside the 200 ms window it was testing. It now sends the burst with
 no gap and checks that premise before asserting on it.
 
+### The UPS branch, and a diagram shaped like the machine
+
+The profile was called `dab-psfb-ups`, offered a button labelled 정전 (UPS 방전), and had **no
+battery in it**. Pressing that button took the mains to 0 V and left every other channel unchanged,
+so the one question an outage raises — how long have we got — had no answer on any screen. The
+codebase did contain a battery model, in `PowerPlantSimulator`: `DabStateOfCharge = 94.5 - t*0.0005`,
+a ramp in wall-clock time that ran at the same rate whether the bank was charging at +12 A or
+discharging at −32 A, and `DabBatteryVoltage` computed on the next line from neither. That class is
+constructed only by the WPF shell; the headless host has never been able to produce any of it.
+
+Four channels now exist and are measured end to end: `ups.battery_voltage`, `ups.battery_current`
+(signed, positive into the bank), `ups.bus_current` (the converter's other winding, positive into
+the bus) and `ups.state_of_charge`. Two derived: `ups.p_batt` and `ups.p_bus`, one per side of the
+converter — deliberately not one figure drawn twice, because the two differ by the loss.
+
+**State of charge is a coulomb count, not a channel that wanders.** `ProfileChannel.Integrates`
+declares it as the running total of another channel, which is the single exception to the engine's
+rule that channels are independent — and it is an identity rather than a correlation: charge *is*
+the integral of current, which is how a real coulomb counter measures it. Declared as an ordinary
+channel it would have drifted at 8 % of its range, rising while the bank drained, and looked exactly
+like every other reading on the screen.
+
+Measured on a live host over a 120 s outage: mean current −179.92 A against the −180 setpoint, and
+the charge the host reported fell **3.000 %** against the **2.997 %** obtained by integrating the
+current samples the same host reported. The 0.003 % difference is well inside the 0.1 % the frame
+itself rounds to. The clamp holds — commanded to 0.5 % and left discharging, it reached 0 and
+stopped — and the current keeps being reported at −201 A afterwards, because nothing here models a
+bank that disconnects itself. That limitation is written down rather than hidden.
+
+The low-charge rule `ups.state_of_charge[%] > 20` fired on the way past: 745 breaching samples,
+`0 is below the 20 floor`.
+
+#### Two scenarios that reported success and did nothing
+
+`ProfileScenario.Fault` is read in exactly one place in the repository — the WPF shell — and the
+headless host never looks at it. `dab-overcurrent` and `psfb-undervoltage` carried a `Fault` and no
+setpoints, so `POST /api/control?cmd=scenario` resolved them, looped over zero setpoints and
+answered **Success**. Correct about every step it took, and wrong about what happened; the operator's
+evidence for either outcome is a chart that did not change.
+
+Both now declare setpoints chosen to cross the profile's own limits, and measured on a live host
+they do: `dab.input_current` 22.02 → 36.51 A against a 36 A ceiling (37 breaching samples),
+`psfb.output_voltage` 48.89 → 40.68 V against a 45 V floor (55 breaching samples). `ControlEndpoint`
+now answers **Error** for any scenario that declares nothing to apply, and says whether it named a
+fault only the desktop shell applies.
+
+#### The diagram is a T
+
+`power_flow.js` is two rows now: the top bar is the normal feed, and a stem drops from the DC bus to
+the battery branch wired in parallel with it — the standard one-line drawing of an online
+double-conversion UPS. **The stem's arrow points up into the chain whenever the UPS is holding the
+bus up**, which is the whole reason for drawing it this way: during an outage the picture shows
+power entering the top bar from below. Verified in a browser against a live host mid-outage —
+`ups.p_bus` 7.78 kW, arrow up, labelled 버스 지원; `ups.p_batt` −8.50 kW, arrow left toward the
+converter, labelled 방전.
+
+The segment between the bus and the converter carries its own channel rather than borrowing
+`ups.p_batt`, for the same reason the DAB→PSFB segment is still blank: drawing one power on both
+sides of a converter asserts a loss of zero that nobody measured.
+
+Three defects were found by measuring the rendered page rather than looking at it, and none of them
+could have been caught by the DOM stub: the direction label overlapped the power figure by 4 px
+(font metrics the stub does not have), the last legend line was positioned outside the viewBox
+entirely (SVG clips it and reports nothing), and the 계산값 pill had moved on top of the flow line.
+The height is now derived from the legend's own line count, and the harness asserts that nothing is
+positioned outside the declared box.
+
+A fourth was found by the harness failing three of its own new checks: they matched the legend prose
+and a row tooltip as though those were readings — the module documenting itself being graded instead
+of the drawing. The checks now read one link group at a time.
+
+#### `power_flow.js` was never shipped
+
+The host's csproj globbed `..\..\*.html` and named `telemetry-client.js` — one file, by hand, next
+to a wildcard. So `dab_psfb_console.html` reached the output directory and `power_flow.js` did not,
+and a host started from its own `bin` served the console and answered 404 for the diagram, drawing
+the page's "could not load" fallback where the picture belongs. Invisible to both harnesses: one
+reads the file straight off disk, the other stubs `PowerFlow` and never loads it. The include is now
+a wildcard too, excluding `verify_*.js`.
+
+Also fixed while here: `PythonExecutionBudgetTests` was marked `[Collection("HeavyTests")]`, a string
+matching no `CollectionDefinition`. xUnit answers an unknown collection name by inventing an ad-hoc
+collection, so that class serialised against nothing and kept running beside the tests it was meant
+to take turns with — while its own remarks describe the cost of exactly that.
+
+**Suite: 1,182 passing, 0 failing** (1,114 portable + 68 desktop).
+
 ## Interface Contracts
 ### Data Ingestion & Safety (M1)
 - `RingBuffer<T>` — thread-safe ring buffer; overflow is counted, never silent

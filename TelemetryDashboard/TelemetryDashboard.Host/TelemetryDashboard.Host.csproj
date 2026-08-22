@@ -30,8 +30,18 @@
       <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\telemetry-client.js">
-      <Link>telemetry-client.js</Link>
+    <!--
+      Every script the pages load, by the same wildcard the pages themselves use. Naming one file
+      here was a slow leak: dab_psfb_console.html shipped and power_flow.js did not, so a host
+      started from its own output directory served the console and answered 404 for the diagram,
+      and the page drew its "could not load" fallback where the picture belongs. The console was
+      the file being tested and the diagram was the file being forgotten, which is what a hand
+      maintained list does next to a wildcard.
+
+      verify_*.js are the development harnesses rather than product, and stay out of the package.
+    -->
+    <Content Include="..\..\*.js" Exclude="..\..\verify_*.js">
+      <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -26,7 +26,12 @@ namespace TelemetryDashboard.Tests;
 /// which is why these tests assert on the wording as well as on the clock.
 /// </para>
 /// </remarks>
-[Collection("HeavyTests")]
+// The string, not a name that looks like one. "HeavyTests" matches no CollectionDefinition, and
+// xUnit answers that by inventing an ad-hoc collection with that name -- so this class serialised
+// against nothing and kept running beside the very tests it was meant to take turns with. These
+// budgets are wall-clock assertions on a spinning interpreter, which is exactly the kind of
+// measurement HeavyTestCollection exists to isolate.
+[Collection(HeavyTestCollection.Name)]
 public class PythonExecutionBudgetTests : IDisposable
 {
     private readonly string _dir = Path.Combine(

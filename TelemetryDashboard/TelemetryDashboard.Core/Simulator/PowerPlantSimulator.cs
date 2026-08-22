@@ -26,6 +26,26 @@ public static class SimulatorChannelIds
     public const string DabInputCurrent = "dab.input_current";
     public const string PsfbOutputCurrent = "psfb.output_current";
 
+    // The battery branch. Without these the profile called itself a UPS, offered a "grid outage"
+    // button, and had no battery anywhere in it: the mains went to zero and every other channel
+    // carried on unchanged, so the one question an outage raises -- how long have we got -- had no
+    // answer on any screen. Charge is signed, positive into the bank, so one channel says both
+    // which way the converter is moving power and how hard.
+    public const string UpsBatteryVoltage = "ups.battery_voltage";
+    public const string UpsBatteryCurrent = "ups.battery_current";
+    public const string UpsStateOfCharge = "ups.state_of_charge";
+
+    // The converter's other side. A DAB has a sensor on each winding and they read different
+    // quantities: the battery-side shunt sees hundreds of amps at 51 V, the DC-link sensor sees
+    // tens at 400 V, and the difference between the two powers is the loss. Declaring only the
+    // battery side left the branch that ties the UPS to the bus unmeasured, so the picture had to
+    // draw its most important segment -- the one carrying the load during an outage -- as unknown.
+    //
+    // Positive is into the bus, which is the opposite reference direction from the battery-side
+    // channel above. That is not an inconsistency to tidy away: each sensor is positive in the
+    // direction its own side calls forward, and on hardware they are wired that way.
+    public const string UpsBusCurrent = "ups.bus_current";
+
     public const string AmbientTemperature = "ambient.temperature";
     public const string AmbientHumidity = "ambient.humidity";
     public const string MachineVibration = "machine.vibration";

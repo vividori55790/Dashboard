@@ -51,6 +51,25 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
     private readonly ConcurrentDictionary<string, Analytics.InjectedSignal> _declared =
         new(StringComparer.Ordinal);
 
+    /// <summary>Running total of each accumulating channel. Absent until its first tick.</summary>
+    private readonly ConcurrentDictionary<string, double> _integrals = new(StringComparer.Ordinal);
+
+    /// <summary>The last value each channel actually emitted, which is what an integral consumes.</summary>
+    /// <remarks>
+    /// The emitted value rather than the setpoint, because the setpoint is what was commanded and
+    /// the emitted value is what the frame said. A coulomb counter on real hardware integrates the
+    /// current the shunt measured, drift and noise included; integrating the commanded value would
+    /// produce a charge reading that no sequence of reported currents adds up to.
+    /// <para>
+    /// Channels are emitted in declaration order, so an integral reads this tick's value when its
+    /// source is declared above it and the previous tick's when it is declared below. That is one
+    /// interval — 100 ms at the default rate — against a quantity that moves in percent per minute,
+    /// and it is deterministic either way. Before the first tick there is nothing to read and the
+    /// source's setpoint stands in.
+    /// </para>
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, double> _lastEmitted = new(StringComparer.Ordinal);
+
     /// <summary>When the previous tick ran, so a waveform advances by real time.</summary>
     private DateTime? _lastTickUtc;
     private readonly Channel<RawPacket> _channel;
@@ -155,6 +174,13 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
 
         double clamped = Math.Clamp(value, channel.Minimum, channel.Maximum);
         _setpoints[channelId] = clamped;
+
+        // An accumulating channel has no setpoint to drift around, so setting one means "the bank
+        // is at this much now" and the running total restarts from there. That is what makes a
+        // low-charge alarm testable in a minute instead of an hour: put the state of charge at 21 %
+        // and watch it cross 20 while the discharge current is real.
+        if (channel.Integrates is not null) _integrals[channelId] = clamped;
+
         return clamped;
     }
 
@@ -195,6 +221,7 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
         foreach (ProfileChannel channel in _profile.Channels)
         {
             _setpoints[channel.Id] = channel.Nominal;
+            if (channel.Integrates is not null) _integrals[channel.Id] = channel.Nominal;
         }
     }
 
@@ -317,6 +344,7 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
     private string Frame(ProfileChannel channel, int step, double elapsedSeconds)
     {
         double value = Wander(channel, step, elapsedSeconds);
+        _lastEmitted[channel.Id] = value;
         string body = string.Create(CultureInfo.InvariantCulture,
             $"TELE,{NodeId},{Sanitise(channel.Id)},{Math.Round(value, Math.Clamp(channel.Decimals, 0, 6))},{channel.Unit}");
 
@@ -345,6 +373,28 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
             return Math.Clamp(
                 setpoint + generator.GetNextSample(elapsedSeconds),
                 channel.Minimum, channel.Maximum);
+        }
+
+        // A running total, not a reading. Placed after the injected-signal branch so a waveform can
+        // still be driven onto this channel during commissioning, and before the drift branch
+        // because drift is the thing an integral must not have: a charge reading that wanders up
+        // while the bank is being drained is indistinguishable on screen from a healthy one.
+        if (channel.Integrates is { } integration)
+        {
+            double held = _integrals.TryGetValue(channel.Id, out double h) ? h : setpoint;
+            double driver = _lastEmitted.TryGetValue(integration.Source, out double d)
+                ? d
+                : (_setpoints.TryGetValue(integration.Source, out double sp) ? sp : 0);
+
+            // Clamped at both ends, which is the whole of the model's knowledge about batteries:
+            // a full bank stops charging and an empty one stops emptying. Nothing here stops the
+            // source, so a flat bank goes on reporting discharge current -- see ChannelIntegration.
+            double next = Math.Clamp(
+                held + driver * integration.PerSecond * elapsedSeconds,
+                channel.Minimum, channel.Maximum);
+
+            _integrals[channel.Id] = next;
+            return next;
         }
 
         double span = channel.Maximum - channel.Minimum;

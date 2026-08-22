@@ -30,6 +30,16 @@ public sealed class ProfileChannel
     /// the quantity, not of the widget: a 350-450 V bus reads as 400 V, a 38-54 V rail as 48.1 V.
     /// </summary>
     public int Decimals { get; init; }
+
+    /// <summary>
+    /// Set when this channel is the running total of another one instead of a drifting reading.
+    /// </summary>
+    /// <remarks>
+    /// Null for every ordinary channel, which is nearly all of them. See
+    /// <see cref="ChannelIntegration"/> for why this is the single exception to the rule that
+    /// channels here do not depend on one another.
+    /// </remarks>
+    public ChannelIntegration? Integrates { get; init; }
 }
 
 /// <summary>A named operating situation the operator can put the simulation into.</summary>
