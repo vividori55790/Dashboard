@@ -21,8 +21,6 @@ public sealed class MatFileWriter
 {
     private const int MatrixTypeLittleEndianDouble = 0000; // little-endian, double, full matrix
 
-    /// <summary>Longest variable name MATLAB accepts.</summary>
-    private const int MaxNameLength = 31;
 
     /// <summary>Writes one matrix per channel. Throws when the destination cannot be written.</summary>
     public void WritePackets(string targetFilePath, IEnumerable<TelemetryPacket> packets)
@@ -39,10 +37,20 @@ public sealed class MatFileWriter
             throw new DirectoryNotFoundException($"Export directory does not exist: {directory}");
         }
 
-        var byChannel = (packets ?? Enumerable.Empty<TelemetryPacket>())
+        List<TelemetryPacket> all = (packets ?? Enumerable.Empty<TelemetryPacket>())
             .Where(p => p is not null)
-            .GroupBy(p => string.IsNullOrWhiteSpace(p.Variable) ? "channel" : p.Variable,
-                     StringComparer.OrdinalIgnoreCase);
+            .ToList();
+
+        // Grouping by channel alone merged every node reporting that channel into one matrix: two
+        // converters on one hub, both publishing Vout, arrived as a single column of interleaved
+        // readings from two devices with nothing left to separate them by. Invisible while the only
+        // caller was a desktop app watching one rig, and the normal case for a hub.
+        bool qualify = all
+            .Select(p => p.NodeId ?? string.Empty)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count() > 1;
+
+        var byChannel = all.GroupBy(p => MatVariableName.For(p, qualify), StringComparer.OrdinalIgnoreCase);
 
         using var stream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write);
         using var writer = new BinaryWriter(stream);
@@ -51,7 +59,7 @@ public sealed class MatFileWriter
         foreach (var channel in byChannel)
         {
             List<TelemetryPacket> rows = channel.OrderBy(p => p.Timestamp).ToList();
-            WriteMatrix(writer, SanitizeName(channel.Key, taken), rows);
+            WriteMatrix(writer, MatVariableName.Sanitize(channel.Key, taken), rows);
         }
     }
 
@@ -83,44 +91,4 @@ public sealed class MatFileWriter
     /// <summary>Converts to MATLAB's datenum: days since year 0, where 1970-01-01 is 719529.</summary>
     private static double ToMatlabDateNumber(DateTime timestamp) =>
         719529.0 + (timestamp.ToUniversalTime() - DateTime.UnixEpoch).TotalDays;
-
-    /// <summary>MAT variable names must be ASCII identifiers, and distinct within one file.</summary>
-    /// <remarks>
-    /// The accepted character set is ASCII-only on purpose. <see cref="char.IsLetterOrDigit(char)"/>
-    /// accepts any Unicode letter, so a Korean channel name such as "온도" passed sanitisation intact
-    /// and was flattened to "??" by <see cref="Encoding.ASCII"/> further down — not a legal MATLAB
-    /// identifier, and the name every other non-ASCII channel collapsed onto as well.
-    /// <para>
-    /// <paramref name="taken"/> is what makes the collapse survivable rather than silent. Two
-    /// channels writing the same name produce two matrices called the same thing, and a loader keeps
-    /// whichever it read last — the first channel is gone from the export with nothing to show it was
-    /// ever there. Truncation to <see cref="MaxNameLength"/> collides the same way.
-    /// </para>
-    /// </remarks>
-    private static string SanitizeName(string raw, HashSet<string> taken)
-    {
-        var builder = new StringBuilder(raw.Length);
-        foreach (char c in raw)
-        {
-            builder.Append(char.IsAsciiLetterOrDigit(c) || c == '_' ? c : '_');
-        }
-
-        // MATLAB identifiers must begin with a letter, so a leading digit or underscore is prefixed
-        // rather than only a leading digit: sanitising "온도" yields "__", which loads in SciPy but
-        // is rejected by isvarname and cannot be typed at a MATLAB prompt.
-        string name = builder.ToString();
-        if (name.Length == 0 || !char.IsAsciiLetter(name[0])) name = "ch_" + name;
-        if (name.Length > MaxNameLength) name = name[..MaxNameLength];
-
-        string unique = name;
-        for (int suffix = 2; !taken.Add(unique); suffix++)
-        {
-            string tail = "_" + suffix.ToString(CultureInfo.InvariantCulture);
-            unique = name.Length + tail.Length > MaxNameLength
-                ? name[..(MaxNameLength - tail.Length)] + tail
-                : name + tail;
-        }
-
-        return unique;
-    }
 }

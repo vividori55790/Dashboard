@@ -25,6 +25,7 @@ public static class UsageText
           TelemetryDashboard.Host [options]
           TelemetryDashboard.Host {ExtensionCommandLine.Verb} <action> [arguments]
           TelemetryDashboard.Host {Backtest.BacktestCommandLine.Verb} <price-file> [arguments]
+          TelemetryDashboard.Host {Archive.ExportCommandLine.Verb} <archive.db> --out <file>
 
         The '{ExtensionCommandLine.Verb}' subcommand installs, enables, disables, removes and lists
         extensions, then exits without serving anything. Run it with no action for its own help.
@@ -33,6 +34,10 @@ public static class UsageText
         trading rule and reports what it would have done, beside buy-and-hold over the same
         sessions and paying the same costs. It serves nothing and ends. Run it with no file for its
         own help.
+
+        The '{Archive.ExportCommandLine.Verb}' subcommand writes a window of an archive this host
+        recorded to a MATLAB MAT-file, so a recording made on a headless bench does not need the
+        desktop shell to be read. Run it with no archive for its own help.
 
         Options:
           -p, --port <n>        TCP port for the streaming server.

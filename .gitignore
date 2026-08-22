@@ -52,7 +52,12 @@ desktop.ini
 # deleted so it stays available locally. Its content is already in git
 # history (the deletions in this commit), so tracking a second copy would
 # store every file twice, __pycache__ and PyInstaller output included.
-Archive/
+#
+# Anchored to the repository root. Unanchored, it matched a directory called
+# Archive at any depth -- which silently swallowed the whole of
+# TelemetryDashboard.Host/Archive/, the export subcommand, on the commit that
+# added it. A clone would have failed to build with no sign of why.
+/Archive/
 
 # PyInstaller output of that prototype: 155 MB of build artefacts.
 publish/

@@ -38,8 +38,16 @@ public sealed class MatlabArchiveExporter : ITelemetryArchiveExporter
         _archive = archive;
     }
 
+    /// <summary>Extension of the files this exporter writes.</summary>
+    /// <remarks>
+    /// A constant as well as the interface property, so a caller deciding whether a destination
+    /// path is one this exporter can write does not have to construct an exporter -- and therefore
+    /// does not have to invent an archive to construct it against -- to ask.
+    /// </remarks>
+    public const string Extension = ".mat";
+
     /// <inheritdoc />
-    public string FileExtension => ".mat";
+    public string FileExtension => Extension;
 
     /// <summary>
     /// Queries the archive and writes one MAT matrix per channel, returning the packet count.

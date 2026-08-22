@@ -1,3 +1,4 @@
+using TelemetryDashboard.Host.Archive;
 using TelemetryDashboard.Host.Backtest;
 using TelemetryDashboard.Host.Configuration;
 
@@ -14,7 +15,7 @@ namespace TelemetryDashboard.Host.Startup;
 /// before or after the host began running a stranger's code — or holding a port open for the length
 /// of a backtest nobody is watching over the network.
 /// <para>
-/// Collected into one list because there are two of them now and the next one is cheaper to add
+/// Collected into one list because there are several of them now and the next one is cheaper to add
 /// here than to thread through the entry point again. The order is the order they are tried in; the
 /// verbs do not overlap, so it does not currently matter, and it is fixed rather than incidental so
 /// that it cannot start to.
@@ -33,6 +34,7 @@ internal static class Subcommands
     {
         if (ExtensionCommandLine.Matches(args)) return ExtensionCommand.Run(args);
         if (BacktestCommandLine.Matches(args)) return BacktestCommand.Run(args);
+        if (ExportCommandLine.Matches(args)) return ExportCommand.Run(args);
 
         return null;
     }

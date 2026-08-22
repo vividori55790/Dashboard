@@ -8,10 +8,10 @@ namespace TelemetryDashboard.Infrastructure.Storage;
 
 /// <summary>The prune path, which is the only way anything is ever deleted from this store.</summary>
 /// <remarks>
-/// Nothing calls this on a timer and nothing calls it at start-up. Retention runs when an operator
-/// or a host asks for it, against a policy that must be enabled before a single row is destroyed —
-/// so the behaviour on a first run, and on every run of a store nobody configured, is that all data
-/// is kept.
+/// Nothing here schedules itself. The host drives it — once at start-up and hourly after that, from
+/// <c>RetentionSweep</c> — and it runs against a policy that must be enabled before a single row is
+/// destroyed, so the behaviour on a first run, and on every run of a store nobody configured, is
+/// that all data is kept. An export never calls it: reading an archive must not prune one.
 /// </remarks>
 public sealed partial class TieredTelemetryStore
 {
