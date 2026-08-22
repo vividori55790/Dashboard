@@ -91,6 +91,110 @@ public partial class ArchitectureRuleTests
     }
 
     /// <summary>
+    /// The headless host asks for no locale data, so a bare container can run it.
+    /// </summary>
+    /// <remarks>
+    /// Measured rather than assumed. Published for Alpine and run in a musl environment, the host
+    /// without this aborts before reaching <c>Main</c>: "Couldn't find a valid ICU package
+    /// installed on the system". A minimal container is exactly that environment, and a plant host
+    /// that needs a locale package installed before it will start is a deployment step nobody
+    /// remembers.
+    /// <para>
+    /// The setting is honest for this project rather than a shortcut. Every number, timestamp and
+    /// comparison on the headless path is already invariant or ordinal by construction — the wire
+    /// format, the CSV, the SQLite schema and the JSON all depend on that — so locale data changes
+    /// nothing it does and only decides whether it starts.
+    /// </para>
+    /// <para>
+    /// Deliberately not applied to the desktop shell, which shows text to a person and should sort
+    /// and format the way their machine does.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void TheHeadlessHostNeedsNoLocaleDataToStart()
+    {
+        string csproj = Path.Combine(SolutionRoot, "TelemetryDashboard.Host", "TelemetryDashboard.Host.csproj");
+        string markup = MarkupWithoutComments(csproj);
+
+        Regex.IsMatch(markup, @"<InvariantGlobalization>\s*true\s*</InvariantGlobalization>",
+                RegexOptions.IgnoreCase)
+            .Should().BeTrue(
+                "without it the published host aborts on a container with no ICU, before it reaches "
+                + "Main and before it can say anything useful about why");
+    }
+
+    /// <summary>
+    /// The portable backbone calls no Windows-only API, whatever it targets.
+    /// </summary>
+    /// <remarks>
+    /// The target-framework rule above is necessary and not sufficient. A project can target plain
+    /// <c>net8.0</c> and still call something that exists only on Windows — a registry read, a WMI
+    /// query, a P/Invoke into <c>kernel32</c> — and the platform analyser reports that as CA1416,
+    /// a <em>warning</em>. The build stays green, the suite stays green on a developer's Windows
+    /// machine, and the failure arrives as a <c>PlatformNotSupportedException</c> on whatever Linux
+    /// box first runs it.
+    /// <para>
+    /// This is the rule the project can enforce from Windows. It is not a substitute for running
+    /// the thing on Linux, and the difference is worth stating plainly: this says the backbone
+    /// contains nothing that <em>cannot</em> work there, not that it <em>does</em>.
+    /// </para>
+    /// <para>
+    /// Struct layouts and constants are deliberately not flagged. <c>Win32Native</c> is
+    /// <c>WM_DEVICECHANGE</c> and two <c>DEV_BROADCAST</c> shapes — no entry point is imported, so
+    /// it loads anywhere and simply never receives a message off Windows. What would break Linux is
+    /// an imported symbol that is not there, and that is what this looks for.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void ThePortableBackboneCallsNoWindowsOnlyApi()
+    {
+        var windowsOnly = new (string Pattern, string What)[]
+        {
+            (@"\[\s*(?:System\.Runtime\.InteropServices\.)?(?:DllImport|LibraryImport)", "a P/Invoke"),
+            (@"using\s+System\.Management", "WMI (System.Management)"),
+            (@"Microsoft\.Win32\.Registry", "the Windows registry"),
+            (@"using\s+System\.Windows", "WPF"),
+            (@"using\s+System\.Drawing", "System.Drawing"),
+            (@"SupportedOSPlatform\s*\(\s*""windows", "an explicit Windows-only marker")
+        };
+
+        var offenders = new List<string>();
+
+        foreach (string project in PortableBackboneProjects)
+        {
+            string root = Path.Combine(SolutionRoot, project);
+            if (!Directory.Exists(root)) continue;
+
+            foreach (string file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                    || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                {
+                    continue;
+                }
+
+                string source = StripComments(File.ReadAllText(file));
+
+                foreach ((string pattern, string what) in windowsOnly)
+                {
+                    if (Regex.IsMatch(source, pattern))
+                    {
+                        offenders.Add($"{Relative(file)} uses {what}");
+                    }
+                }
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "Core, Infrastructure and Plugins run on every host this product has. A Windows-only "
+            + "call in any of them compiles, warns, passes the suite on Windows, and throws "
+            + "PlatformNotSupportedException the first time it runs anywhere else:\n"
+            + string.Join("\n", offenders));
+    }
+
+    /// <summary>
     /// The portable test project stays portable, so the rule above is actually exercised off Windows.
     /// </summary>
     /// <remarks>

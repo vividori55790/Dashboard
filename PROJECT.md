@@ -1004,7 +1004,56 @@ The step between the drift and the injected wave dominates the low end of any wi
 The endpoint is right in all three; a caller who does not know that reads the third as a broken
 analyser. The `signal` reply now says so, with those numbers.
 
-**Suite: 1,165 passing, 0 failing** (1,097 portable + 68 desktop) — about 2 m 35 s with
+### The cross-platform claim, finally measured
+Every document in this repository has called the headless host "the cross-platform product". It had
+never been run anywhere but Windows. That was the largest unverified claim here, and it has now been
+tested rather than asserted.
+
+Published `linux-musl-x64`, self-contained, and run in a musl x86_64 environment:
+
+```
+uname                Linux x86_64
+seriesChannels       27          seriesSamplesAccepted   2693
+computed             3 declared, 291 published, 0 faulted
+limits               6 declared, 1 breached
+spectrum             computing, 10.12 Hz measured sample rate
+endpoints            all 13 advertised and answering
+```
+
+**What that does and does not establish.** It is a real Linux kernel running a real build of this
+product serving real telemetry over HTTP, so the headless path contains nothing Windows-only that
+matters. It is *musl* (Alpine), inside Docker Desktop's own utility VM — not mainstream glibc Linux,
+and not macOS. Neither of those has been run, and this does not stand in for them.
+
+Two things had to be true before it would start, and both were worth learning:
+
+- `libstdc++` and `libgcc` are prerequisites .NET does not carry on musl. The first run failed with
+  a page of unresolved C++ symbols.
+- **It aborted on ICU** — `Couldn't find a valid ICU package installed on the system` — before
+  reaching `Main`. A minimal container is exactly that environment, so a plant host that needs a
+  locale package installed before it starts is a deployment step nobody remembers.
+
+The second is now fixed rather than worked around. The headless host publishes with
+`InvariantGlobalization`, which is honest for this project rather than a shortcut: every number,
+timestamp and comparison on that path is already invariant or ordinal by construction — the wire
+format, the CSV, the SQLite schema and the JSON all depend on it — so locale data changes nothing
+the host does and only decides whether it starts. Re-verified with ICU **uninstalled**: 27 channels,
+2,693 samples, every endpoint answering. The desktop shell is deliberately untouched; it shows text
+to a person and should sort the way their machine does.
+
+Two executable rules were added alongside, because what can be checked from Windows should be:
+
+- **The portable backbone calls no Windows-only API.** The existing rule checked target frameworks,
+  which is necessary and not sufficient — a project can target plain `net8.0`, call a registry read
+  or a P/Invoke, and get a CA1416 *warning* while the build and the suite stay green. The new rule
+  scans for P/Invokes, WMI, the registry, WPF and `[SupportedOSPlatform("windows")]`. Verified to
+  actually catch something: a probe `[DllImport("kernel32.dll")]` dropped into Core failed it by
+  name, and was removed again. `Win32Native` is deliberately not flagged — it is constants and
+  struct layouts with no imported entry point, so it loads anywhere and simply never receives a
+  message off Windows.
+- **The host asks for no locale data**, so the ICU finding cannot be quietly reverted.
+
+**Suite: 1,167 passing, 0 failing** (1,099 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

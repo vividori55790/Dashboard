@@ -9,6 +9,15 @@
     <AssemblyName>TelemetryDashboard.Host</AssemblyName>
     <RollForward>LatestMajor</RollForward>
     <NoWarn>$(NoWarn);NU1701;NU1603</NoWarn>
+
+    <!--
+      No ICU. Every number, timestamp and comparison on this path is already invariant or ordinal
+      by construction. The wire format, the CSV, the SQLite schema and the JSON all depend on that,
+      so locale data buys nothing here and costs a dependency: measured on Alpine, the host without
+      this aborts with "Couldn't find a valid ICU package", and a minimal container is exactly that.
+      Scoped to the host. The desktop shell shows text to a person and keeps its globalization.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
