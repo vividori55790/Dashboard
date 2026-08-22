@@ -91,6 +91,11 @@ public partial class MainWindow : Window
         // as to its own toolbar, because that decision is taken at start-up on a panel that may
         // not be the one in front of the operator.
         TwinControl.Notice += message => ControlPanel.LogMessage("TWIN", message);
+
+        // Watching the clock as well as the values. Until now the shell could not see a channel
+        // that had simply stopped: the scope holds the last point, the statistics hold the last
+        // mean, and the z-score sits at zero because the distribution stopped moving too.
+        ControlPanel.StartSilenceWatch();
         SetupSimulatorTimer();
 
         // Before the first tick, because the tick asks the active profile which channels to plot.

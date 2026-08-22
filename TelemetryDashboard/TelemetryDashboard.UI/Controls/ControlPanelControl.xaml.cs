@@ -370,6 +370,11 @@ public partial class ControlPanelControl : UserControl
             // line. Only the simulated path checked, which is the wrong way round for a defect to
             // be arranged -- the demo warned and the plant did not.
             RaiseIfAnomalous(node, variable, value, analysis);
+
+            // The other half of the same question. RaiseIfAnomalous asks whether this reading is
+            // unusual; this asks whether readings are still arriving at all, which no verdict
+            // about a value can answer.
+            ObserveForSilence($"{node}.{variable}", DateTime.UtcNow);
         });
     }
 

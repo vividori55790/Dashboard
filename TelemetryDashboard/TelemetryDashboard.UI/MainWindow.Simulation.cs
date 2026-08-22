@@ -115,8 +115,11 @@ public partial class MainWindow
         _activeProfile = profile;
 
         // Clearing first means a channel the previous profile drove stops being driven, rather
-        // than lingering as a setpoint nothing on screen can see or reset.
+        // than lingering as a setpoint nothing on screen can see or reset. The silence watch goes
+        // with them: the previous rig's channels stop reporting because the operator changed rigs,
+        // and reporting that as an outage would raise an alarm for a deliberate act.
         _simulator.Reset();
+        ControlPanel.ResetSilenceWatch();
         ProfileChannels.Clear();
         ProfileScenarios.Clear();
 

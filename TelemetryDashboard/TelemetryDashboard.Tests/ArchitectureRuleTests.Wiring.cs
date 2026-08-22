@@ -270,6 +270,17 @@ public partial class ArchitectureRuleTests
         // thirty. Measured on the running application with a twenty-channel profile:
         // "Samples: 2,176 | Channels: 16 | Time: 33.8s | dropped 544 (544 past channel cap)",
         // where before it said only the first three fields.
+        // TieredTelemetryStore arrived on this baseline the day the rule stopped counting a
+        // partial's own other halves as external references. It is split across four files, and the
+        // old check asked only whether some file *other than the one it was first seen in* named
+        // it -- which TieredTelemetryStore.Query.cs does, being one of its own halves. So every
+        // multi-file partial in this solution was marked reached automatically, used or not, and
+        // this one is not used: nothing constructs a hot/warm/cold store with retention, so the
+        // tiering, the roll-ups and the retention sweep are all written, all tested and all off.
+        //
+        // Recorded rather than wired in the same breath, because it is a feature-sized piece of
+        // work and pretending otherwise would be how it gets half-done.
+        "TieredTelemetryStore",
         "SampleTelemetryPlugin",
         // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
         // source behind --replay, so a recording can be played back through the pipeline that wrote
@@ -344,15 +355,34 @@ public partial class ArchitectureRuleTests
             RegexOptions.Multiline);
 
         var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+        PartialDeclarations.Clear();
+
         foreach (string file in ProductionSourceFiles())
         {
             foreach (System.Text.RegularExpressions.Match match in pattern.Matches(File.ReadAllText(file)))
             {
-                declared.TryAdd(match.Groups[1].Value, file);
+                string name = match.Groups[1].Value;
+                declared.TryAdd(name, file);
+
+                // Every file a partial is split across, not just the first one seen. Keeping only
+                // the first made a partial's other files look unreached the moment one was added:
+                // splitting ControlPanelControl into a second file moved the type's recorded home
+                // there, and the original -- which still declared EventLogEntry and
+                // NodePowerToggle beside it -- was reported as dead code by a rule whose whole
+                // job is to be believed about that.
+                if (!PartialDeclarations.TryGetValue(name, out HashSet<string>? files))
+                {
+                    files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    PartialDeclarations[name] = files;
+                }
+                files.Add(file);
             }
         }
         return declared;
     }
+
+    /// <summary>Every file each type is declared in, which for a partial is more than one.</summary>
+    private static readonly Dictionary<string, HashSet<string>> PartialDeclarations = new(StringComparer.Ordinal);
 
     /// <summary>Type names appearing in any production file, mapped to the files mentioning them.</summary>
     private static Dictionary<string, HashSet<string>> TypeMentions(IEnumerable<string> names)
@@ -403,11 +433,15 @@ public partial class ArchitectureRuleTests
         var reachedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach ((string name, string file) in declared)
         {
-            if (FrameworkEntryPoints.Contains(name)
-                || mentions[name].Any(f => !string.Equals(f, file, StringComparison.OrdinalIgnoreCase)))
+            if (!FrameworkEntryPoints.Contains(name)
+                && !mentions[name].Any(f => !PartialDeclarations[name].Contains(f)))
             {
-                reachedFiles.Add(file);
+                continue;
             }
+
+            // Every file this type is split across. A partial declared in three files is one type
+            // and is reached or not as one, and "outside it" means outside all of them.
+            foreach (string declaringFile in PartialDeclarations[name]) reachedFiles.Add(declaringFile);
         }
 
         // Then a type is unreachable only when its declaring file is unreachable too. Asking
