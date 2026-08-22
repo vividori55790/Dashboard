@@ -137,43 +137,31 @@ public class ScriptEngineExecutionTests : IDisposable
     [Fact]
     public void Python_ActuallyExecutes_AndTheEmbeddedRuntimeIsAlwaysPresent()
     {
-        var adapter = new PythonNetAdapter();
+        // Moved off PythonNetAdapter, which is gone. The adapter was a timeout wrapper around this
+        // runtime, and the timeout it owned is now on the path that actually loads plugins -- so
+        // the wrapper was a second entry point to one interpreter, which is the thing to remove
+        // rather than to wire.
+        var runtime = new EmbeddedPythonRuntime();
 
-        adapter.IsInterpreterAvailable.Should().BeTrue();
-        adapter.UsesHostInterpreter.Should().BeFalse("no host override is attached in this test");
+        PythonRunResult ran = runtime.Run("x = sum(range(10))\nassert x == 45");
 
-        adapter.ExecuteScript("x = sum(range(10))\nassert x == 45", out string error).Should().BeTrue(error);
-        error.Should().BeEmpty();
+        ran.Succeeded.Should().BeTrue(ran.Error);
+        ran.Error.Should().BeEmpty();
     }
 
     [Fact]
     public void Python_RuntimeError_IsReportedNotThrown()
     {
-        var adapter = new PythonNetAdapter();
+        var runtime = new EmbeddedPythonRuntime();
 
-        adapter.ExecuteScript("raise ValueError('boom')", out string error).Should().BeFalse();
-        error.Should().Contain("boom");
+        PythonRunResult ran = runtime.Run("raise ValueError('boom')");
+
+        ran.Succeeded.Should().BeFalse();
+        ran.Error.Should().Contain("boom");
     }
 
-    [Fact]
-    public void Python_InfiniteLoop_IsGenuinelyInterrupted_NotAbandoned()
-    {
-        var adapter = new PythonNetAdapter();
-        var clock = Stopwatch.StartNew();
-
-        bool ran = adapter.ExecuteWithTimeout("while True:\n    pass", timeoutMs: 200);
-        clock.Stop();
-
-        ran.Should().BeFalse();
-
-        // "interrupted" rather than "did not respond": the tracing hook unwound the loop. The
-        // distinction is the whole point — abandoning the thread would leave it spinning for the
-        // life of the process while this method reported the script stopped.
-        adapter.LastError.Should().Contain("interrupted");
-        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
-    }
-
-    // ---------------- End to end through the real sandbox ----------------
+    // The infinite-loop interruption moved to PythonExecutionBudgetTests, where it exercises the
+    // path a plugin actually takes rather than a wrapper nothing constructed.
 
     [Fact]
     public void SandboxLoadsAndRunsBothJavaScriptAndPythonPluginsFromTheFolder()

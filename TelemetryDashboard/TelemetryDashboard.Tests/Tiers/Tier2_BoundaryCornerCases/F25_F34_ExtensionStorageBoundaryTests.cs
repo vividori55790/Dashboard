@@ -132,29 +132,6 @@ public class F25_F34_ExtensionStorageBoundaryTests
 
     [Fact]
     [Trait("Category", "Tier2")]
-    public void F26_Boundary_PythonScriptSyntaxError_LogsScriptErrorAndSkips()
-    {
-        var pyAdapter = new PythonNetAdapter();
-        string badScript = "def invalid_syntax(:";
-
-        bool success = pyAdapter.ExecuteScript(badScript, out string errorMessage);
-        success.Should().BeFalse();
-        errorMessage.Should().NotBeNullOrEmpty();
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F26_Boundary_PythonGilTimeout_CancelsScriptExecution()
-    {
-        var pyAdapter = new PythonNetAdapter();
-        string infiniteLoopScript = "while True: pass";
-
-        bool executed = pyAdapter.ExecuteWithTimeout(infiniteLoopScript, timeoutMs: 50);
-        executed.Should().BeFalse();
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
     public void F26_Boundary_PluginThrowsExceptionOnInit_UnloadsSafely()
     {
         var mockPlugin = new Mock<IPlugin>();
@@ -252,18 +229,6 @@ public class F25_F34_ExtensionStorageBoundaryTests
 
     [Fact]
     [Trait("Category", "Tier2")]
-    public async Task F28_Boundary_Port8080InUse_FallsBackToNextAvailablePort()
-    {
-        var server = new KestrelWebServer();
-        int assignedPort = await server.StartOnAvailablePortAsync(preferredPort: 8080);
-
-        assignedPort.Should().BeGreaterThan(0);
-        server.IsRunning.Should().BeTrue();
-        await server.StopAsync();
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
     public void F28_Boundary_MalformedHttpRequest_Returns400BadRequest()
     {
         var handler = new SseStreamHandler();
@@ -294,15 +259,6 @@ public class F25_F34_ExtensionStorageBoundaryTests
 
         Action act = () => handler.RegisterClient();
         act.Should().Throw<InvalidOperationException>();
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public async Task F28_Boundary_StopServerWhenNotStarted_NoOpWithoutException()
-    {
-        var server = new KestrelWebServer();
-        Func<Task> act = async () => await server.StopAsync();
-        await act.Should().NotThrowAsync();
     }
 
     #endregion

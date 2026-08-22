@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using IronPython.Hosting;
 using Microsoft.Scripting;
 using Microsoft.Scripting.Hosting;
@@ -110,6 +111,83 @@ public sealed class EmbeddedPythonRuntime
             return PythonRunResult.Fail($"{ex.GetType().Name}: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> on the interpreter, interrupting it if it outlasts its budget.
+    /// </summary>
+    /// <remarks>
+    /// The same trace hook <see cref="Run(ScriptEngine, ScriptScope, string, CancellationToken)"/>
+    /// installs, applied to arbitrary interpreter work — loading a plugin file, or calling one of
+    /// its functions. Both of those had no budget at all: a <c>.py</c> plugin whose body or whose
+    /// hook is <c>while True: pass</c> hung the host, at start-up in the first case and on the
+    /// ingest path in the second, and the only cancellation machinery in the codebase sat in a
+    /// class nothing constructed.
+    /// <para>
+    /// Bounded on both sides. The wait for the script is the budget; the wait for it to unwind
+    /// afterwards is separately bounded, because a script that ignores the interruption must not be
+    /// able to hang the caller by refusing to stop. Which of the two happened is reported, since
+    /// "it was stopped" and "it would not stop" call for different actions.
+    /// </para>
+    /// </remarks>
+    public static PythonRunResult RunWithBudget(ScriptEngine engine, TimeSpan budget, Action work)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(work);
+
+        using var cancellation = new CancellationTokenSource();
+        CancellationToken token = cancellation.Token;
+
+        Exception? fault = null;
+        bool unwound = false;
+        Task worker = Task.Run(() =>
+        {
+            // Installed here, on the thread that is about to run the script. Tracing in Python is
+            // per-thread -- it is sys.settrace -- so a hook set on the calling thread is not
+            // installed on this one, and the interruption then does nothing at all. Written that
+            // way first, and the runaway loop reported "did not respond to interruption" while
+            // still burning a core: the caller returned on time and the fiction was that the
+            // script had been stopped.
+            IronPython.Runtime.Exceptions.TracebackDelegate? hook = null;
+            hook = (frame, kind, payload) =>
+            {
+                token.ThrowIfCancellationRequested();
+                return hook!;
+            };
+            engine.SetTrace(hook);
+
+            // A cancelled script unwound as asked, which is a normal outcome here rather than a
+            // fault. Rethrowing it faulted the task, so the wait below threw an AggregateException
+            // out of a method whose whole job is to report calmly what happened.
+            try { work(); }
+            catch (OperationCanceledException) { unwound = true; }
+            catch (Exception ex) { fault = ex; }
+            finally
+            {
+                // Best effort: an interrupted thread is unwinding and may not reach this.
+                try { engine.SetTrace(null); } catch { /* the thread is going away regardless */ }
+            }
+        }, CancellationToken.None);
+
+        if (worker.Wait(budget))
+        {
+            return fault is null
+                ? PythonRunResult.Ok()
+                : PythonRunResult.Fail($"{fault.GetType().Name}: {fault.Message}");
+        }
+
+        cancellation.Cancel();
+
+        // Two conditions, and they are not the same: the task finishing means it stopped, and the
+        // flag means it stopped *because it was asked to* rather than by coincidence.
+        bool stopped = worker.Wait(UnwindGrace) && unwound;
+
+        return PythonRunResult.Fail(stopped
+            ? $"exceeded its {budget.TotalMilliseconds:0} ms budget and was interrupted"
+            : $"exceeded its {budget.TotalMilliseconds:0} ms budget and did not respond to interruption");
+    }
+
+    /// <summary>How long a cancelled script is given to unwind before the outcome is reported.</summary>
+    private static readonly TimeSpan UnwindGrace = TimeSpan.FromSeconds(2);
 
     /// <summary>Compiles without running, so a malformed hook is rejected before it has effects.</summary>
     public PythonRunResult Validate(string script)

@@ -35,8 +35,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Kestrel hosting for the embedded web console (Infrastructure/WebServer). -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

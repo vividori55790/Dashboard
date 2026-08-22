@@ -896,7 +896,50 @@ console that feeds nothing when it had simply never been ticked. And it stopped 
 six chain stages had arrived, which is before any computed sample does — the same early-stop
 mistake found and fixed in the other harness a cycle earlier.
 
-**Suite: 1,150 passing, 0 failing** (1,082 portable + 68 desktop) — about 2 m 35 s with
+### A plugin that never finishes used to take the host with it
+`PythonScriptEngine` ran a `.py` file with no token and no deadline, and `PythonScriptModule`
+invoked its hooks the same way. So a plugin whose body is `while True: pass` hung the host at
+start-up before a packet had been read, and a hook that spins hung the **ingest path**, once per
+packet, stopping the console, the recording and every other channel's scoring behind it. The
+JavaScript engine beside it has carried a budget since it was written.
+
+The only cancellation machinery in the codebase sat in `PythonNetAdapter`, which nothing
+constructed. It is now on the path a plugin actually takes — 10 s to import, 2 s per call, both
+adjustable — and the adapter is deleted.
+
+**Running it found that the first version of the fix did not work.** The interruption goes through
+IronPython's tracing hook, and tracing in Python is per-thread — it is `sys.settrace`. The hook was
+installed on the calling thread while the script ran on a worker, so it was never installed where
+the script was: the caller returned on time, reported the script "did not respond to interruption",
+and the loop kept burning a core for the life of the process. **A test asserting only that the call
+returns within six seconds would have passed.** It was caught because the test asserts the wording —
+`was interrupted` rather than `did not respond` — which is the difference between stopping a runaway
+script and abandoning it while claiming otherwise.
+
+### Deleting the last ASP.NET Core dependency
+`KestrelWebServer` started a `WebApplication` serving exactly one route, `/health`, and no telemetry,
+no assets and no client; `TelemetryStreamingServer` has served `/ws`, `/stream` and eleven `/api`
+routes the whole time. It was also the solution's **only** ASP.NET Core consumer, and the sole
+reason `Infrastructure` carried a `FrameworkReference` that flowed on to Host and UI.
+
+Measured before and after on a published, framework-dependent build:
+
+```
+before   Microsoft.AspNetCore.App declared in Infrastructure.csproj (git show HEAD:…)
+after    runtimeconfig.json requires Microsoft.NETCore.App 8.0.0 only
+         published host still serves: 9 channels, 13 endpoints
+```
+
+A deployment no longer needs the ASP.NET Core runtime installed for one route nothing called.
+
+**A third file was found testing a stub it declared itself.** `F28_KestrelWebServerTests` exercised
+a `KestrelServerState` class declared at the bottom of that same test file, and
+`SimulatorToKestrelToWebTests` drove a `MockKestrelWebServer` whose `Start()` sets a boolean. Neither
+touched the class they were named for. That is the same pattern as `SessionReplayPlayerState` and
+`FailureSnapshotExtractorHelper` before them: a substitute standing in for the thing under test can
+only confirm itself.
+
+**Suite: 1,140 passing, 0 failing** (1,072 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

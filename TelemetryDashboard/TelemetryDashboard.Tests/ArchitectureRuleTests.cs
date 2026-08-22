@@ -491,6 +491,7 @@ public partial class ArchitectureRuleTests
         "TelemetryDashboard.Core/Streaming/ComputedEndpoint.cs",                   // 180 lines — reply shape already split into ComputedEndpointModels.cs
         "TelemetryDashboard.Core/Streaming/ControlEndpoint.cs",                    // 163 lines — reply shape already split into ControlEndpointModels.cs
         "TelemetryDashboard.Core/Analytics/LimitMonitor.cs",                       // 190 lines — state records already split into LimitMonitorState.cs
+        "TelemetryDashboard.Infrastructure/Plugins/EmbeddedPythonRuntime.cs",      // 211 lines — one interpreter, and the reasoning behind its interruption
         "TelemetryDashboard.Host/Configuration/UsageText.cs",                      // 158 lines — one help screen, one flag per entry
         "TelemetryDashboard.Host/Ingest/IngestSetup.cs",                           // 151 lines — one source-selection decision per branch
         "TelemetryDashboard.Core/Simulator/PowerConverterUpsProfile.cs",           // 156 lines — one worked example, entirely data

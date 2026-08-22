@@ -38,6 +38,14 @@ public sealed class PythonScriptModule : IScriptModule
     /// <summary>Message from the last failed invocation. Empty after a successful one.</summary>
     public string LastError { get; private set; } = string.Empty;
 
+    /// <summary>How long one call into this module gets.</summary>
+    /// <remarks>
+    /// Tighter than the load budget and for a different reason. A filter runs on the ingest path,
+    /// once per packet, so a hook that spins does not merely delay a plugin — it stops the console,
+    /// the recording and every other channel's scoring behind it. There was no budget here at all.
+    /// </remarks>
+    public TimeSpan InvocationTimeout { get; init; } = TimeSpan.FromSeconds(2);
+
     /// <inheritdoc />
     public bool TryInvoke(string functionName, ScriptInvocationContext context, out object? result)
     {
@@ -48,18 +56,21 @@ public sealed class PythonScriptModule : IScriptModule
         if (!_scope.TryGetVariable(functionName, out object? target)) return false;
         if (!_engine.Operations.IsCallable(target)) return false;
 
-        try
+        object? invoked = null;
+        PythonRunResult outcome = EmbeddedPythonRuntime.RunWithBudget(
+            _engine, InvocationTimeout,
+            () => invoked = _engine.Operations.Invoke(target, BuildArgument(context)));
+
+        if (!outcome.Succeeded)
         {
-            result = _engine.Operations.Invoke(target, BuildArgument(context));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // A raising filter is a failed invocation, not a host failure: the packet must still
-            // reach every other subscriber.
-            LastError = $"{functionName}: {ex.Message}";
+            // A raising filter, or one that ran past its budget. Either is a failed invocation and
+            // not a host failure: the packet must still reach every other subscriber.
+            LastError = $"{functionName}: {outcome.Error}";
             return false;
         }
+
+        result = invoked;
+        return true;
     }
 
     /// <summary>

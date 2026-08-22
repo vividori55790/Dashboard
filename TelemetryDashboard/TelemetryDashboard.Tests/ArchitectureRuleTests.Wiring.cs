@@ -113,7 +113,13 @@ public partial class ArchitectureRuleTests
         // spectrum is useful to every client could not have it. Its first run against live data
         // found a defect in the series store, which was writing every channel into one series.
         "HeatmapInterpolationService",
-        "KestrelWebServer",
+        // KestrelWebServer left this baseline by being deleted. It started a WebApplication
+        // serving exactly one route -- /health -- and no telemetry, no assets and no client;
+        // TelemetryStreamingServer has served /ws, /stream and eleven /api routes the whole
+        // time. It was also the solution's only ASP.NET Core consumer, and the sole reason
+        // Infrastructure carried a FrameworkReference that flowed on to Host and UI -- so a
+        // framework-dependent deployment needed the ASP.NET Core runtime installed for one
+        // route nothing called. Both are gone.
         // ManifestIndexMarketplace retired from this baseline: TelemetryDashboard.Host's
         // ExtensionCatalogueReport now constructs it behind --extensions, so the catalogue is
         // reachable from a running host and the entry has stopped exempting anything.
@@ -133,7 +139,12 @@ public partial class ArchitectureRuleTests
         "PortablePackageChecker",
         // Redundant with PythonScriptEngine, which is what the sandbox actually loads. Both embed
         // IronPython; keeping two entry points to one interpreter is the thing to fix, not to wire.
-        "PythonNetAdapter",
+        // PythonNetAdapter left this baseline by being deleted, but only after the one thing
+        // it had that the shipping engine lacked was moved across. It was a timeout wrapper
+        // around EmbeddedPythonRuntime, and it held the only cancellation machinery in the
+        // codebase -- while PythonScriptEngine, which is what actually loads a .py plugin,
+        // ran files and hooks with no budget at all. That mechanism now guards both the load
+        // and the per-packet invoke; the wrapper was a second entry point to one interpreter.
         "SampleTelemetryPlugin",
         "ScopeViewModel",
         // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
