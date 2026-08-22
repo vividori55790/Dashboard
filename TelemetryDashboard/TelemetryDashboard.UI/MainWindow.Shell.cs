@@ -41,8 +41,19 @@ public partial class MainWindow
     /// implicit TabItem style the ribbon uses, so there is one tab appearance in the application
     /// and no second copy of it to keep in step.
     /// </remarks>
+    private bool _workspaceRestored;
+
     private void DockManager_Loaded(object sender, RoutedEventArgs e)
     {
+        // Before the tab styling below, and only once: Loaded fires again whenever the element is
+        // re-added to the tree, and deserialising a second time would throw away an arrangement
+        // the operator has since changed.
+        if (!_workspaceRestored)
+        {
+            _workspaceRestored = true;
+            RestoreWorkspace();
+        }
+
         // The manager is loaded before it has built its pane controls, so this first pass normally
         // finds nothing to style. LayoutUpdated is the hook that fires once they exist; it detaches
         // itself as soon as every pane in the tree has been dealt with, so it costs one tree walk
@@ -98,6 +109,15 @@ public partial class MainWindow
                 {
                     themed.Setters.Add(setter);
                 }
+
+                // The tab's accessible name. AvalonDock puts the LayoutDocument itself in Header,
+                // and the automation peer falls back to ToString() on it -- so every document tab
+                // reported as "AvalonDock.Layout.LayoutDocument" and a screen reader could not tell
+                // two open documents apart. The caption renders correctly from the header template,
+                // which is why it goes unnoticed by anyone reading the screen with their eyes.
+                themed.Setters.Add(new Setter(
+                    System.Windows.Automation.AutomationProperties.NameProperty,
+                    new System.Windows.Data.Binding("Title")));
 
                 themed.Seal();
                 _themedDockTabStyles.Add(themed);

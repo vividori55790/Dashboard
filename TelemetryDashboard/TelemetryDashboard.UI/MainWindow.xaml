@@ -28,7 +28,8 @@
         Background="{StaticResource CanvasBrush}"
         WindowStartupLocation="CenterScreen"
         AllowDrop="True" Drop="MainWindow_Drop" PreviewDragOver="MainWindow_PreviewDragOver"
-        KeyDown="MainWindow_KeyDown">
+        KeyDown="MainWindow_KeyDown"
+        Closing="MainWindow_Closing">
 
     <Window.Resources>
         <!--
@@ -493,6 +494,12 @@
                             ToolTip="한국어와 영어를 번갈아 적용합니다."/>
                     <Button Content="테마 전환" Click="BtnToggleTheme_Click"
                             Style="{StaticResource RibbonCommand}"/>
+                    <Button Content="레이아웃 저장" Click="BtnSaveWorkspace_Click"
+                            Style="{StaticResource RibbonCommand}"
+                            ToolTip="지금의 패널 배치를 저장합니다. 창을 닫을 때도 자동으로 저장됩니다."/>
+                    <Button Content="레이아웃 초기화" Click="BtnResetWorkspace_Click"
+                            Style="{StaticResource RibbonCommand}"
+                            ToolTip="저장된 배치를 지웁니다. 다음 시작 시 기본 배치로 돌아갑니다."/>
                     <Button Content="명령 팔레트" Click="BtnOpenCommandPalette_Click"
                             Style="{StaticResource RibbonCommand}" ToolTip="Ctrl+Shift+P"/>
                     <Button Content="화면 잠금" Click="BtnLockScreen_Click"/>

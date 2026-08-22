@@ -481,6 +481,10 @@ public partial class ArchitectureRuleTests
         // which is not deducible from the code and cost a full run to find.
         "TelemetryDashboard.UI/Services/ThemeService.cs",                          // 214 lines
 
+        // Grew by the content-resolution callback that makes restoring a layout safe, and by the
+        // account of what happens without it.
+        "TelemetryDashboard.UI/Docking/LayoutManager.cs",                          // 162 lines
+
         // Feature 12 reaching a running program for the first time. Most of the addition in each
         // file is the account of why an interlock that transmits to hardware is off by default and
         // refuses to pick its own port, which belongs beside the code that enforces it.

@@ -187,8 +187,20 @@ public partial class ArchitectureRuleTests
         // ordinary reading, and clamped silently to the nearest sample for any instant outside its
         // buffer. A test asserted the first of those as the required behaviour.
         "Twin3DService",              // the 3D viewport control it holds state for is not in the shell
-        "WorkspaceLayoutState",
-        "WorkspaceManager",
+        // WorkspaceLayoutState deleted rather than wired. It held a preset name and two lists of
+        // panel names, with a hardcoded switch mapping "ScopeMode" to the string "ScopeView" -- a
+        // model of the dock that was never connected to the dock. LayoutManager does the same job
+        // against the real DockingManager. The only thing that ever exercised it was a Tier1 test
+        // that declared its own copy of the class at the bottom of the test file, so five green
+        // assertions covered a class the product could have lost without noticing.
+        // WorkspaceManager retired from this baseline: WorkspaceStore uses it to keep the
+        // operator's panel arrangement between sessions. Every piece of that feature already
+        // existed -- a serialiser that could write the dock and read it back, a file store, and a
+        // profile type with a LayoutXml field to carry it -- and nothing called any of it, so the
+        // window came back the way it shipped at every launch. Joining the two ends needed one
+        // real fix first: AvalonDock's deserialiser restores the shape of the panes and not their
+        // contents, so without answering its LayoutSerializationCallback the arrangement came back
+        // correct and every pane in it empty.
     };
 
     private static IEnumerable<string> ReferenceScanFiles() =>
