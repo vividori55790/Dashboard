@@ -61,6 +61,14 @@ public static class UsageText
               --simulate        Run the virtual simulator instead of hardware. Every frame it
                                 produces is marked simulated=true and its node id is prefixed
                                 'SIM:'. Env: {EnvironmentVariables.Simulate}=1
+              --max-clients <n> Most concurrent stream subscribers. Default
+                                {TelemetryDashboard.Core.Streaming.TelemetryBroadcastHub.DefaultMaxSubscribers}.
+                                Beyond it a connection is refused -- 503 on /stream, a close frame
+                                on /ws -- rather than admitted. There was no ceiling at all before:
+                                every subscriber is a long-lived connection and every frame is fanned
+                                out to all of them, so the cost of one more is paid by the ones
+                                already being served. A tab left reloading degrades the operator
+                                watching the plant, silently. The count refused is on /api/status.
               --watch-intervals
                                 Derive a '<channel>.interval' channel, in seconds, holding the gap
                                 since that channel last reported. Off by default because it roughly

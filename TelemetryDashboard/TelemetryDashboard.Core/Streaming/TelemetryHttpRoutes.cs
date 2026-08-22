@@ -123,6 +123,13 @@ public static class TelemetryHttpRoutes
         status = server.IsRunning ? "Running" : "Stopped",
         port = server.Port,
         connectedClients = server.ConnectedClientCount,
+
+        // The ceiling and what it has turned away. A cap that refuses clients and says nothing
+        // looks, from outside, exactly like a network dropping connections -- so an operator
+        // wondering why a second browser will not connect has the answer on the endpoint they
+        // already check, with the number they would need in order to raise it.
+        maxStreamClients = server.MaxStreamClients,
+        refusedConnections = server.RefusedConnections,
         totalPackets = server.TotalPacketsBroadcasted,
         dvrFrames = server.DvrPlayer.FrameCount,
         dvrDurationSec = server.DvrPlayer.MaxDurationSec,

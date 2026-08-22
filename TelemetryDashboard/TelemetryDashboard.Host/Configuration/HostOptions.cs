@@ -71,6 +71,16 @@ public sealed class HostOptions
     public bool WatchIntervals { get; init; }
 
     /// <summary>
+    /// Most concurrent stream subscribers, or 0 for the default.
+    /// </summary>
+    /// <remarks>
+    /// Every subscriber is a long-lived connection and every frame is fanned out to all of them, so
+    /// the cost of one more is paid by the ones already being served. There was no ceiling at all
+    /// until this existed.
+    /// </remarks>
+    public int MaxStreamClients { get; init; }
+
+    /// <summary>
     /// Directory scanned for plugin assemblies, or null for <c>plugins/</c> beside the executable.
     /// </summary>
     /// <remarks>

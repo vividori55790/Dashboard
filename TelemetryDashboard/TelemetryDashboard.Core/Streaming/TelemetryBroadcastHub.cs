@@ -15,7 +15,7 @@ namespace TelemetryDashboard.Core.Streaming;
 /// evicted without blocking or corrupting delivery to the others. Frames are serialised once and
 /// the same buffer is shared by every subscriber.
 /// </remarks>
-public sealed class TelemetryBroadcastHub : IAsyncDisposable
+public sealed partial class TelemetryBroadcastHub : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, ITelemetrySubscriber> _subscribers = new();
     private readonly ConcurrentDictionary<string, TelemetrySubscription> _subscriptions = new();
@@ -28,17 +28,13 @@ public sealed class TelemetryBroadcastHub : IAsyncDisposable
 
     public long FramesDelivered => Interlocked.Read(ref _framesDelivered);
 
+    private long _refused;
+
     /// <summary>Per-transport subscriber counts, for the operator status panel.</summary>
     public IReadOnlyDictionary<string, int> SubscribersByTransport =>
         _subscribers.Values
             .GroupBy(s => s.Transport, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
-
-    public void Add(ITelemetrySubscriber subscriber)
-    {
-        ArgumentNullException.ThrowIfNull(subscriber);
-        _subscribers[subscriber.Id] = subscriber;
-    }
 
     public async Task RemoveAsync(string subscriberId)
     {

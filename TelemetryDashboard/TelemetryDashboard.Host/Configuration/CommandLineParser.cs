@@ -39,6 +39,14 @@ public static class CommandLineParser
                     draft.WatchIntervals = true;
                     break;
 
+                case "--max-clients":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawClients)) return ArgumentCursor.MissingValue(argument);
+                    if (!int.TryParse(rawClients, out draft.MaxStreamClients) || draft.MaxStreamClients < 1)
+                    {
+                        return ArgumentCursor.Fail($"'{rawClients}' is not a client count of 1 or more.");
+                    }
+                    break;
+
                 case "--port" or "-p":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawPort)) return ArgumentCursor.MissingValue(argument);
                     if (!EnvironmentVariables.TryPort(rawPort, out draft.Port)) return ArgumentCursor.Fail($"'{rawPort}' is not a TCP port between 1 and 65535.");

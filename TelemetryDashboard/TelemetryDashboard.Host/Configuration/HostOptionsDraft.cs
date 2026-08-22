@@ -24,6 +24,7 @@ internal sealed class HostOptionsDraft
         RecordingDirectory = defaults.RecordingDirectory;
         Simulate = defaults.Simulate;
         WatchIntervals = defaults.WatchIntervals;
+        MaxStreamClients = defaults.MaxStreamClients;
         PluginDirectory = defaults.PluginDirectory;
         ExtensionDirectory = defaults.ExtensionDirectory;
         ExtensionCatalogue = defaults.ExtensionCatalogue;
@@ -64,6 +65,8 @@ internal sealed class HostOptionsDraft
     public bool Simulate;
 
     public bool WatchIntervals;
+
+    public int MaxStreamClients;
     public string? PluginDirectory;
     public string? ExtensionDirectory;
     public string? ExtensionCatalogue;
@@ -96,6 +99,7 @@ internal sealed class HostOptionsDraft
         RecordingDirectory = RecordingDirectory,
         Simulate = Simulate,
         WatchIntervals = WatchIntervals,
+        MaxStreamClients = MaxStreamClients,
         PluginDirectory = PluginDirectory,
         ExtensionDirectory = ExtensionDirectory,
         ExtensionCatalogue = ExtensionCatalogue,

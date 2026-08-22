@@ -225,43 +225,16 @@ public class F25_F34_ExtensionStorageBoundaryTests
 
     #endregion
 
-    #region F28: Kestrel Embedded Web Server (Boundary Tests)
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F28_Boundary_MalformedHttpRequest_Returns400BadRequest()
-    {
-        var handler = new SseStreamHandler();
-        string rawHttp = "BAD_HTTP_REQUEST_HEADER\r\n\r\n";
-
-        int statusCode = handler.ProcessRawRequest(rawHttp);
-        statusCode.Should().Be(400);
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F28_Boundary_WebClientDisconnectMidStream_CleansUpSseConnection()
-    {
-        var handler = new SseStreamHandler();
-        string clientId = handler.RegisterClient();
-
-        handler.UnregisterClient(clientId);
-        handler.ActiveClientCount.Should().Be(0);
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F28_Boundary_MaxConcurrentWebClients_RejectsExcessConnections()
-    {
-        var handler = new SseStreamHandler(maxClients: 2);
-        handler.RegisterClient();
-        handler.RegisterClient();
-
-        Action act = () => handler.RegisterClient();
-        act.Should().Throw<InvalidOperationException>();
-    }
-
-    #endregion
+    // F28's three tests exercised SseStreamHandler, which is gone. It kept its own dictionary of
+    // connected clients -- a second copy of the register TelemetryBroadcastHub already owns -- so
+    // wiring it would have meant two records of who is connected, free to disagree, which is the
+    // defect class this project keeps finding rather than one to introduce.
+    //
+    // Its one real idea, refusing a connection rather than admitting it into a hub whose existing
+    // clients would pay for it, now lives on the hub itself and is covered by StreamClientCapTests
+    // against the running server. Its other idea, hand-parsing an HTTP request line for a 400, was
+    // never reachable: this server runs on HttpListener, which rejects a malformed request long
+    // before any of this code sees it.
 
     #region F29: Notion REST API Automated Report Generator (Boundary Tests)
 

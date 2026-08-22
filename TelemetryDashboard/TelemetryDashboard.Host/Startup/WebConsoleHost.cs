@@ -52,7 +52,7 @@ public sealed class WebConsoleHost : IAsyncDisposable
     /// <summary>Binds the port and begins serving. Throws when the port cannot be bound.</summary>
     public static WebConsoleHost Start(HostOptions options)
     {
-        var server = new TelemetryStreamingServer(options.Port);
+        var server = new TelemetryStreamingServer(options.Port, maxStreamClients: options.MaxStreamClients);
 
         IReadOnlyList<string> roots = ResolveRoots(options);
         foreach (string root in roots)

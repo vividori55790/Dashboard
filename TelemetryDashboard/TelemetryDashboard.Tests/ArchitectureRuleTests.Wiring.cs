@@ -102,6 +102,24 @@ public partial class ArchitectureRuleTests
         // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
         // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
         // without inferring it from coordinates and getting a cursor at the origin wrong.
+        // SseStreamHandler left this baseline by being deleted rather than wired, and that is the
+        // honest outcome for it. It kept its own dictionary of connected clients -- a second copy
+        // of the register TelemetryBroadcastHub already owns -- so wiring it would have meant two
+        // records of who is connected, free to disagree. That is the defect class this project
+        // keeps finding, not one to introduce on purpose.
+        //
+        // Its one real idea was worth taking: refuse a connection rather than admit it into a hub
+        // whose existing clients would pay for it. The hub had no ceiling at all, and every
+        // subscriber is a long-lived connection every frame is fanned out to, so a tab left
+        // reloading degraded the operator watching the plant, silently. TelemetryBroadcastHub now
+        // caps admissions, /stream answers 503 and /ws closes with a status, and --max-clients
+        // moves the number. Measured on the running host at --max-clients 2: two clients received
+        // 224 frames each while the third was refused, and a fourth got in once they had gone.
+        //
+        // Its other idea, hand-parsing an HTTP request line to return 400, was never reachable:
+        // this server runs on HttpListener, which rejects a malformed request before any of that
+        // code would see it.
+        //
         // PortablePackageChecker retired from this baseline: the host asks it, before opening the
         // archive, whether SQLite's native library is on this machine at all. Only that one method
         // is driven -- ParseArgs duplicates this host's own command-line parser and wiring it would
@@ -250,7 +268,6 @@ public partial class ArchitectureRuleTests
         // removed. The need it named is already met by wiring that exists: --replay <csv>
         // --archive <db> plays a recording through the pipeline and into the durable store,
         // measured at 990 CSV rows in and 990 samples queryable out.
-        "SseStreamHandler",
         // RecordPipeline, NumericPacketStage, StageActivity and TelemetryCircuitBreaker retired
         // from this baseline: TelemetryIngestPump now routes every arrival through the record path,
         // and IngestRateGuard puts the breaker in force. Before this the M6 record layer carried

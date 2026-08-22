@@ -80,7 +80,14 @@ public sealed class WebRtcTelemetryBridge : IWebRtcDataBridge, IAsyncDisposable
 
         if (_hub is not null)
         {
-            channel.onopen += () => _hub.Add(peer);
+            // Refused rather than admitted when the hub is full, on the same terms as a WebSocket
+            // or an SSE client: a data channel is another long-lived connection every frame has to
+            // be fanned out to, and the cost of one more is paid by the clients already being
+            // served. The peer is torn down rather than left open on a hub that will never feed it.
+            channel.onopen += () =>
+            {
+                if (!_hub.TryAdd(peer)) _ = ClosePeerAsync(clientId);
+            };
             channel.onclose += () => _ = _hub.RemoveAsync(peer.Id);
         }
 

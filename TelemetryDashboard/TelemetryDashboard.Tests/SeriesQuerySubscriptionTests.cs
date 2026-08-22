@@ -53,7 +53,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }, maxUpdateHz: 10, maxPoints: 500), 0.0);
 
         var pump = new SeriesBroadcastPump(hub, new SeriesQueryService(StoreWithTwoChannels(50_000)));
@@ -70,7 +70,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }, maxUpdateHz: 10), NowSec);
 
         var pump = new SeriesBroadcastPump(hub, new SeriesQueryService(StoreWithTwoChannels(10_000)));
@@ -90,7 +90,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp", "B.pressure" }, maxPoints: 800), 0.0);
 
         var pump = new SeriesBroadcastPump(hub, new SeriesQueryService(StoreWithTwoChannels(200_000)));
@@ -109,7 +109,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }, maxPoints: 500, windowSec: 3_600), 0.0);
 
         var pump = new SeriesBroadcastPump(hub, new SeriesQueryService(StoreWithTwoChannels(100_000)));
@@ -135,7 +135,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }, maxPoints: 2_000), 0.0);
 
         var pump = new SeriesBroadcastPump(hub, new SeriesQueryService(StoreWithTwoChannels(100)));
@@ -155,8 +155,8 @@ public class SeriesQuerySubscriptionTests
         var hub = new TelemetryBroadcastHub();
         var subscribed = new RecordingSubscriber("s1");
         var plain = new RecordingSubscriber("s2");
-        hub.Add(subscribed);
-        hub.Add(plain);
+        hub.TryAdd(subscribed);
+        hub.TryAdd(plain);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }, maxUpdateHz: 1), 0.0);
 
         for (int i = 0; i < 25; i++) await hub.BroadcastAsync(new byte[] { 1, 2, 3 });
@@ -210,7 +210,7 @@ public class SeriesQuerySubscriptionTests
     {
         var hub = new TelemetryBroadcastHub();
         var subscriber = new RecordingSubscriber("s1");
-        hub.Add(subscriber);
+        hub.TryAdd(subscriber);
         hub.Subscribe("s1", new SubscriptionOptions(new[] { "A.temp" }), 0.0);
 
         await hub.BroadcastAsync(new byte[] { 9 });

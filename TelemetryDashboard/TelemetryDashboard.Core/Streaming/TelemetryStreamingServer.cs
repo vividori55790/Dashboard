@@ -24,7 +24,23 @@ namespace TelemetryDashboard.Core.Streaming;
 public partial class TelemetryStreamingServer : IAsyncDisposable
 {
     private readonly HttpListener _listener = new();
-    private readonly TelemetryBroadcastHub _hub = new();
+    /// <summary>What a refused client is told, on either transport.</summary>
+    /// <remarks>
+    /// The same sentence for both so an operator reading a browser console and one reading a socket
+    /// close frame are looking at the same fact, and it names the ceiling because "too many" without
+    /// a number tells nobody whether to raise it or to go find the client that is looping.
+    /// </remarks>
+    internal string HubFullReason =>
+        $"stream client limit reached ({_hub.MaxSubscribers}); "
+        + "refusing this connection rather than degrading the streams already running";
+
+    /// <summary>Connections turned away because the hub was already full.</summary>
+    public long RefusedConnections => _hub.RefusedConnections;
+
+    /// <summary>Most concurrent stream subscribers this server admits.</summary>
+    public int MaxStreamClients => _hub.MaxSubscribers;
+
+    private readonly TelemetryBroadcastHub _hub;
     private readonly StaticContentHost _content = new();
     private readonly CancellationTokenSource _cts = new();
 
@@ -116,10 +132,22 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// urlacl</c> reservation; <see cref="Start"/> reports that plainly rather than failing with
     /// HttpListener's bare "Access is denied".
     /// </remarks>
-    public TelemetryStreamingServer(int port = 8080, bool acceptRemoteConnections = false)
+    /// <param name="maxStreamClients">
+    /// Most concurrent stream subscribers. Above this, connections are refused rather than
+    /// admitted into a hub whose existing clients would pay for them; see
+    /// <see cref="TelemetryBroadcastHub.MaxSubscribers"/>. Non-positive means the default.
+    /// </param>
+    public TelemetryStreamingServer(
+        int port = 8080, bool acceptRemoteConnections = false, int maxStreamClients = 0)
     {
         Port = port;
         IsNetworkReachable = acceptRemoteConnections;
+        _hub = new TelemetryBroadcastHub
+        {
+            MaxSubscribers = maxStreamClients > 0
+                ? maxStreamClients
+                : TelemetryBroadcastHub.DefaultMaxSubscribers
+        };
 
         var prefixes = new List<string>();
         if (acceptRemoteConnections)
@@ -331,7 +359,15 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     {
         WebSocketContext wsContext = await context.AcceptWebSocketAsync(subProtocol: null).ConfigureAwait(false);
         var subscriber = new WebSocketSubscriber(Guid.NewGuid().ToString("N"), wsContext.WebSocket);
-        _hub.Add(subscriber);
+        if (!_hub.TryAdd(subscriber))
+        {
+            // Closed with a status the client can read, rather than left open on a hub that will
+            // never send it anything -- a socket that connects and stays silent is the hardest
+            // failure of all to diagnose from the other end.
+            await wsContext.WebSocket.CloseAsync(
+                WebSocketCloseStatus.PolicyViolation, HubFullReason, token).ConfigureAwait(false);
+            return;
+        }
 
         try
         {
@@ -389,14 +425,26 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     private async Task AcceptServerSentEventsAsync(HttpListenerContext context, CancellationToken token)
     {
         HttpListenerResponse response = context.Response;
+
+        // Admission before the 200. Sending event-stream headers and then discovering the hub is
+        // full would leave the client holding a stream that never produces a frame.
+        var subscriber = new ServerSentEventSubscriber(Guid.NewGuid().ToString("N"), response.OutputStream);
+        if (!_hub.TryAdd(subscriber))
+        {
+            response.StatusCode = 503;
+            response.ContentType = "text/plain; charset=utf-8";
+            response.AddHeader("Retry-After", "5");
+            byte[] body = Encoding.UTF8.GetBytes(HubFullReason);
+            await response.OutputStream.WriteAsync(body, token).ConfigureAwait(false);
+            response.Close();
+            return;
+        }
+
         response.StatusCode = 200;
         response.ContentType = "text/event-stream; charset=utf-8";
         response.AddHeader("Cache-Control", "no-cache");
         response.AddHeader("Access-Control-Allow-Origin", "*");
         response.SendChunked = true;
-
-        var subscriber = new ServerSentEventSubscriber(Guid.NewGuid().ToString("N"), response.OutputStream);
-        _hub.Add(subscriber);
 
         // Prime the stream so clients see an immediate connection confirmation.
         await subscriber.SendAsync(
