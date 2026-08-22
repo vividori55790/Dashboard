@@ -149,6 +149,31 @@
     #derived-table td.expr { font-size: 11px; color: var(--text-3); word-break: break-all; }
     #derived-table tr.unavailable td.val { color: var(--text-3); }
 
+    #control-panel { margin-top: 16px; }
+    .control-note { font-size: 12px; line-height: 1.7; color: var(--text-3); margin: 0 0 14px; }
+    .control-row { display: grid; grid-template-columns: 1fr 190px 96px; gap: 12px; align-items: center;
+                   padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .control-row:last-of-type { border-bottom: none; }
+    .control-name { font-size: 12.5px; }
+    .control-name .id { display: block; font-size: 11px; color: var(--text-3); }
+    .control-row input[type=range] { width: 100%; }
+    .control-row .set { display: flex; gap: 6px; align-items: center; }
+    .control-row input[type=number] {
+        width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+        border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .scenarios { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button.cmd {
+        background: var(--panel-2); color: var(--text-2); border: 1px solid var(--line);
+        border-radius: 6px; padding: 7px 12px; font: inherit; font-size: 12px; cursor: pointer;
+    }
+    button.cmd:hover { color: var(--text); border-color: var(--text-3); }
+    button.cmd.reset { margin-left: auto; }
+    #control-status { margin-top: 12px; font-size: 12px; min-height: 18px; color: var(--text-3); }
+    #control-status.ok { color: var(--ok); }
+    #control-status.warn { color: var(--alarm); }
+
     .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 12px; font-weight: 600; }
 
     table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -205,6 +230,18 @@
             <thead><tr><th>채널</th><th>값</th><th>식</th><th>상태</th></tr></thead>
             <tbody><tr><td colspan="4" class="empty">/api/computed 를 읽는 중…</td></tr></tbody>
         </table>
+    </div>
+    <div class="panel" id="control-panel">
+        <h2>커미셔닝 &mdash; 값을 직접 움직여 알람과 인터록을 확인합니다</h2>
+        <p class="control-note">
+            알람이 정말 도는지 확인하려면 채널을 위험한 값에 놓아봐야 합니다. 여기서 지시하면
+            실제 하드웨어를 과전압시키지 않고도 한계 초과 &rarr; 알림 &rarr; 인터록까지 전부
+            확인할 수 있습니다. <em>생성된 소스(시뮬레이터·루프백)에서만</em> 동작하며, 실제 장비를
+            읽는 호스트는 여기서 읽기 전용입니다.
+        </p>
+        <div id="control-rows"><div class="empty">/api/control 을 읽는 중…</div></div>
+        <div class="scenarios" id="control-scenarios"></div>
+        <div id="control-status"></div>
     </div>
 </main>
 
@@ -451,6 +488,132 @@
 
     pollDerived();
     setInterval(pollDerived, 2000);
+
+    // ---- 커미셔닝 --------------------------------------------------------
+    // 이 패널이 없으면 /api/control 은 curl 로만 쓸 수 있고, 이 제품의 사용자는 브라우저를
+    // 엽니다. 화면에서 지켜야 하는 성질은 하나입니다: 요청한 값과 실제로 적용된 값이 다르면
+    // 반드시 그렇게 보여야 합니다. 450 이 적용됐는데 999 라고 적힌 입력칸을 남겨두면,
+    // 운영자는 버스가 999 V 라고 믿은 채로 "알람이 안 울렸다"고 결론냅니다.
+    // 이 페이지에는 esc() 가 없습니다. 옆 콘솔(stream_client.html)에 있는 것을 그대로 불렀다가
+    // 렌더가 죽었고, 그 오류를 표시하려던 경로도 같은 함수를 쓰는 바람에 함께 죽어서 화면에는
+    // 빈 칸만 남았습니다 -- 오류 처리기가 오류 처리기를 필요로 하면 안 됩니다.
+    function escapeText(value) {
+        return String(value).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+    }
+
+    var controlRows = document.getElementById('control-rows');
+    var controlScenarios = document.getElementById('control-scenarios');
+    var controlStatus = document.getElementById('control-status');
+
+    function say(text, kind) {
+        controlStatus.textContent = text;
+        controlStatus.className = kind || '';
+    }
+
+    function post(query) {
+        // 본문이 없으면 Windows 의 HTTP 스택이 411 로 되돌립니다 -- 호스트 코드에 닿기 전에.
+        // 브라우저는 Content-Length: 0 을 붙이지만, 명시적으로 빈 본문을 보내 의도를 남깁니다.
+        return fetch('/api/control?' + query, { method: 'POST', body: '' })
+            .then(function (r) { return r.json(); });
+    }
+
+    function applied(result) {
+        if (result.Status !== 'Success') { say(result.Reason || '거부되었습니다', 'warn'); return; }
+
+        if (result.Clamped) {
+            // 성공이지만 요청한 값이 아닙니다. 이것을 조용히 넘기면 화면이 거짓말을 합니다.
+            say(result.Reason, 'warn');
+        } else if (result.Applied !== null && result.Applied !== undefined) {
+            say(result.Channel + ' = ' + result.Applied + ' 적용됨', 'ok');
+        } else {
+            say((result.Command || '명령') + ' 적용됨', 'ok');
+        }
+
+        loadControl();
+    }
+
+    function renderControl(payload, why) {
+        controlRows.innerHTML = '';
+        controlScenarios.innerHTML = '';
+
+        if (!payload || payload.Status !== 'Success') {
+            controlRows.innerHTML = '<div class="empty">' +
+                escapeText(why || (payload && payload.Reason) || '제어할 수 있는 것이 없습니다') + '</div>';
+            return;
+        }
+
+        (payload.Channels || []).forEach(function (c) {
+            var row = document.createElement('div');
+            row.className = 'control-row';
+
+            var span = c.Maximum - c.Minimum;
+            var step = span > 100 ? 1 : (span > 10 ? 0.1 : 0.01);
+
+            row.innerHTML =
+                '<div class="control-name">' + escapeText(c.Label || c.Id) +
+                '<span class="id mono">' + escapeText(c.Id) + ' · ' + c.Minimum + '–' + c.Maximum +
+                ' ' + escapeText(c.Unit) + '</span></div>' +
+                '<input type="range" min="' + c.Minimum + '" max="' + c.Maximum + '" step="' + step +
+                '" value="' + c.Setpoint + '">' +
+                '<div class="set"><input type="number" step="' + step + '" value="' + c.Setpoint + '"></div>';
+
+            var slider = row.querySelector('input[type=range]');
+            var box = row.querySelector('input[type=number]');
+
+            slider.addEventListener('input', function () { box.value = slider.value; });
+            slider.addEventListener('change', function () { send(c.Id, slider.value); });
+            box.addEventListener('change', function () { send(c.Id, box.value); });
+
+            controlRows.appendChild(row);
+        });
+
+        (payload.Scenarios || []).forEach(function (sc) {
+            var b = document.createElement('button');
+            b.className = 'cmd';
+            b.textContent = sc.Label || sc.Id;
+            b.title = sc.Description || '';
+            b.addEventListener('click', function () {
+                post('cmd=scenario&id=' + encodeURIComponent(sc.Id)).then(applied);
+            });
+            controlScenarios.appendChild(b);
+        });
+
+        var reset = document.createElement('button');
+        reset.className = 'cmd reset';
+        reset.textContent = '전부 기본값으로';
+        reset.addEventListener('click', function () { post('cmd=reset').then(applied); });
+        controlScenarios.appendChild(reset);
+    }
+
+    function send(channel, value) {
+        post('cmd=setpoint&channel=' + encodeURIComponent(channel) + '&value=' + encodeURIComponent(value))
+            .then(applied)
+            .catch(function () { say('명령을 보내지 못했습니다', 'warn'); });
+    }
+
+    function loadControl() {
+        // 두 가지 실패를 구분합니다. 요청이 실패한 것과, 응답은 왔는데 그리다가 터진 것은
+        // 원인이 완전히 다른데, 하나의 catch 로 묶으면 화면에는 똑같이 "닿지 못했습니다"가
+        // 뜹니다 -- 실제로 이 패널의 첫 버전이 그렇게 거짓 진단을 내놨습니다.
+        fetch('/api/control')
+            .then(function (r) { return r.json(); })
+            .catch(function (e) {
+                renderControl(null, '/api/control 에 닿지 못했습니다: ' + e);
+                return null;
+            })
+            .then(function (payload) {
+                if (payload === null) return;
+                try {
+                    renderControl(payload);
+                } catch (e) {
+                    renderControl(null, '응답은 받았지만 화면을 그리지 못했습니다: ' + e);
+                }
+            });
+    }
+
+    loadControl();
 
     // ---- 연결 -----------------------------------------------------------
     var PORT = new URLSearchParams(location.search).get('port')

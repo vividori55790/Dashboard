@@ -39,9 +39,23 @@ function makeEl(id) {
         _id: id, innerText: '', textContent: '', className: '', _innerHTML: '',
         style: {}, children: [], clientWidth: 400,
         appendChild(c) { this.children.push(c); return c; },
+        // Buttons the page creates get handlers attached to them. Without this the page's own
+        // error path fires -- correctly -- about a shim that cannot be wired to.
+        addEventListener() {},
+        dispatchEvent() {},
         insertBefore(c) { this.children.unshift(c); return c; },
         removeChild(c) { this.children = this.children.filter(x => x !== c); return c; },
-        querySelector: () => null,
+        // Rows the page builds are queried for the inputs inside them. Returning null made the
+        // page's own error path fire with "화면을 그리지 못했습니다", which is the page behaving
+        // correctly about a shim that is too thin. A stub input is enough for the page to attach
+        // its handlers; the assertions below are on the markup the page produced, not on this.
+        querySelector(sel) {
+            if (!/input|button/.test(String(sel))) return null;
+            this._stubs = this._stubs || {};
+            return (this._stubs[sel] = this._stubs[sel] || {
+                value: '', checked: false, addEventListener() {}, dispatchEvent() {}
+            });
+        },
         get firstChild() { return this.children[0] || null; },
         get lastChild() { return this.children[this.children.length - 1] || null; },
         classList: {
@@ -81,7 +95,8 @@ function makeEl(id) {
 }
 
 ['chain', 'conn-dot', 'conn-text', 'node-chip', 'sim-banner', 'log', 'table',
- 'derived-panel', 'derived-table']
+ 'derived-panel', 'derived-table', 'control-panel', 'control-rows', 'control-scenarios',
+ 'control-status']
     .forEach(id => elements.set(id, makeEl(id)));
 
 const tbody = makeEl('tbody');
@@ -103,13 +118,27 @@ const document = {
 // page is exercised against what the host actually serves; a stubbed /api/computed would only
 // confirm that the page can render a shape this file invented.
 const pendingFetches = [];
-function sandboxFetch(path) {
+function sandboxFetch(path, init) {
+    // The commissioning panel POSTs. Windows' HTTP stack answers 411 to a POST with no
+    // Content-Length, so the body is always sent -- the same requirement a browser satisfies for
+    // itself and the reason the help text mentions it.
+    const method = (init && init.method) || 'GET';
+    const body = (init && init.body) || '';
+
     const p = new Promise((resolve, reject) => {
-        http.get({ host: 'localhost', port, path }, res => {
-            let body = '';
-            res.on('data', c => { body += c; });
-            res.on('end', () => resolve({ json: () => Promise.resolve(JSON.parse(body)) }));
-        }).on('error', reject);
+        const request = method === 'GET'
+            ? http.get({ host: 'localhost', port, path }, collect)
+            : http.request({ host: 'localhost', port, path, method,
+                             headers: { 'Content-Length': Buffer.byteLength(body) } }, collect);
+
+        function collect(res) {
+            let text = '';
+            res.on('data', c => { text += c; });
+            res.on('end', () => resolve({ json: () => Promise.resolve(JSON.parse(text)) }));
+        }
+
+        request.on('error', reject);
+        if (method !== 'GET') request.end(body);
     });
     pendingFetches.push(p.catch(() => null));
     return p;
@@ -302,6 +331,26 @@ async function finish() {
             && Math.abs(eff - (100 * pout / pin)) < 1e-3,
             'efficiency=' + eff + ' vs 100*p_out/p_in=' + (100 * pout / pin).toFixed(6));
     }
+
+    // ---- the commissioning panel -------------------------------------------
+    // /api/control existed for a cycle before anything in a browser could reach it, which is the
+    // same shape of defect this project keeps finding: a capability nobody can get to. These
+    // checks are about the panel being wired to the host, not about how it looks.
+    await Promise.allSettled(pendingFetches);
+    await new Promise(resolve => setImmediate(resolve));
+
+    const controlMarkup = String(elements.get('control-rows').innerHTML)
+        + elements.get('control-rows').children.map(c => String(c.innerHTML)).join('');
+    const scenarioButtons = elements.get('control-scenarios').children.length;
+
+    check('the commissioning panel was filled from /api/control',
+        controlMarkup.includes('dab.bus_voltage') && scenarioButtons > 0,
+        elements.get('control-rows').children.length + ' row(s), ' + scenarioButtons
+        + ' button(s); holds: ' + controlMarkup.slice(0, 90));
+
+    check('each row names the range the profile allows, not a generic slider',
+        controlMarkup.includes('350') && controlMarkup.includes('450'),
+        'the bus row should carry its own bounds');
 
     console.log(`\n${failures === 0 ? 'all checks passed' : failures + ' check(s) failed'}`);
     process.exit(failures === 0 ? 0 : 1);
