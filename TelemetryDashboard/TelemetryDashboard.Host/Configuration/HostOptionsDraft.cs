@@ -27,6 +27,7 @@ internal sealed class HostOptionsDraft
         MaxStreamClients = defaults.MaxStreamClients;
         DriftWindowSeconds = defaults.DriftWindowSeconds;
         IncidentDirectory = defaults.IncidentDirectory;
+        RetentionSpec = defaults.RetentionSpec;
         PluginDirectory = defaults.PluginDirectory;
         ExtensionDirectory = defaults.ExtensionDirectory;
         ExtensionCatalogue = defaults.ExtensionCatalogue;
@@ -73,6 +74,8 @@ internal sealed class HostOptionsDraft
     public int DriftWindowSeconds;
 
     public string? IncidentDirectory;
+
+    public string? RetentionSpec;
     public string? PluginDirectory;
     public string? ExtensionDirectory;
     public string? ExtensionCatalogue;
@@ -108,6 +111,7 @@ internal sealed class HostOptionsDraft
         MaxStreamClients = MaxStreamClients,
         DriftWindowSeconds = DriftWindowSeconds,
         IncidentDirectory = IncidentDirectory,
+        RetentionSpec = RetentionSpec,
         PluginDirectory = PluginDirectory,
         ExtensionDirectory = ExtensionDirectory,
         ExtensionCatalogue = ExtensionCatalogue,

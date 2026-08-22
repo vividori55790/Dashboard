@@ -44,9 +44,17 @@ public static class ArchiveSetup
             return false;
         }
 
+        Core.Storage.RetentionPolicy retention = Core.Storage.RetentionPolicy.Disabled;
+        if (options.RetentionSpec is not null
+            && !Core.Storage.RetentionSpec.TryParse(options.RetentionSpec, out retention, out string? why))
+        {
+            refusal = $"--retain {options.RetentionSpec}: {why}";
+            return false;
+        }
+
         try
         {
-            archive = ArchiveSink.Open(options.ArchivePath);
+            archive = ArchiveSink.Open(options.ArchivePath, retention);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException
                                       or UnauthorizedAccessException)
@@ -60,6 +68,13 @@ public static class ArchiveSetup
         server.Archive = archive.Store;
         Console.WriteLine($"  archive       {archive.DatabasePath}");
         Console.WriteLine("                queryable at /api/history?channel=<id>&from=<iso>&to=<iso>");
+
+        if (archive.Tiered is not null)
+        {
+            Console.WriteLine($"                tiered layout, pruned every "
+                + $"{RetentionSweep.Interval.TotalHours:0} h to {options.RetentionSpec}");
+        }
+
         return true;
     }
 }

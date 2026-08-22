@@ -127,7 +127,7 @@ public static class Program
         {
             Console = console,
             // RunAllAsync, not RunAsync: this pump is two loops now, and which ones is its business.
-            Pumping = pump?.RunAllAsync(shutdown.Token) ?? Task.CompletedTask,
+            Pumping = BackgroundWork.RunAsync(pump, archive, shutdown.Token),
             Plugins = plugins,
             Relays = relays,
             Source = source,

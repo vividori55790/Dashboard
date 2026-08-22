@@ -270,17 +270,16 @@ public partial class ArchitectureRuleTests
         // thirty. Measured on the running application with a twenty-channel profile:
         // "Samples: 2,176 | Channels: 16 | Time: 33.8s | dropped 544 (544 past channel cap)",
         // where before it said only the first three fields.
-        // TieredTelemetryStore arrived on this baseline the day the rule stopped counting a
-        // partial's own other halves as external references. It is split across four files, and the
-        // old check asked only whether some file *other than the one it was first seen in* named
-        // it -- which TieredTelemetryStore.Query.cs does, being one of its own halves. So every
-        // multi-file partial in this solution was marked reached automatically, used or not, and
-        // this one is not used: nothing constructs a hot/warm/cold store with retention, so the
-        // tiering, the roll-ups and the retention sweep are all written, all tested and all off.
+        // TieredTelemetryStore retired from this baseline one cycle after the corrected rule found
+        // it. The archive uses it whenever --retain names a policy, and RetentionSweep applies that
+        // policy on a clock -- which is the gap the store's own remarks recorded in so many words:
+        // "Nothing calls this on a timer and nothing calls it at start-up." Four partial files of
+        // tiering, rollups and retention were all written, all tested and all off.
         //
-        // Recorded rather than wired in the same breath, because it is a feature-sized piece of
-        // work and pretending otherwise would be how it gets half-done.
-        "TieredTelemetryStore",
+        // Measured on the running host: a replay archived into the tiered layout, then the host
+        // restarted with raw=10s,minute=1d, printed at start-up "retention removed: 602 raw blocks
+        // / 602 samples (...), 0 minute windows" -- the raw gone, the minute rollups kept, which is
+        // the whole bargain of the tiering.
         "SampleTelemetryPlugin",
         // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
         // source behind --replay, so a recording can be played back through the pipeline that wrote

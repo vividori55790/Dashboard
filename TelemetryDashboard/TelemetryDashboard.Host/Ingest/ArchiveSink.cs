@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Storage;
 using TelemetryDashboard.Infrastructure.Storage;
 
 namespace TelemetryDashboard.Host.Ingest;
@@ -30,28 +31,36 @@ public sealed class ArchiveSink : IAsyncDisposable
     /// <remarks>Roughly half a minute at 120 samples a second, which is a slow disk's worth.</remarks>
     public const int RingCapacity = 4_000;
 
-    private readonly SqliteDataLogger _store;
+    private readonly ArchiveStore _store;
     private readonly ChannelDataLogger _ring;
     private readonly ChannelDataLoggerDrain _drain;
 
-    private ArchiveSink(SqliteDataLogger store, ChannelDataLogger ring, ChannelDataLoggerDrain drain)
+    private ArchiveSink(ArchiveStore store, ChannelDataLogger ring, ChannelDataLoggerDrain drain)
     {
         _store = store;
         _ring = ring;
         _drain = drain;
     }
 
+    /// <summary>The tiered store behind this archive, or null when it is the row store.</summary>
+    /// <remarks>
+    /// Exposed so the host can run its prune and print what it removed. Nothing here schedules
+    /// that: deleting data is an act somebody has to have asked for, and the store's own remarks
+    /// say the same.
+    /// </remarks>
+    public TieredTelemetryStore? Tiered => _store.Tiered;
+
     /// <summary>The database this run is writing into.</summary>
-    public string DatabasePath => _store.DatabasePath;
+    public string DatabasePath => _store.Path();
 
     /// <summary>Samples committed to disk.</summary>
-    public long Written => _store.WrittenCount;
+    public long Written => _store.Written();
 
     /// <summary>Samples the ring could not hold, and which are therefore not in the archive.</summary>
     public long Dropped => _ring.DroppedCount;
 
     /// <summary>The store, for reading the archive back.</summary>
-    public IDataLogger Store => _store;
+    public IDataLogger Store => _store.Logger;
 
     /// <summary>Opens the archive, or returns null when it was not asked for.</summary>
     /// <remarks>
@@ -59,17 +68,25 @@ public sealed class ArchiveSink : IAsyncDisposable
     /// who passed <c>--archive</c> and got a run with no archive would find out when they came
     /// looking for the data, which is the worst possible moment.
     /// </remarks>
-    public static ArchiveSink? Open(string? path)
+    /// <param name="retention">
+    /// Enabled means the tiered, prunable layout; disabled means the row store, which keeps every
+    /// sample and its wire text forever. That is a real choice and not a tuning knob: the tiered
+    /// store does not carry <c>RawData</c>, so an archive that has to be able to show the original
+    /// bytes is the row store whatever it costs.
+    /// </param>
+    public static ArchiveSink? Open(string? path, RetentionPolicy? retention = null)
     {
         if (path is null) return null;
+
+        RetentionPolicy policy = (retention ?? RetentionPolicy.Disabled).Validated();
 
         string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
-        SqliteDataLogger store;
+        ArchiveStore store;
         try
         {
-            store = new SqliteDataLogger(path);
+            store = ArchiveStore.Open(path, policy);
         }
         catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException
                                       or BadImageFormatException or System.Reflection.TargetInvocationException)
@@ -85,7 +102,7 @@ public sealed class ArchiveSink : IAsyncDisposable
         }
 
         var ring = new ChannelDataLogger(RingCapacity);
-        var drain = new ChannelDataLoggerDrain(ring, store);
+        var drain = new ChannelDataLoggerDrain(ring, store.Logger);
         drain.Start();
 
         return new ArchiveSink(store, ring, drain);
@@ -118,6 +135,6 @@ public sealed class ArchiveSink : IAsyncDisposable
             Console.Error.WriteLine($"telemetry-host: archive did not flush cleanly: {ex.Message}");
         }
 
-        _store.Dispose();
+        (_store.Logger as IDisposable)?.Dispose();
     }
 }

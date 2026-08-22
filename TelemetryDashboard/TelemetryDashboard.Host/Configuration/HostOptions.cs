@@ -103,6 +103,17 @@ public sealed class HostOptions
     public string? IncidentDirectory { get; init; }
 
     /// <summary>
+    /// Retention policy for the archive, or null to keep everything forever.
+    /// </summary>
+    /// <remarks>
+    /// Asking for one changes the archive's layout as well as its lifetime: it becomes the tiered
+    /// store, which keeps compressed blocks and rollups instead of a row per sample, and which is
+    /// the only layout here that can be pruned. The row store keeps the original wire text and this
+    /// one does not, so it is a choice about what the archive is for rather than a size knob.
+    /// </remarks>
+    public string? RetentionSpec { get; init; }
+
+    /// <summary>
     /// Directory scanned for plugin assemblies, or null for <c>plugins/</c> beside the executable.
     /// </summary>
     /// <remarks>

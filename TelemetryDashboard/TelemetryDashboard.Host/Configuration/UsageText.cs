@@ -69,6 +69,16 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --retain <policy> Keep the archive bounded, written as <tier>=<duration> clauses:
+                                --retain "raw=7d,minute=90d,hour=2y". Tiers are raw, second, minute
+                                and hour; a tier left out is kept forever. Units s, m, h, d, w, y.
+                                It changes the archive's layout, not only its lifetime. With a
+                                policy the archive is the tiered store -- compressed blocks and
+                                rollups maintained as data arrives, one row per batch per channel
+                                instead of one per sample -- which is the only layout here that can
+                                be pruned. That store does not keep the original wire text, so an
+                                archive that has to show the bytes a device sent stays the row store
+                                and stays unbounded. Without --retain nothing is ever deleted.
               --incident-dir <dir>
                                 Write an incident report into <dir> the moment a --limit is
                                 crossed: the sixty seconds of every channel leading up to it, plus

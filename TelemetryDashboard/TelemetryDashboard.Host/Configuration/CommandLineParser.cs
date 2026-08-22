@@ -39,6 +39,18 @@ public static class CommandLineParser
                     draft.WatchIntervals = true;
                     break;
 
+                case "--retain":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawRetain)) return ArgumentCursor.MissingValue(argument);
+                    if (!Core.Storage.RetentionSpec.TryParse(rawRetain, out _, out string? retainError))
+                    {
+                        // Refused here rather than at the store, because this is the one setting in
+                        // the product that destroys data and a run that started on a misread policy
+                        // has already deleted something by the time anyone looks.
+                        return ArgumentCursor.Fail($"--retain {rawRetain}: {retainError}");
+                    }
+                    draft.RetentionSpec = rawRetain;
+                    break;
+
                 case "--incident-dir":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawIncident)) return ArgumentCursor.MissingValue(argument);
                     draft.IncidentDirectory = System.IO.Path.GetFullPath(rawIncident);
