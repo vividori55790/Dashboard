@@ -58,6 +58,18 @@ public static class ControlSetup
                 query["value"] = parts[2];
                 break;
 
+            // signal <channel> <shape> <hz> [amplitude]
+            case "signal" when parts.Length >= 4:
+                query["channel"] = parts[1];
+                query["shape"] = parts[2];
+                query["hz"] = parts[3];
+                if (parts.Length >= 5) query["amplitude"] = parts[4];
+                break;
+
+            case "signal-off" when parts.Length >= 2:
+                query["channel"] = parts[1];
+                break;
+
             case "scenario" when parts.Length >= 2:
                 query["id"] = parts[1];
                 break;
@@ -68,7 +80,7 @@ public static class ControlSetup
             default:
                 // Not a command this understands. Said, not swallowed: a console whose button does
                 // nothing and reports nothing is the defect this whole path exists to remove.
-                Console.Error.WriteLine($"[control] ignored '{text}': not one of setpoint, scenario, reset");
+                Console.Error.WriteLine($"[control] ignored '{text}': not one of setpoint, signal, signal-off, scenario, reset");
                 return;
         }
 

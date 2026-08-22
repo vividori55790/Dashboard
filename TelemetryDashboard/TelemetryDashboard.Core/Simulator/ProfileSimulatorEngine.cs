@@ -47,6 +47,10 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
     private readonly ConcurrentDictionary<string, Analytics.SignalGeneratorService> _signals =
         new(StringComparer.Ordinal);
 
+    /// <summary>What each driven channel was asked for, so a caller can be told.</summary>
+    private readonly ConcurrentDictionary<string, Analytics.InjectedSignal> _declared =
+        new(StringComparer.Ordinal);
+
     /// <summary>When the previous tick ran, so a waveform advances by real time.</summary>
     private DateTime? _lastTickUtc;
     private readonly Channel<RawPacket> _channel;
@@ -125,8 +129,19 @@ public sealed class ProfileSimulatorEngine : ISimulatorEngine, Interfaces.ISimul
         if (!_profile.Channels.Any(c => c.Id == signal.Channel)) return false;
 
         _signals[signal.Channel] = signal.Arm();
+        _declared[signal.Channel] = signal;
         return true;
     }
+
+    /// <summary>Returns a channel to the drift model.</summary>
+    public bool ClearSignal(string channelId)
+    {
+        _declared.TryRemove(channelId ?? string.Empty, out _);
+        return _signals.TryRemove(channelId ?? string.Empty, out _);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyDictionary<string, Analytics.InjectedSignal> InjectedSignals => _declared;
 
     /// <summary>Per-channel sample rate, which is also what a spectrum of that channel will measure.</summary>
     public double SampleRateHz => 1000.0 / Math.Max(1, _interval.TotalMilliseconds);

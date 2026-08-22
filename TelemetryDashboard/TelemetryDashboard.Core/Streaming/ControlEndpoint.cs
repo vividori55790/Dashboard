@@ -33,6 +33,8 @@ public static partial class ControlEndpoint
     public static readonly IReadOnlyList<string> Commands = new[]
     {
         "setpoint&channel=<id>&value=<number>",
+        "signal&channel=<id>&shape=<sine|square|triangle|sawtooth|noise>&hz=<number>&amplitude=<number>",
+        "signal-off&channel=<id>",
         "scenario&id=<id>",
         "reset"
     };
@@ -43,6 +45,7 @@ public static partial class ControlEndpoint
             ? NotControllable()
             : new Result { Command = "describe" } with
             {
+                SampleRateHz = control.SampleRateHz,
                 Channels = control.Profile.Channels.Select(c => new ChannelState
                 {
                     Id = c.Id,
@@ -51,7 +54,10 @@ public static partial class ControlEndpoint
                     Minimum = c.Minimum,
                     Maximum = c.Maximum,
                     Nominal = c.Nominal,
-                    Setpoint = control.GetSetpoint(c.Id)
+                    Setpoint = control.GetSetpoint(c.Id),
+                    Signal = control.InjectedSignals.TryGetValue(c.Id, out Analytics.InjectedSignal? driving)
+                        ? driving.Declaration
+                        : null
                 }).ToList(),
                 Scenarios = control.Profile.Scenarios.Select(s => new ScenarioState
                 {
@@ -72,6 +78,8 @@ public static partial class ControlEndpoint
         return command switch
         {
             "setpoint" => Setpoint(control, query),
+            "signal" => Signal(control, query),
+            "signal-off" => SignalOff(control, query["channel"]),
             "scenario" => Scenario(control, query["id"]),
             "reset" => Reset(control),
             "" => Refuse(null, "no command given; pass ?cmd=" + string.Join(" or ?cmd=", Commands)),
@@ -112,6 +120,68 @@ public static partial class ControlEndpoint
                     $"{applied:G6} was applied instead")
                 : null
         };
+    }
+
+    private static Result Signal(ISimulatedControl control, NameValueCollection query)
+    {
+        string channel = (query["channel"] ?? string.Empty).Trim();
+        if (channel.Length == 0) return Refuse("signal", "no channel named; pass &channel=<id>");
+
+        string shape = (query["shape"] ?? "sine").Trim();
+        string hz = (query["hz"] ?? string.Empty).Trim();
+        string amplitude = (query["amplitude"] ?? "1").Trim();
+
+        Analytics.InjectedSignal signal;
+        try
+        {
+            signal = Analytics.InjectedSignal.Parse($"{channel}={shape}@{hz}:{amplitude}");
+        }
+        catch (FormatException ex)
+        {
+            return Refuse("signal", ex.Message) with { Channel = channel };
+        }
+
+        // Refused here rather than accepted and drawn. Above half the sample rate the samples are
+        // indistinguishable from a slower wave, so the spectrum would report a peak that is real,
+        // wrong and has no symptom -- and an injected signal exists to be the thing other
+        // measurements are checked against.
+        if (signal.AliasesAt(control.SampleRateHz))
+        {
+            return Refuse("signal",
+                $"{signal.FrequencyHz:G6} Hz is above the {control.SampleRateHz / 2:G6} Hz Nyquist "
+                + $"limit of this source ({control.SampleRateHz:G6} Hz per channel). It would fold "
+                + "back and be reported as a lower frequency that is not there.")
+                with { Channel = channel };
+        }
+
+        if (!control.InjectSignal(signal))
+        {
+            return Refuse("signal",
+                $"this profile declares no channel '{channel}'; GET /api/control lists the ones it does")
+                with { Channel = channel };
+        }
+
+        return new Result
+        {
+            Command = "signal",
+            Channel = channel,
+            Reason = $"{signal.Shape.ToString().ToLowerInvariant()} at {signal.FrequencyHz:G6} Hz, "
+                   + $"±{signal.Amplitude:G6} about the setpoint. This channel is now a reference, "
+                   + "not a simulation of the machine. A spectrum taken over a window that reaches "
+                   + "back before now mixes this with what the channel was doing before, and the "
+                   + "step between them dominates the low end: measured at 1.976 Hz over 45 s "
+                   + "against 1.9985 Hz over 10 s, for the same 2 Hz signal."
+        };
+    }
+
+    private static Result SignalOff(ISimulatedControl control, string? channelId)
+    {
+        string channel = (channelId ?? string.Empty).Trim();
+        if (channel.Length == 0) return Refuse("signal-off", "no channel named; pass &channel=<id>");
+
+        return control.ClearSignal(channel)
+            ? new Result { Command = "signal-off", Channel = channel }
+            : Refuse("signal-off", $"no signal was driving '{channel}'") with { Channel = channel };
     }
 
     private static Result Scenario(ISimulatedControl control, string? id)

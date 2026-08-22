@@ -24,6 +24,14 @@ public static partial class ControlEndpoint
 
         /// <summary>The setpoint in force.</summary>
         public double Setpoint { get; init; }
+
+        /// <summary>The waveform driving this channel, or null when the drift model is.</summary>
+        /// <remarks>
+        /// Reported so a screen can mark the channel as a reference rather than a simulation of the
+        /// machine. A driven channel that looks like every other one invites reading the chart as
+        /// though the converter were doing that.
+        /// </remarks>
+        public string? Signal { get; init; }
     }
 
     public sealed record ScenarioState
@@ -35,6 +43,9 @@ public static partial class ControlEndpoint
 
     public sealed record Result
     {
+        /// <summary>Samples per second each channel is produced at, so a caller can judge Nyquist.</summary>
+        public double SampleRateHz { get; init; }
+
         public string Status { get; init; } = "Success";
         public string? Reason { get; init; }
 

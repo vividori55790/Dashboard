@@ -153,6 +153,81 @@ public class ControlEndpointTests
         engine.GetSetpoint("dab.bus_voltage").Should().Be(400);
     }
 
+    // ---- injected waveforms -------------------------------------------------
+
+    [Fact]
+    public void AWaveformCanBeInjectedAndTakenAwayAgain()
+    {
+        // --signal could only be set at start-up, and commissioning is something someone does
+        // while watching: inject an oscillation, see what the alarm does, stop it.
+        ProfileSimulatorEngine engine = Engine();
+
+        ControlEndpoint.Result on = ControlEndpoint.Apply(engine,
+            Query("cmd", "signal", "channel", "dab.bus_voltage", "shape", "sine", "hz", "2", "amplitude", "20"));
+
+        on.Status.Should().Be("Success");
+        engine.InjectedSignals.Should().ContainKey("dab.bus_voltage");
+
+        ControlEndpoint.Apply(engine, Query("cmd", "signal-off", "channel", "dab.bus_voltage"))
+            .Status.Should().Be("Success");
+        engine.InjectedSignals.Should().NotContainKey("dab.bus_voltage");
+    }
+
+    [Fact]
+    public void ARateAboveNyquistIsRefusedRatherThanDrawnAsALowerOne()
+    {
+        // The one failure an injected signal must not have. Above half the sample rate the samples
+        // are indistinguishable from a slower wave, so the spectrum would report a peak that is
+        // real, wrong and symptomless -- on the very channel meant to be the reference.
+        ProfileSimulatorEngine engine = Engine();
+
+        ControlEndpoint.Result result = ControlEndpoint.Apply(engine,
+            Query("cmd", "signal", "channel", "dab.bus_voltage", "shape", "sine", "hz", "8", "amplitude", "5"));
+
+        result.Status.Should().Be("Error");
+        result.Reason.Should().Contain("Nyquist").And.Contain("fold back");
+        engine.InjectedSignals.Should().BeEmpty("nothing was applied");
+    }
+
+    [Fact]
+    public void TheReplySaysThatAWideSpectrumWindowWillMixRegimes()
+    {
+        // Measured on a live host: the same 2 Hz signal read 1.9985 Hz over a 10 s window that was
+        // entirely post-injection and 1.976 Hz over a 45 s one that reached back before it. The
+        // endpoint is right both times; a caller who does not know that reads the second as a
+        // wrong analyser.
+        ControlEndpoint.Result result = ControlEndpoint.Apply(Engine(),
+            Query("cmd", "signal", "channel", "dab.bus_voltage", "shape", "sine", "hz", "2", "amplitude", "20"));
+
+        result.Reason.Should().Contain("reaches back before now");
+    }
+
+    [Fact]
+    public void TurningOffASignalThatWasNotRunningSaysSo()
+    {
+        ControlEndpoint.Result result = ControlEndpoint.Apply(Engine(),
+            Query("cmd", "signal-off", "channel", "dab.bus_voltage"));
+
+        result.Status.Should().Be("Error");
+        result.Reason.Should().Contain("no signal was driving");
+    }
+
+    [Fact]
+    public void ADrivenChannelIsReportedAsDrivenSoAScreenCanSaySo()
+    {
+        // A driven channel that looks like every other one invites reading the chart as though the
+        // converter were doing that.
+        ProfileSimulatorEngine engine = Engine();
+        ControlEndpoint.Apply(engine,
+            Query("cmd", "signal", "channel", "dab.bus_voltage", "shape", "square", "hz", "1", "amplitude", "5"));
+
+        ControlEndpoint.Result described = ControlEndpoint.Describe(engine);
+
+        described.SampleRateHz.Should().BeGreaterThan(0, "a caller cannot judge Nyquist without it");
+        described.Channels.Single(c => c.Id == "dab.bus_voltage").Signal.Should().Contain("square@1");
+        described.Channels.Single(c => c.Id == "grid.voltage").Signal.Should().BeNull();
+    }
+
     // ---- the WebSocket text path -------------------------------------------
 
     [Theory]

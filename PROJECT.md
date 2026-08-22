@@ -974,7 +974,37 @@ checks **the fundamental only**. Every shape but a sine carries harmonics and th
 square is a useful reference for edge detection and not a clean one for a spectrum. Nothing here
 can make it so, and the help text says as much.
 
-**Suite: 1,160 passing, 0 failing** (1,092 portable + 68 desktop) — about 2 m 35 s with
+### Injecting a waveform while you watch
+`--signal` could only be set at start-up, and commissioning is something someone does while
+watching: put an oscillation on a channel, see what the alarm does, take it away again.
+`/api/control` gained `signal` and `signal-off`, the panel gained a shape picker and a rate box per
+row, and the same commands arrive over the WebSocket.
+
+Driven end to end from the browser: pressing 주입 on the bus row with sine/2 Hz put the channel on a
+reference waveform, and `/api/spectrum` over a clean window read **1.9825 Hz — 0.24 of a bin**. The
+row is marked 파형 주입 중 and the button becomes 해제, because a driven channel that looks like every
+other one invites reading the chart as though the converter were doing that.
+
+The rate box takes its `max` from the source's own sample rate, which `/api/control` now reports —
+Nyquist belongs on the control that sets the rate, not in a message afterwards. Above it the request
+is refused outright.
+
+**A measurement that looked wrong turned out to be right, and worth explaining.** Straight after
+injecting, the spectrum reported 0.11 Hz rather than 2 Hz. The channel was verifiably correct — raw
+samples swinging 380–420 about 400 — so the window was the suspect, and measuring three widths
+settled it:
+
+```
+window 10 s (entirely post-injection)   1.9985 Hz    0.02 bins
+window 20 s                             1.9951 Hz    0.13 bins
+window 45 s (reaches back before it)    1.9760 Hz    1.31 bins
+```
+
+The step between the drift and the injected wave dominates the low end of any window containing it.
+The endpoint is right in all three; a caller who does not know that reads the third as a broken
+analyser. The `signal` reply now says so, with those numbers.
+
+**Suite: 1,165 passing, 0 failing** (1,097 portable + 68 desktop) — about 2 m 35 s with
 `--filter "Category!=Benchmark"`, longer for everything (the million-row storage benchmark alone is
 seven minutes). The intermittent
 failures were all one story: heavy benchmarks running in parallel with timing-sensitive tests. Two

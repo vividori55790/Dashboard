@@ -152,8 +152,19 @@
 
     #control-panel { margin-top: 16px; }
     .control-note { font-size: 12px; line-height: 1.7; color: var(--text-3); margin: 0 0 14px; }
-    .control-row { display: grid; grid-template-columns: 1fr 190px 96px; gap: 12px; align-items: center;
+    .control-row { display: grid; grid-template-columns: 1fr 190px 96px 176px; gap: 12px; align-items: center;
                    padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .sig { display: flex; gap: 5px; align-items: center; }
+    .sig select, .sig input {
+        background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+        border-radius: 6px; padding: 4px 5px; font: inherit; font-size: 11px;
+    }
+    .sig select { flex: 0 0 74px; }
+    .sig input { flex: 1 1 44px; min-width: 0; font-variant-numeric: tabular-nums; }
+    .sig button { flex: 0 0 auto; padding: 4px 8px; font-size: 11px; }
+    .control-row.driven { background: rgba(255,255,255,0.02); }
+    .driven-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px;
+                  border: 1px solid var(--text-3); border-radius: 999px; color: var(--text-3); }
     .control-row:last-of-type { border-bottom: none; }
     .control-name { font-size: 12.5px; }
     .control-name .id { display: block; font-size: 11px; color: var(--text-3); }
@@ -571,9 +582,15 @@
         loadControl();
     }
 
+    function shapeOptions() {
+        return ['sine', 'square', 'triangle', 'sawtooth', 'noise']
+            .map(function (w) { return '<option value="' + w + '">' + w + '</option>'; }).join('');
+    }
+
     function renderControl(payload, why) {
         controlRows.innerHTML = '';
         controlScenarios.innerHTML = '';
+        var nyquist = payload && payload.SampleRateHz ? payload.SampleRateHz / 2 : 0;
 
         if (!payload || payload.Status !== 'Success') {
             controlRows.innerHTML = '<div class="empty">' +
@@ -594,10 +611,38 @@
                 ' ' + escapeText(c.Unit) + '</span></div>' +
                 '<input type="range" min="' + c.Minimum + '" max="' + c.Maximum + '" step="' + step +
                 '" value="' + c.Setpoint + '">' +
-                '<div class="set"><input type="number" step="' + step + '" value="' + c.Setpoint + '"></div>';
+                '<div class="set"><input type="number" step="' + step + '" value="' + c.Setpoint + '"></div>' +
+                '<div class="sig">' +
+                '  <select>' + shapeOptions() + '</select>' +
+                '  <input type="number" step="0.1" min="0" placeholder="Hz" value="2">' +
+                '  <button class="cmd">' + (c.Signal ? '해제' : '주입') + '</button>' +
+                '</div>';
+
+            if (c.Signal) {
+                row.className += ' driven';
+                row.querySelector('.control-name').innerHTML +=
+                    '<span class="driven-tag">파형 주입 중</span>';
+            }
 
             var slider = row.querySelector('input[type=range]');
             var box = row.querySelector('input[type=number]');
+            var shapeSel = row.querySelector('.sig select');
+            var hzBox = row.querySelector('.sig input');
+            var sigBtn = row.querySelector('.sig button');
+
+            // Nyquist belongs on the control that sets the rate, not in a message after the fact:
+            // above half the sample rate the samples are indistinguishable from a slower wave, and
+            // the spectrum would then report a peak that is real, wrong and has no symptom.
+            if (nyquist > 0) { hzBox.max = nyquist; hzBox.title = '최대 ' + nyquist + ' Hz (Nyquist)'; }
+
+            sigBtn.addEventListener('click', function () {
+                if (c.Signal) { post('cmd=signal-off&channel=' + encodeURIComponent(c.Id)).then(applied); return; }
+                post('cmd=signal&channel=' + encodeURIComponent(c.Id) +
+                     '&shape=' + encodeURIComponent(shapeSel.value) +
+                     '&hz=' + encodeURIComponent(hzBox.value) +
+                     '&amplitude=' + encodeURIComponent(Math.max(1, (c.Maximum - c.Minimum) * 0.1).toFixed(2)))
+                    .then(applied);
+            });
 
             slider.addEventListener('input', function () { box.value = slider.value; });
             slider.addEventListener('change', function () { send(c.Id, slider.value); });

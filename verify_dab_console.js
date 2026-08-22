@@ -50,10 +50,17 @@ function makeEl(id) {
         // correctly about a shim that is too thin. A stub input is enough for the page to attach
         // its handlers; the assertions below are on the markup the page produced, not on this.
         querySelector(sel) {
-            if (!/input|button/.test(String(sel))) return null;
+            // Any selector, not a chosen few. Restricting it to inputs and buttons meant every
+            // element the page added afterwards -- a select, a label it appends a tag to --
+            // returned null and the page's own error path fired, which is the page behaving
+            // correctly about a shim that is too thin. The assertions below read the markup the
+            // page produced; this only has to let the page finish producing it.
+            if (!sel) return null;
             this._stubs = this._stubs || {};
             return (this._stubs[sel] = this._stubs[sel] || {
-                value: '', checked: false, addEventListener() {}, dispatchEvent() {}
+                value: '', checked: false, max: '', min: '', title: '', textContent: '',
+                innerHTML: '', className: '', style: {},
+                addEventListener() {}, dispatchEvent() {}, click() {}
             });
         },
         get firstChild() { return this.children[0] || null; },

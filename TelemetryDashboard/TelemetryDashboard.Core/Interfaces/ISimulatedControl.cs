@@ -43,4 +43,28 @@ public interface ISimulatedControl
 
     /// <summary>Returns every channel to the value the profile calls nominal.</summary>
     void Reset();
+
+    /// <summary>Samples per second this source produces for each channel.</summary>
+    /// <remarks>
+    /// Published because a caller cannot decide whether a requested waveform is representable
+    /// without it: above half this rate the samples are indistinguishable from a slower wave, and
+    /// the spectrum would report a peak that is real, wrong and symptomless.
+    /// </remarks>
+    double SampleRateHz { get; }
+
+    /// <summary>Drives a channel with a known waveform instead of the drift model.</summary>
+    /// <returns>False when the profile declares no such channel.</returns>
+    bool InjectSignal(Analytics.InjectedSignal signal);
+
+    /// <summary>Returns a channel to the drift model.</summary>
+    /// <returns>False when no signal was driving it.</returns>
+    bool ClearSignal(string channelId);
+
+    /// <summary>Signals currently driving a channel, keyed by channel id.</summary>
+    /// <remarks>
+    /// Reported so a screen can say which channels are a reference rather than a simulation of the
+    /// machine. A driven channel that looks like every other one invites a reading of the chart as
+    /// though the converter were doing that.
+    /// </remarks>
+    IReadOnlyDictionary<string, Analytics.InjectedSignal> InjectedSignals { get; }
 }
