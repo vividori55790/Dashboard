@@ -43,6 +43,18 @@ public sealed class HeatmapInterpolationService
     }
 
     /// <summary>
+    /// Forgets every sensor, so the next field is built only from what is there now.
+    /// </summary>
+    /// <remarks>
+    /// Added when the twin was wired to it. The dictionary is keyed by coordinate, so a live rig
+    /// re-reporting the same sensors overwrites them and needs nothing -- but switching profiles
+    /// replaces the machine, and without this the previous rig's sensors stayed in the field
+    /// forever. The result is not a stale reading, which an operator might notice; it is an
+    /// interpolation between two different machines, which looks exactly like a real gradient.
+    /// </remarks>
+    public void Clear() => _sensors.Clear();
+
+    /// <summary>
     /// Interpolates the temperature at a point, or NaN when no sensor has been registered.
     /// </summary>
     /// <remarks>

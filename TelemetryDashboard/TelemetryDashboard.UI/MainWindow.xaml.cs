@@ -296,6 +296,17 @@ public partial class MainWindow : Window
         _streamingServer.BroadcastTelemetry(_frameBuilder.BuildAmbientFrame(state, frame.Ambient));
         _streamingServer.BroadcastTelemetry(frame.WireFrame);
 
+        // The twin's thermal field. The node ids are the profile's, not this file's: the simulator
+        // knows a DAB temperature and a PSFB temperature, and the profile in force is what says
+        // which port each of those boards is and where it sits. A shell that named the coordinates
+        // here would be drawing one customer's rig for everybody, which is the mistake ProfileNode
+        // exists to have already fixed once.
+        TwinControl.UpdateThermal(_activeProfile, new Dictionary<string, double>
+        {
+            ["COM3"] = state.DabTemperature,
+            ["COM4"] = state.PsfbTemperature
+        });
+
         if (_csvRecorder.IsRecording) UpdateRecordingStatus();
 
         StreamingControl.UpdateMetrics();

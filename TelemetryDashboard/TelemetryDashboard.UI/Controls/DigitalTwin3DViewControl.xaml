@@ -36,6 +36,16 @@
                            Text="placeholder"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
 
+                <!-- The thermal state gets its own line. Folded into the model readout it would be
+                     the geometry that scrolls off when a device name is long, and the temperature
+                     is the half an operator is watching. -->
+                <TextBlock x:Name="ThermalText" DockPanel.Dock="Right"
+                           Style="{StaticResource MonoText}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           AutomationProperties.AutomationId="TwinThermalReadout"
+                           Text="온도 대기 중"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <TextBlock Style="{StaticResource SubtitleText}" Margin="0,0,16,0"
                                VerticalAlignment="Center" Text="디지털 트윈"/>
@@ -68,6 +78,12 @@
                 showing it because something said so and said why.
             -->
             <ModelVisual3D x:Name="ModelHost"/>
+
+            <!--
+                The thermal field, kept apart from the mesh so a model reload does not take the
+                temperatures down with it and a temperature update does not re-parse the model.
+            -->
+            <ModelVisual3D x:Name="ThermalHost"/>
         </helix:HelixViewport3D>
     </Grid>
 </UserControl>

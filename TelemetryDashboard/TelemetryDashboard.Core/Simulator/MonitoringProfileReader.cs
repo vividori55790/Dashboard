@@ -169,11 +169,30 @@ internal static class MonitoringProfileReader
                 return null;
             }
 
+            if (node.Placement is { } p
+                && (p.X is null || p.Y is null || p.Z is null
+                    || !double.IsFinite(p.X.Value) || !double.IsFinite(p.Y.Value) || !double.IsFinite(p.Z.Value)))
+            {
+                // Refused rather than completed. A placement missing an axis would put the device
+                // on the floor at the origin, and the twin would draw it there as confidently as
+                // it draws a correct one.
+                problems.Add($"'{name}' — 노드 '{node.Id}' 의 placement 에 x, y, z 가 모두 필요합니다.");
+                return null;
+            }
+
             nodes.Add(new ProfileNode
             {
                 Id = node.Id!,
                 Label = node.Label!,
-                Description = node.Description ?? string.Empty
+                Description = node.Description ?? string.Empty,
+                Placement = node.Placement is null
+                    ? null
+                    : new SensorPlacement
+                    {
+                        X = node.Placement.X!.Value,
+                        Y = node.Placement.Y!.Value,
+                        Z = node.Placement.Z!.Value
+                    }
             });
         }
 

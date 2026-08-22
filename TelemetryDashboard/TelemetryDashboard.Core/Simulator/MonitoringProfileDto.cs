@@ -32,6 +32,21 @@ internal sealed class NodeDto
     public string? Id { get; init; }
     public string? Label { get; init; }
     public string? Description { get; init; }
+
+    /// <summary>Optional physical position, as {"x": .., "y": .., "z": ..}.</summary>
+    public PlacementDto? Placement { get; init; }
+}
+
+/// <summary>A node's position on the rig, in the twin's own coordinates.</summary>
+/// <remarks>
+/// All three are nullable so a half-written placement can be refused by name. Defaulting a missing
+/// axis to zero would put a converter on the floor at the origin and draw it there confidently.
+/// </remarks>
+internal sealed class PlacementDto
+{
+    public double? X { get; init; }
+    public double? Y { get; init; }
+    public double? Z { get; init; }
 }
 
 internal sealed class ChannelDto

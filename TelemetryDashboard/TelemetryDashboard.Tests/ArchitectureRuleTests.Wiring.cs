@@ -102,6 +102,17 @@ public partial class ArchitectureRuleTests
         // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
         // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
         // without inferring it from coordinates and getting a cursor at the origin wrong.
+        // HeatmapInterpolationService retired from this baseline: the digital twin holds one and
+        // paints the temperature between the converters with it, placing each board where the
+        // active profile says it sits. Measured on the running application -- "2 sensors ·
+        // 39.2–43.1 °C · hottest PSFB 서버 레일" at rest, "43.2–87.4 °C · hottest DAB 배터리 컨버터"
+        // with the DAB overcurrent fault injected, and back on recovery.
+        //
+        // Wiring it exposed one gap: the service keyed its sensors by coordinate and had no way to
+        // forget them, so a live rig re-reporting the same points was fine and changing profiles
+        // was not -- the old machine's sensors stayed, and the result is an interpolation between
+        // two different machines, which looks exactly like a real gradient. Clear() is the fix.
+        //
         // Twin3DService retired from this baseline: DigitalTwin3DViewControl holds one, loads a
         // mesh through it and normalises the result into the camera frustum. The control itself was
         // complete -- toolbar, viewport, lights, grid -- and had no window anywhere in the shell, so
@@ -138,7 +149,6 @@ public partial class ArchitectureRuleTests
         // reach it -- the headless host must never reference the WPF project, so the one place a
         // spectrum is useful to every client could not have it. Its first run against live data
         // found a defect in the series store, which was writing every channel into one series.
-        "HeatmapInterpolationService",
         // KestrelWebServer left this baseline by being deleted. It started a WebApplication
         // serving exactly one route -- /health -- and no telemetry, no assets and no client;
         // TelemetryStreamingServer has served /ws, /stream and eleven /api routes the whole
