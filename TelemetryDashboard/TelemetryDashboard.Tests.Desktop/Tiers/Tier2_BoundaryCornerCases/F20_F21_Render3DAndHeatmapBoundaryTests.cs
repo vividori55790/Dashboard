@@ -60,17 +60,11 @@ public class F20_F21_Render3DAndHeatmapBoundaryTests
         renderer.HasModel.Should().BeFalse();
     }
 
-    [WpfFact]
-    [Trait("Category", "Tier2")]
-    public void F20_Boundary_Rapid3DRotation_DoesNotCrashRenderLoop()
-    {
-        var renderer = new Twin3DService();
-        for (int i = 0; i < 50; i++)
-        {
-            renderer.Rotate(i * 10.0, i * 5.0, 0.0);
-        }
-        renderer.RotationX.Should().Be(490.0);
-    }
+    // F20_Boundary_Rapid3DRotation_DoesNotCrashRenderLoop is gone with the API it exercised.
+    // Twin3DService carried RotationX/Y/Z and a Rotate setter that nothing in the application ever
+    // called; this test called it fifty times and asserted the getter held 490. It could not have
+    // failed for any reason a user would notice, and its passing was the only evidence that the
+    // rotation state was alive.
 
     [Fact]
     [Trait("Category", "Tier2")]

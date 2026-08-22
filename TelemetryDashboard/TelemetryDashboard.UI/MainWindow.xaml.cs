@@ -86,6 +86,11 @@ public partial class MainWindow : Window
         PopulatePortAndBaud();
         RegisterDefaultCommands();
         SetupAlerts();
+
+        // The twin says out loud which mesh it settled on and why. Routed to the event log as well
+        // as to its own toolbar, because that decision is taken at start-up on a panel that may
+        // not be the one in front of the operator.
+        TwinControl.Notice += message => ControlPanel.LogMessage("TWIN", message);
         SetupSimulatorTimer();
 
         // Before the first tick, because the tick asks the active profile which channels to plot.

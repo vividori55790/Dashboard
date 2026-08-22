@@ -102,6 +102,19 @@ public partial class ArchitectureRuleTests
         // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
         // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
         // without inferring it from coordinates and getting a cursor at the origin wrong.
+        // Twin3DService retired from this baseline: DigitalTwin3DViewControl holds one, loads a
+        // mesh through it and normalises the result into the camera frustum. The control itself was
+        // complete -- toolbar, viewport, lights, grid -- and had no window anywhere in the shell, so
+        // it had never once appeared in the running application, while LayoutPreset.Twin3DMode
+        // offered to arrange the workspace around it. The mesh it drew was a box written into its
+        // own markup.
+        //
+        // Wiring it exposed a gap the service could not express: LoadModel returning true is a
+        // promise about the file, not about the mesh inside it, and an .stl holding prose that
+        // begins with the word "solid" clears the probe and then throws out of the reader.
+        // RejectLoadedModel is the way back. Its rotation state went the other way -- RotationX/Y/Z
+        // and a Rotate setter that nothing drove, whose only caller was a test, and whose only
+        // display surface was a toolbar reading "Roll — · Pitch — · Yaw —" that never changed.
         "DerivedNumericProjection",
         // EmergencyMcuController retired from this baseline: EmergencyInterlockRelay constructs it
         // behind --emergency-stop, so the one feature that acts on the machine rather than watching
@@ -199,7 +212,6 @@ public partial class ArchitectureRuleTests
         // what it said first -- it returned 0.0 for a node that had sent nothing, which is also an
         // ordinary reading, and clamped silently to the nearest sample for any instant outside its
         // buffer. A test asserted the first of those as the required behaviour.
-        "Twin3DService",              // the 3D viewport control it holds state for is not in the shell
         // WorkspaceLayoutState deleted rather than wired. It held a preset name and two lists of
         // panel names, with a hardcoded switch mapping "ScopeMode" to the string "ScopeView" -- a
         // model of the dock that was never connected to the dock. LayoutManager does the same job

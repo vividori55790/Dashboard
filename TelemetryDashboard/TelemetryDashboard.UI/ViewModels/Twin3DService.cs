@@ -43,15 +43,6 @@ public sealed class Twin3DService
     /// <summary>Triangles in the current mesh, derived from the index list.</summary>
     public int TriangleCount { get; private set; }
 
-    /// <summary>Absolute orientation about each axis, in degrees.</summary>
-    public double RotationX { get; private set; }
-
-    /// <inheritdoc cref="RotationX"/>
-    public double RotationY { get; private set; }
-
-    /// <inheritdoc cref="RotationX"/>
-    public double RotationZ { get; private set; }
-
     /// <summary>
     /// Accepts an STL mesh for display, falling back to a placeholder cube when it is unusable.
     /// </summary>
@@ -104,6 +95,17 @@ public sealed class Twin3DService
         IsFallbackModelActive = false;
     }
 
+    /// <summary>
+    /// Abandons a model that passed its file check and then could not be read.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="LoadModel"/> returning true is a promise about the <em>file</em> — that it is
+    /// shaped like an STL — and not about the mesh inside it. The two disagree in practice, and
+    /// without this there was no way to walk that back: the service went on reporting a loaded
+    /// model, with a path, for a mesh nothing had ever read.
+    /// </remarks>
+    public void RejectLoadedModel() => ActivateFallbackModel();
+
     /// <summary>Empties the viewport.</summary>
     /// <remarks>
     /// Orientation is left alone. Clearing one model to load another is the common case, and
@@ -119,23 +121,15 @@ public sealed class Twin3DService
         TriangleCount = 0;
     }
 
-    /// <summary>
-    /// Sets the absolute orientation of the model in degrees.
-    /// </summary>
-    /// <remarks>
-    /// Assigns rather than accumulates: the trackball and the animation timeline each report an
-    /// absolute angle, so an accumulating setter drifts out of step with whichever is not driving.
-    /// Angles stay unwrapped so a caller sweeping past 360 degrees keeps a monotonic value to
-    /// interpolate against; reducing to a principal range is the renderer's job.
-    /// </remarks>
-    public void Rotate(double x, double y, double z)
-    {
-        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z)) return;
-
-        RotationX = x;
-        RotationY = y;
-        RotationZ = z;
-    }
+    // Rotation state used to live here: RotationX/Y/Z and a Rotate setter. Nothing drove them.
+    // Nothing in this product measures a machine's attitude, no renderer called them, and the one
+    // surface that displayed them -- a toolbar reading "Roll — · Pitch — · Yaw —" -- never changed
+    // in the application's life because the panel holding it had never been given a window. The
+    // only caller was a test asserting that fifty calls to the setter left 490 in the getter.
+    //
+    // Deleted rather than wired, because there is nothing honest to wire them to: the viewport's
+    // trackball orbits the camera, which HelixToolkit already does, and that is a different thing
+    // from the model's own orientation. Ten lines to restore the day an IMU channel exists.
 
     private void ActivateFallbackModel()
     {

@@ -1,11 +1,17 @@
 <!--
-    3D orientation view.
+    Digital twin viewport.
 
     Both toolbar buttons had a fixed Width of 90, measured against "Reset View"; "Toggle Grid" is
     wider and lost its last characters. Neither sets a width now.
 
     The heading no longer names the rendering library. An operator has no use for knowing which
     toolkit draws the box, and the panel had the library's name in larger type than the reading.
+
+    The right-hand readout used to say "Roll — · Pitch — · Yaw —" and never changed, because
+    nothing in this product measures a machine's attitude and nothing called the method that would
+    have filled it in. It now reports what is actually in the viewport: which mesh, how many
+    triangles, and the scale it was normalised by — all of which change, and all of which an
+    operator can check against the file they chose.
 -->
 <UserControl x:Class="TelemetryDashboard.UI.Controls.DigitalTwin3DViewControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -23,20 +29,27 @@
 
         <Border Grid.Row="0" Style="{StaticResource Toolbar}">
             <DockPanel>
-                <TextBlock x:Name="OrientationText" DockPanel.Dock="Right"
+                <TextBlock x:Name="ModelText" DockPanel.Dock="Right"
                            Style="{StaticResource MonoText}"
                            Foreground="{StaticResource TextSecondaryBrush}"
-                           Text="Roll — · Pitch — · Yaw —"
+                           AutomationProperties.AutomationId="TwinModelReadout"
+                           Text="placeholder"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <TextBlock Style="{StaticResource SubtitleText}" Margin="0,0,16,0"
-                               VerticalAlignment="Center" Text="Digital twin"/>
+                               VerticalAlignment="Center" Text="디지털 트윈"/>
                     <!-- Plain captions: no glyph in the sanctioned set means "reset the camera" or
                          "show the ground grid", and a guessed one renders as an empty box. -->
-                    <Button x:Name="BtnResetView" Content="Reset view" Margin="0,0,8,0"
+                    <Button x:Name="BtnLoadModel" Content="모델 열기…" Margin="0,0,8,0"
+                            AutomationProperties.AutomationId="TwinLoadModel"
+                            Click="BtnLoadModel_Click"/>
+                    <Button x:Name="BtnUsePlaceholder" Content="기본 형상" Margin="0,0,8,0"
+                            AutomationProperties.AutomationId="TwinUsePlaceholder"
+                            Click="BtnUsePlaceholder_Click"/>
+                    <Button x:Name="BtnResetView" Content="뷰 초기화" Margin="0,0,8,0"
                             Click="BtnResetView_Click"/>
-                    <Button x:Name="BtnToggleGrid" Content="Toggle grid" Click="BtnToggleGrid_Click"/>
+                    <Button x:Name="BtnToggleGrid" Content="격자" Click="BtnToggleGrid_Click"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -49,8 +62,12 @@
                                      MajorDistance="5" MinorDistance="1" Thickness="0.03"
                                      Fill="{StaticResource GridLineBrush}"/>
 
-            <helix:BoxVisual3D x:Name="TwinBox" Width="6" Length="4" Height="1"
-                               Fill="{StaticResource AccentBrush}"/>
+            <!--
+                One host the code swaps the contents of, rather than a box declared here. The mesh
+                on screen is whatever was actually loaded, so a viewport showing the placeholder is
+                showing it because something said so and said why.
+            -->
+            <ModelVisual3D x:Name="ModelHost"/>
         </helix:HelixViewport3D>
     </Grid>
 </UserControl>

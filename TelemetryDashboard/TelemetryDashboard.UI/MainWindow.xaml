@@ -571,6 +571,16 @@
                                 <dockLayout:LayoutDocument Title="스트리밍 서버" ContentId="StreamingServerView" CanClose="False">
                                     <controls:StreamingServerControl x:Name="StreamingControl"/>
                                 </dockLayout:LayoutDocument>
+                                <!--
+                                    The digital twin. The control was complete - toolbar, viewport,
+                                    lights, grid - and had no window anywhere in this shell, so it
+                                    had never once appeared in the running application, while
+                                    LayoutPreset.Twin3DMode offered to arrange the workspace around
+                                    it. A pane is all it was ever missing.
+                                -->
+                                <dockLayout:LayoutDocument Title="디지털 트윈" ContentId="Twin3DView" CanClose="False">
+                                    <controls:DigitalTwin3DViewControl x:Name="TwinControl"/>
+                                </dockLayout:LayoutDocument>
                             </dockLayout:LayoutDocumentPane>
                         </dockLayout:LayoutDocumentPaneGroup>
 

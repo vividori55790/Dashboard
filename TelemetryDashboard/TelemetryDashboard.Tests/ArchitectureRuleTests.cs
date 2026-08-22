@@ -483,6 +483,13 @@ public partial class ArchitectureRuleTests
         "TelemetryDashboard.Host/Backtest/BacktestCommandLine.cs",                 // 175 lines
         "TelemetryDashboard.Core/Backtesting/BacktestEngine.cs",                   // 152 lines
 
+        // The digital-twin panel's code-behind, joining the five other WPF code-behinds above it.
+        // Its two testable halves are already out: reading a file into geometry is TwinModelLoader
+        // and flattening a scene is TwinMeshFlattener, both of which have tests the control cannot
+        // have -- it calls FindResource while it works, so it cannot be constructed outside a
+        // running application. What is left is a viewport, four button handlers and a readout.
+        "TelemetryDashboard.UI/Controls/DigitalTwin3DViewControl.xaml.cs",         // 154 lines
+
         // The lock screen now has two jobs -- ask for the password, or ask the operator to choose
         // one on an installation that has none -- plus a cooldown it counts down on screen. It was
         // 68 lines when the answer was a literal compiled into it.
