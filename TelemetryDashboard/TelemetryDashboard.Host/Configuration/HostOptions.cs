@@ -81,6 +81,17 @@ public sealed class HostOptions
     public int MaxStreamClients { get; init; }
 
     /// <summary>
+    /// Whether every channel also gets a <c>.drift</c> channel, or 0 for off.
+    /// </summary>
+    /// <remarks>
+    /// The number is the long memory in seconds: how far back "where this channel has been living"
+    /// reaches. It is the only detector here that can see a fault which never trips a threshold --
+    /// a z-score measures a reading against the window it just came from, so anything slow enough
+    /// drags its own baseline along and never scores.
+    /// </remarks>
+    public int DriftWindowSeconds { get; init; }
+
+    /// <summary>
     /// Directory scanned for plugin assemblies, or null for <c>plugins/</c> beside the executable.
     /// </summary>
     /// <remarks>

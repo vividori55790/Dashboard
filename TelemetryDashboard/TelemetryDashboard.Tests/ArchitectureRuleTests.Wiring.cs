@@ -79,7 +79,22 @@ public partial class ArchitectureRuleTests
         // The service had a gap of its own. It documents that the layer above does the speaking and
         // observes the state here, and exposed only a count -- so text could be queued, throttled
         // and sanitised, and never read by anything. TakeNextVoiceAlert is that drain.
-        "AnomalyEngine",              // superseded by TelemetryMlAnalyticsEngine on the live path
+        // AnomalyEngine stays, but the entry was only half true and the other half was the useful
+        // half. It bundled two things sharing nothing -- a batch z-score evaluator, which is indeed
+        // superseded by TelemetryMlAnalyticsEngine on the live path, and the only exponentially
+        // weighted average in this codebase, which was not superseded by anything because nothing
+        // else had one.
+        //
+        // That average is now ExponentialAverage, and DriftMonitor is built on it: two averages
+        // with different memories, whose difference is the drift a rolling z-score structurally
+        // cannot see. Measured on a live host replaying a 48 V rail sagging 0.4 V over two minutes
+        // under noise sixty times its per-sample slope, beside an identical healthy channel --
+        // sagging.drift negative on 339 of 341 samples, healthy.drift on 177 of 341, while the raw
+        // channels scored peak |z| of 3.33 and 3.41 respectively. The detector this product already
+        // had rated the healthy channel the more anomalous of the two.
+        //
+        // What is left here is the batch evaluator, and it is still reachable from nothing.
+        "AnomalyEngine",
         // AstNode retired from this baseline: ComputedChannel holds one and asks it what
         // channels it reads, which is what /api/computed needs before it can align them. The
         // expression engine had been reachable only from a WPF dialog and from DataRouter's

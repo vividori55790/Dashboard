@@ -25,6 +25,7 @@ internal sealed class HostOptionsDraft
         Simulate = defaults.Simulate;
         WatchIntervals = defaults.WatchIntervals;
         MaxStreamClients = defaults.MaxStreamClients;
+        DriftWindowSeconds = defaults.DriftWindowSeconds;
         PluginDirectory = defaults.PluginDirectory;
         ExtensionDirectory = defaults.ExtensionDirectory;
         ExtensionCatalogue = defaults.ExtensionCatalogue;
@@ -67,6 +68,8 @@ internal sealed class HostOptionsDraft
     public bool WatchIntervals;
 
     public int MaxStreamClients;
+
+    public int DriftWindowSeconds;
     public string? PluginDirectory;
     public string? ExtensionDirectory;
     public string? ExtensionCatalogue;
@@ -100,6 +103,7 @@ internal sealed class HostOptionsDraft
         Simulate = Simulate,
         WatchIntervals = WatchIntervals,
         MaxStreamClients = MaxStreamClients,
+        DriftWindowSeconds = DriftWindowSeconds,
         PluginDirectory = PluginDirectory,
         ExtensionDirectory = ExtensionDirectory,
         ExtensionCatalogue = ExtensionCatalogue,

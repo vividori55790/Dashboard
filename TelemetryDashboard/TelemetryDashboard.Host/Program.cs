@@ -111,7 +111,7 @@ public static class Program
         TelemetryIngestPump? pump = source is null
             ? null
             : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive,
-                watchIntervals: options.WatchIntervals);
+                watchIntervals: options.WatchIntervals, driftWindowSeconds: options.DriftWindowSeconds);
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, IngestSetup.SerialManagerOf(source));
 

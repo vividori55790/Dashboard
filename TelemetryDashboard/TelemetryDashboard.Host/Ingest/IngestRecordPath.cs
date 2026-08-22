@@ -37,6 +37,10 @@ public sealed partial class IngestRecordPath
 
     /// <param name="publish">Receives every numeric record as a packet plus the port it arrived on.</param>
     /// <param name="isSimulated">Whether the source is synthetic; stamped onto each packet here.</param>
+    /// <param name="driftWindowSeconds">
+    /// Long memory, in seconds, for a per-channel <c>.drift</c> channel; 0 for none. See
+    /// <see cref="ChannelDriftProjection"/> for the fault this is the only detector here that sees.
+    /// </param>
     /// <param name="watchIntervals">
     /// Whether to derive a <c>.interval</c> channel per channel. See
     /// <see cref="ChannelIntervalProjection"/> for why a dead sensor is otherwise indistinguishable
@@ -45,7 +49,8 @@ public sealed partial class IngestRecordPath
     public IngestRecordPath(
         Func<TelemetryPacket, string, CancellationToken, ValueTask> publish,
         bool isSimulated,
-        bool watchIntervals = false)
+        bool watchIntervals = false,
+        int driftWindowSeconds = 0)
     {
         ArgumentNullException.ThrowIfNull(publish);
 
@@ -66,6 +71,13 @@ public sealed partial class IngestRecordPath
         {
             Intervals = new ChannelIntervalProjection();
             _pipeline.Register(Intervals.Stage(async (record, token) =>
+                await _pipeline.DispatchAsync(record, token).ConfigureAwait(false)));
+        }
+
+        if (driftWindowSeconds > 0)
+        {
+            Drift = new ChannelDriftProjection(driftWindowSeconds);
+            _pipeline.Register(Drift.Stage(async (record, token) =>
                 await _pipeline.DispatchAsync(record, token).ConfigureAwait(false)));
         }
     }

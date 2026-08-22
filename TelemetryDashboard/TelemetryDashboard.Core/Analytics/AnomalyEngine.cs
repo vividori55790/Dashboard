@@ -5,9 +5,15 @@ using TelemetryDashboard.Core.Analytics;
 namespace TelemetryDashboard.Core.Analytics;
 
 /// <summary>
-/// Statistical anomaly detection over a batch of samples, plus an EWMA tracker for slow drift.
+/// Statistical anomaly detection over a batch of samples.
 /// </summary>
 /// <remarks>
+/// The smoothing this used to implement inline now lives in <see cref="ExponentialAverage"/>, which
+/// was the half of this class worth having: it was the only exponentially weighted average in the
+/// codebase, it shared nothing with the batch evaluator below -- separate fields, separate methods,
+/// no interaction -- and nothing constructed this class, so it was unreachable. <c>DriftMonitor</c>
+/// is built on it, and the methods here delegate so there is one implementation rather than two.
+/// <para>
 /// All statistics are delegated to <see cref="RollingChannelStatistics"/> so the engine and the
 /// live per-channel path agree by construction. Two detectors that compute their own mean and
 /// sigma eventually disagree at the boundary, and the operator is left with two numbers for the
@@ -36,12 +42,11 @@ public sealed class AnomalyEngine
     /// <remarks>Mirrors the guard inside <see cref="RollingChannelStatistics.ZScoreOf"/>.</remarks>
     private const double DegenerateSigma = 1e-9;
 
+    private readonly ExponentialAverage _ewma = new();
     private double _ewmaAlpha = 0.3;
-    private double _ewma;
-    private bool _hasEwmaSeed;
 
     /// <summary>Current exponentially weighted moving average, or NaN before the first update.</summary>
-    public double CurrentEwma => _hasEwmaSeed ? _ewma : double.NaN;
+    public double CurrentEwma => _ewma.Value;
 
     /// <summary>
     /// Judges the newest sample of <paramref name="samples"/> against the ones before it.
@@ -96,14 +101,7 @@ public sealed class AnomalyEngine
     /// The first sample seeds the average outright. Starting from zero would otherwise inject a
     /// ramp from zero up to the channel's operating point that looks exactly like a real transient.
     /// </remarks>
-    public double UpdateEwma(double value)
-    {
-        if (!double.IsFinite(value)) return CurrentEwma;
-
-        _ewma = _hasEwmaSeed ? _ewmaAlpha * value + (1.0 - _ewmaAlpha) * _ewma : value;
-        _hasEwmaSeed = true;
-        return _ewma;
-    }
+    public double UpdateEwma(double value) => _ewma.Update(value, _ewmaAlpha);
 
     /// <summary>
     /// Re-scores the newest sample against a baseline that includes it.

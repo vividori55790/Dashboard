@@ -69,6 +69,20 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --watch-drift <s> Derive a '<channel>.drift' channel: how far the channel's recent
+                                average has run ahead of its long-run one, in the channel's own
+                                unit, with <s> seconds as the long memory. Off by default.
+                                It is the only detector here that sees a fault which never trips a
+                                threshold. A z-score measures a reading against the window it just
+                                came from, so anything slow enough drags its own baseline along and
+                                never scores: a rail sagging a millivolt an hour, a case warming as
+                                a bearing wears. Everything stays inside its limits, every z-score
+                                stays near zero, and the unit has been getting worse for weeks.
+                                It measures a sustained rate of change, not a distance from a
+                                factory baseline -- a step shows briefly and then decays as the long
+                                average catches up, which is right, because the z-score already
+                                catches steps. Example:
+                                --watch-drift 900 --limit "psfb.output_voltage.drift[V] < 0.5"
               --watch-intervals
                                 Derive a '<channel>.interval' channel, in seconds, holding the gap
                                 since that channel last reported. Off by default because it roughly

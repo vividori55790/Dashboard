@@ -27,7 +27,7 @@ public sealed class DerivedNumericProjection : IRecordStage
     private readonly DataValueKind _accepts;
     private readonly Func<DataRecord, double?> _measure;
     private readonly string _keySuffix;
-    private readonly string _unit;
+    private readonly Func<DataRecord, string> _unitOf;
     private readonly Func<DataRecord, CancellationToken, ValueTask> _emit;
 
     /// <param name="name">Identifies the projection in provenance and in pipeline counters.</param>
@@ -45,7 +45,8 @@ public sealed class DerivedNumericProjection : IRecordStage
         Func<DataRecord, double?> measure,
         string keySuffix,
         string unit,
-        Func<DataRecord, CancellationToken, ValueTask> emit)
+        Func<DataRecord, CancellationToken, ValueTask> emit,
+        Func<DataRecord, string>? unitOf = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -61,7 +62,13 @@ public sealed class DerivedNumericProjection : IRecordStage
         _accepts = accepts;
         _measure = measure ?? throw new ArgumentNullException(nameof(measure));
         _keySuffix = keySuffix;
-        _unit = unit ?? string.Empty;
+
+        // A fixed unit is right for a projection that always measures the same quantity -- an
+        // interval is seconds whatever it was computed from. It is wrong for one whose output
+        // carries its input's unit: drift on a voltage is volts, on a temperature is degrees, and
+        // publishing it unitless leaves an operator writing a limit against a number whose scale
+        // they have to guess. Surfaced by the first projection of the second kind.
+        _unitOf = unitOf ?? (_ => unit ?? string.Empty);
         _emit = emit ?? throw new ArgumentNullException(nameof(emit));
     }
 
@@ -125,7 +132,7 @@ public sealed class DerivedNumericProjection : IRecordStage
         DataRecord derived = DataRecord.Derived(
             record.Key.Stream,
             record.Key.Key + _keySuffix,
-            new DataValue.Numeric(figure, _unit),
+            new DataValue.Numeric(figure, _unitOf(record)),
             Name,
             record.Timestamp,
             record.Source);

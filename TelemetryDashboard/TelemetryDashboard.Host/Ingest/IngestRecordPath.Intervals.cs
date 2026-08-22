@@ -18,6 +18,9 @@ public sealed partial class IngestRecordPath
     /// <summary>The interval projection, or null when it was not asked for.</summary>
     public ChannelIntervalProjection? Intervals { get; }
 
+    /// <summary>The drift projection, or null when it was not asked for.</summary>
+    public ChannelDriftProjection? Drift { get; }
+
     /// <summary>
     /// Publishes a growing interval for any channel that has gone silent, until cancelled.
     /// </summary>

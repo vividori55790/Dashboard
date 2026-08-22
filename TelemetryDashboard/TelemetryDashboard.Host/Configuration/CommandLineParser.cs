@@ -39,6 +39,16 @@ public static class CommandLineParser
                     draft.WatchIntervals = true;
                     break;
 
+                case "--watch-drift":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawDrift)) return ArgumentCursor.MissingValue(argument);
+                    if (!int.TryParse(rawDrift, out draft.DriftWindowSeconds) || draft.DriftWindowSeconds < 10)
+                    {
+                        return ArgumentCursor.Fail(
+                            $"'{rawDrift}' is not a drift window in seconds. Below ten seconds the long "
+                            + "average tracks the short one and their difference is noise, not drift.");
+                    }
+                    break;
+
                 case "--max-clients":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawClients)) return ArgumentCursor.MissingValue(argument);
                     if (!int.TryParse(rawClients, out draft.MaxStreamClients) || draft.MaxStreamClients < 1)

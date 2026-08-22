@@ -79,14 +79,16 @@ public sealed class TelemetryIngestPump
         int maxChannelRatePerSecond = IngestRateGuard.DefaultMaxChannelRatePerSecond,
         JsonChannelMap? jsonMap = null,
         ArchiveSink? archive = null,
-        bool watchIntervals = false)
+        bool watchIntervals = false,
+        int driftWindowSeconds = 0)
     {
         _jsonMap = jsonMap;
         _source = source;
         _publisher = new IngestPublisher(
             server, source.Origin, source.IsSimulated, recorder,
             new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive);
-        _records = new IngestRecordPath(_publisher.PublishAsync, source.IsSimulated, watchIntervals);
+        _records = new IngestRecordPath(
+            _publisher.PublishAsync, source.IsSimulated, watchIntervals, driftWindowSeconds);
 
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
