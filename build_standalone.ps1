@@ -66,7 +66,10 @@ function Copy-WebAssets($destination) {
     $assets = Join-Path $destination "webroot"
     New-Item -ItemType Directory -Path $assets -Force | Out-Null
     Get-ChildItem -Path $root -Filter "*.html" -File | Copy-Item -Destination $assets -Force
-    Get-ChildItem -Path $root -Filter "*.js"   -File | Copy-Item -Destination $assets -Force
+    # verify_*.js are the development harnesses, not product. They were shipping into every
+    # package because this line matched the same wildcard the pages do.
+    Get-ChildItem -Path $root -Filter "*.js"   -File |
+        Where-Object { $_.Name -notlike "verify_*" } | Copy-Item -Destination $assets -Force
     return $assets
 }
 
