@@ -78,14 +78,15 @@ public sealed class TelemetryIngestPump
         TelemetryCsvRecorder? recorder = null,
         int maxChannelRatePerSecond = IngestRateGuard.DefaultMaxChannelRatePerSecond,
         JsonChannelMap? jsonMap = null,
-        ArchiveSink? archive = null)
+        ArchiveSink? archive = null,
+        bool watchIntervals = false)
     {
         _jsonMap = jsonMap;
         _source = source;
         _publisher = new IngestPublisher(
             server, source.Origin, source.IsSimulated, recorder,
             new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive);
-        _records = new IngestRecordPath(_publisher.PublishAsync, source.IsSimulated);
+        _records = new IngestRecordPath(_publisher.PublishAsync, source.IsSimulated, watchIntervals);
 
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
@@ -106,6 +107,29 @@ public sealed class TelemetryIngestPump
     /// Consumes the source until cancelled. Never throws: a source that dies must not take the
     /// server down with it, because the console and the recorded timeline are still worth serving.
     /// </summary>
+    /// <summary>
+    /// Runs everything this pump does: the source read loop and the silence sweep beside it.
+    /// </summary>
+    /// <remarks>
+    /// One entry point so a caller cannot start half of it. The two are genuinely separate loops --
+    /// see <see cref="SweepIntervalsAsync"/> for why the sweep cannot be driven by the reader --
+    /// and a host that started only the reader would look correct right up until a link dropped.
+    /// </remarks>
+    public Task RunAllAsync(CancellationToken cancellationToken) =>
+        Task.WhenAll(RunAsync(cancellationToken), SweepIntervalsAsync(cancellationToken));
+
+    /// <summary>
+    /// Runs the silence sweep, which has to outlive this pump's own read loop.
+    /// </summary>
+    /// <remarks>
+    /// Started beside <see cref="RunAsync"/> rather than inside it. A source that has stopped
+    /// delivering is precisely the condition the sweep watches for, so driving it from the read
+    /// loop would silence it at the moment it mattered -- and a replay reaching the end of its file
+    /// ends that loop outright.
+    /// </remarks>
+    public Task SweepIntervalsAsync(CancellationToken cancellationToken) =>
+        _records.SweepIntervalsAsync(cancellationToken);
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         // Alongside the read loop rather than inside it. A derived channel is computed for an

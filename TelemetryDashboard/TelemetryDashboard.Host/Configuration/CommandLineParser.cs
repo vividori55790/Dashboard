@@ -35,6 +35,10 @@ public static class CommandLineParser
                     draft.Simulate = true;
                     break;
 
+                case "--watch-intervals":
+                    draft.WatchIntervals = true;
+                    break;
+
                 case "--port" or "-p":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawPort)) return ArgumentCursor.MissingValue(argument);
                     if (!EnvironmentVariables.TryPort(rawPort, out draft.Port)) return ArgumentCursor.Fail($"'{rawPort}' is not a TCP port between 1 and 65535.");

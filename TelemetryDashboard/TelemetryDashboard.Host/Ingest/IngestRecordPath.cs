@@ -25,7 +25,7 @@ namespace TelemetryDashboard.Host.Ingest;
 /// applied here, after the projection, from the source's own declaration — and a caller offering an
 /// already-marked packet is refused rather than silently laundered.
 /// </remarks>
-public sealed class IngestRecordPath
+public sealed partial class IngestRecordPath
 {
     /// <summary>Key used for lines nothing could parse; the stream is the port they arrived on.</summary>
     public const string UnparsedKey = "unparsed";
@@ -37,7 +37,15 @@ public sealed class IngestRecordPath
 
     /// <param name="publish">Receives every numeric record as a packet plus the port it arrived on.</param>
     /// <param name="isSimulated">Whether the source is synthetic; stamped onto each packet here.</param>
-    public IngestRecordPath(Func<TelemetryPacket, string, CancellationToken, ValueTask> publish, bool isSimulated)
+    /// <param name="watchIntervals">
+    /// Whether to derive a <c>.interval</c> channel per channel. See
+    /// <see cref="ChannelIntervalProjection"/> for why a dead sensor is otherwise indistinguishable
+    /// from a steady one, and why this costs enough to be asked for.
+    /// </param>
+    public IngestRecordPath(
+        Func<TelemetryPacket, string, CancellationToken, ValueTask> publish,
+        bool isSimulated,
+        bool watchIntervals = false)
     {
         ArgumentNullException.ThrowIfNull(publish);
 
@@ -49,7 +57,19 @@ public sealed class IngestRecordPath
         });
 
         _pipeline.Register(_numeric).Register(_unrecognised);
+
+        // Registered last on purpose. Its derived record re-enters the pipeline from inside its own
+        // ProcessAsync, so with the projection first a channel's interval would be published ahead
+        // of the reading it was measured from -- and anything downstream ordering by arrival would
+        // see the derivative announce a sample that had not been sent yet.
+        if (watchIntervals)
+        {
+            Intervals = new ChannelIntervalProjection();
+            _pipeline.Register(Intervals.Stage(async (record, token) =>
+                await _pipeline.DispatchAsync(record, token).ConfigureAwait(false)));
+        }
     }
+
 
     /// <summary>What each stage has seen, for the shutdown report and the diagnostics surface.</summary>
     public IReadOnlyList<StageActivity> Activity() => _pipeline.Activity();
@@ -89,6 +109,7 @@ public sealed class IngestRecordPath
         }
 
         DataRecord record = TelemetryPacketProjection.ToRecord(packet) with { Source = portName ?? string.Empty };
+        LastSource = record.Source;
         return _pipeline.DispatchAsync(record, cancellationToken);
     }
 

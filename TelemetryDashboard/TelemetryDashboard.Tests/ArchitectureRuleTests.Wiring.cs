@@ -102,6 +102,28 @@ public partial class ArchitectureRuleTests
         // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
         // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
         // without inferring it from coordinates and getting a cursor at the origin wrong.
+        // DerivedNumericProjection retired from this baseline: the headless host registers one
+        // behind --watch-intervals, deriving a '<channel>.interval' channel of seconds since that
+        // channel last reported. A dead sensor is otherwise indistinguishable from a steady one --
+        // every chart draws the last value it was given, so a dropped link holds its final reading
+        // inside its limits with a z-score of zero, and the absence of values is the whole failure.
+        // Once the gap is a channel, --limit and the rolling statistics apply to it unchanged.
+        //
+        // Two defects came out of wiring it, and neither could have been found any other way:
+        //
+        //  * The projection's emit target is documented as the pipeline, and the pipeline offers
+        //    every record to every stage matching the value *shape* -- which a derived numeric
+        //    record does. So it was fed its own output, the key grew a suffix per turn, and the
+        //    stack ended the process. Nothing had noticed because nothing had ever registered one.
+        //  * DataRecord.Derived had no source parameter, so every derived channel published with an
+        //    empty port beside a measured one reading "SIM" -- on a multi-port rig, nothing said
+        //    which cable a derived channel belonged to.
+        //
+        // And one hole in the feature as first built: a projection only speaks when a record
+        // arrives, so a channel that stopped entirely stopped producing intervals too and the alarm
+        // never fired. Watching for the absence of values with something driven by values cannot
+        // work. ChannelIntervalProjection.Sweep is the half that runs on a clock instead.
+        //
         // HeatmapInterpolationService retired from this baseline: the digital twin holds one and
         // paints the temperature between the converters with it, placing each board where the
         // active profile says it sits. Measured on the running application -- "2 sensors ·
@@ -126,7 +148,6 @@ public partial class ArchitectureRuleTests
         // RejectLoadedModel is the way back. Its rotation state went the other way -- RotationX/Y/Z
         // and a Rotate setter that nothing drove, whose only caller was a test, and whose only
         // display surface was a toolbar reading "Roll — · Pitch — · Yaw —" that never changed.
-        "DerivedNumericProjection",
         // EmergencyMcuController retired from this baseline: EmergencyInterlockRelay constructs it
         // behind --emergency-stop, so the one feature that acts on the machine rather than watching
         // it can now be reached from a running program. It stays off by default and is refused

@@ -59,6 +59,18 @@ public sealed class HostOptions
     public bool Simulate { get; init; }
 
     /// <summary>
+    /// Whether every channel also gets a <c>.interval</c> channel of seconds since it last reported.
+    /// </summary>
+    /// <remarks>
+    /// Off by default because it roughly doubles the record count. On, because a dead sensor is
+    /// otherwise indistinguishable from a steady one: every chart here draws the last value it was
+    /// given, so a link that drops holds its final reading on screen, inside its limits, with a
+    /// z-score of zero. The absence of values is the whole failure, and no value-watching alarm can
+    /// see it.
+    /// </remarks>
+    public bool WatchIntervals { get; init; }
+
+    /// <summary>
     /// Directory scanned for plugin assemblies, or null for <c>plugins/</c> beside the executable.
     /// </summary>
     /// <remarks>

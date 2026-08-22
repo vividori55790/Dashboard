@@ -73,9 +73,16 @@ public sealed record DataRecord
     /// Names the projection. Required — a derived record that cannot say what produced it is
     /// indistinguishable from a measurement, which is the confusion this field exists to stop.
     /// </param>
+    /// <param name="source">
+    /// Who reported the observation this was computed from. Carried through rather than left
+    /// empty: a derived figure is attributed to the same reporter as its input, because that is
+    /// where it came from and because the field is what tells a multi-port rig which cable a
+    /// channel arrived on. Measured live before this parameter existed -- every derived channel
+    /// published with an empty port beside a measured one reading "SIM".
+    /// </param>
     public static DataRecord Derived(
         string stream, string key, DataValue value, string derivedFrom,
-        DateTimeOffset? timestamp = null)
+        DateTimeOffset? timestamp = null, string source = "")
     {
         if (string.IsNullOrWhiteSpace(derivedFrom))
         {
@@ -88,6 +95,7 @@ public sealed record DataRecord
             Key = new DataKey(stream, key),
             Timestamp = timestamp ?? DateTimeOffset.UtcNow,
             Value = value,
+            Source = source,
             DerivedFrom = derivedFrom
         };
     }

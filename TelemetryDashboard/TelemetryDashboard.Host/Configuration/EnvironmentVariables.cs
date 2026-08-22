@@ -36,6 +36,9 @@ public static class EnvironmentVariables
     /// <summary>Set to <c>1</c>, <c>true</c> or <c>yes</c> to run the simulator.</summary>
     public const string Simulate = "TELEMETRY_HOST_SIMULATE";
 
+    /// <summary>Derive a per-channel interval channel. See <see cref="HostOptions.WatchIntervals"/>.</summary>
+    public const string WatchIntervals = "TELEMETRY_HOST_WATCH_INTERVALS";
+
     /// <summary>Plugin discovery directory. Same meaning as <c>--plugin-dir</c>.</summary>
     public const string PluginDir = "TELEMETRY_HOST_PLUGIN_DIR";
 
@@ -95,6 +98,7 @@ public static class EnvironmentVariables
             SerialPort = Value(Serial),
             RecordingDirectory = Value(Record),
             Simulate = IsTruthy(Value(Simulate)),
+            WatchIntervals = IsTruthy(Value(WatchIntervals)),
             PluginDirectory = Value(PluginDir),
             ExtensionCatalogue = Value(Extensions),
             SlackWebhook = Value(SlackWebhook),

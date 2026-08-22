@@ -110,7 +110,8 @@ public static class Program
 
         TelemetryIngestPump? pump = source is null
             ? null
-            : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive);
+            : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive,
+                watchIntervals: options.WatchIntervals);
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, IngestSetup.SerialManagerOf(source));
 
@@ -125,7 +126,8 @@ public static class Program
         var run = new ShutdownSequence
         {
             Console = console,
-            Pumping = pump?.RunAsync(shutdown.Token) ?? Task.CompletedTask,
+            // RunAllAsync, not RunAsync: this pump is two loops now, and which ones is its business.
+            Pumping = pump?.RunAllAsync(shutdown.Token) ?? Task.CompletedTask,
             Plugins = plugins,
             Relays = relays,
             Source = source,

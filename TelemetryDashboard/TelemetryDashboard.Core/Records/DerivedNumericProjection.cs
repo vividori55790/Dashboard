@@ -77,10 +77,42 @@ public sealed class DerivedNumericProjection : IRecordStage
     /// </remarks>
     public long UnmeasurableCount { get; private set; }
 
+    /// <summary>Records this projection had already produced and was offered again.</summary>
+    /// <remarks>
+    /// Counted rather than passed over quietly. A non-zero value here is the pipeline feeding a
+    /// projection its own output, which is correct and expected once the emit target is the
+    /// pipeline itself — but it is also exactly the shape of a configuration that would have
+    /// recursed, so it is worth being able to see.
+    /// </remarks>
+    public long SelfDeclinedCount { get; private set; }
+
     public bool CanHandle(DataValue value) => value.Kind == _accepts;
 
+    /// <summary>
+    /// Measures one record and emits the derived one, unless this projection made it.
+    /// </summary>
+    /// <remarks>
+    /// The self-check is not defensive tidiness; without it this class cannot be used at all in the
+    /// arrangement it was written for. <see cref="_emit"/> is documented as feeding the pipeline,
+    /// and the pipeline offers every record to every stage whose <see cref="CanHandle"/> matches
+    /// the value <em>shape</em> — which a derived numeric record does, being numeric. So the first
+    /// record produces a derivative, the derivative is offered straight back, and the keys grow a
+    /// suffix per turn until the stack ends the process.
+    /// <para>
+    /// Nothing had ever noticed, because nothing had ever registered one of these in a live
+    /// pipeline. The guard is on this projection's own name rather than on
+    /// <see cref="DataRecord.IsDerived"/>, so one projection reading another's output — a rate
+    /// computed from a waiting time — still works.
+    /// </para>
+    /// </remarks>
     public async ValueTask ProcessAsync(DataRecord record, CancellationToken cancellationToken = default)
     {
+        if (string.Equals(record.DerivedFrom, Name, StringComparison.Ordinal))
+        {
+            SelfDeclinedCount++;
+            return;
+        }
+
         ReadCount++;
 
         double? measured = _measure(record);
@@ -95,7 +127,8 @@ public sealed class DerivedNumericProjection : IRecordStage
             record.Key.Key + _keySuffix,
             new DataValue.Numeric(figure, _unit),
             Name,
-            record.Timestamp);
+            record.Timestamp,
+            record.Source);
 
         await _emit(derived, cancellationToken).ConfigureAwait(false);
     }

@@ -61,6 +61,18 @@ public static class UsageText
               --simulate        Run the virtual simulator instead of hardware. Every frame it
                                 produces is marked simulated=true and its node id is prefixed
                                 'SIM:'. Env: {EnvironmentVariables.Simulate}=1
+              --watch-intervals
+                                Derive a '<channel>.interval' channel, in seconds, holding the gap
+                                since that channel last reported. Off by default because it roughly
+                                doubles the record count.
+                                It exists because a dead sensor looks exactly like a steady one:
+                                every chart draws the last value it was given, so a link that drops
+                                holds its final reading on screen, inside its limits, with a z-score
+                                of zero because the distribution stopped moving too. The absence of
+                                values is the whole failure and no value-watching alarm can see it.
+                                The gap is a number, so --limit and the rolling statistics apply to
+                                it unchanged: --limit "COM3.Temp.interval[s] < 2" fires when that
+                                channel goes quiet. Env: {EnvironmentVariables.WatchIntervals}=1
               --archive <file>  Keep a durable SQLite archive of every ingested sample, queryable
                                 afterwards at /api/history by node, channel and time window. A CSV
                                 recording is a transcript; this is a store you can ask questions of,

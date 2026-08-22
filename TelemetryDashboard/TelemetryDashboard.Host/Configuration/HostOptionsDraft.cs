@@ -23,6 +23,7 @@ internal sealed class HostOptionsDraft
         SerialPort = defaults.SerialPort;
         RecordingDirectory = defaults.RecordingDirectory;
         Simulate = defaults.Simulate;
+        WatchIntervals = defaults.WatchIntervals;
         PluginDirectory = defaults.PluginDirectory;
         ExtensionDirectory = defaults.ExtensionDirectory;
         ExtensionCatalogue = defaults.ExtensionCatalogue;
@@ -61,6 +62,8 @@ internal sealed class HostOptionsDraft
     public string? SerialPort;
     public string? RecordingDirectory;
     public bool Simulate;
+
+    public bool WatchIntervals;
     public string? PluginDirectory;
     public string? ExtensionDirectory;
     public string? ExtensionCatalogue;
@@ -92,6 +95,7 @@ internal sealed class HostOptionsDraft
         SerialPort = SerialPort,
         RecordingDirectory = RecordingDirectory,
         Simulate = Simulate,
+        WatchIntervals = WatchIntervals,
         PluginDirectory = PluginDirectory,
         ExtensionDirectory = ExtensionDirectory,
         ExtensionCatalogue = ExtensionCatalogue,
