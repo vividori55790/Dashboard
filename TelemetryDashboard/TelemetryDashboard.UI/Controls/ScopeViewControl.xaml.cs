@@ -149,16 +149,33 @@ public partial class ScopeViewControl : UserControl
     /// <summary>Queues one sample for a named channel, creating the channel on first sight.</summary>
     public void PushChannel(string channelName, double value)
     {
-        if (_isPaused || string.IsNullOrWhiteSpace(channelName)) return;
-        if (double.IsNaN(value) || double.IsInfinity(value)) return;
+        if (string.IsNullOrWhiteSpace(channelName)) return;
+
+        if (_isPaused)
+        {
+            Drops.CountWhilePaused();
+            return;
+        }
+
+        // Counted, not just skipped. A reading that is not a number means a decode fault, a sensor
+        // answering NaN or a divide by zero upstream, and skipping it silently makes "this channel
+        // is quiet" and "this channel is talking nonsense" the same flat trace.
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            Drops.CountNonFinite();
+            return;
+        }
 
         _pending.Enqueue((channelName, value));
 
         while (_pending.Count > MaxPendingSamples)
         {
-            _pending.TryDequeue(out _);
+            if (_pending.TryDequeue(out _)) Drops.CountOverflowed();
         }
     }
+
+    /// <summary>What this scope discarded and why. See <see cref="ScopeDropTally"/>.</summary>
+    public ScopeDropTally Drops { get; } = new();
 
     /// <summary>
     /// Convenience overload for the bundled ambient sensor set.
@@ -181,7 +198,14 @@ public partial class ScopeViewControl : UserControl
         while (_pending.TryDequeue(out (string Channel, double Value) sample))
         {
             ScopeChannelSeries? series = Resolve(sample.Channel, ref channelAdded);
-            if (series is null) continue;
+            if (series is null)
+            {
+                // The ceiling is on channels, so what is lost here is not a sample but a whole
+                // channel, every time it reports. Derived channels make this likelier than it looks:
+                // a ten-channel rig with intervals and drift turned on reports thirty.
+                Drops.CountBeyondChannelCap();
+                continue;
+            }
 
             series.Add(elapsedSec, sample.Value);
             _sampleCount++;
@@ -199,7 +223,8 @@ public partial class ScopeViewControl : UserControl
     private void UpdateScopeReadouts()
     {
         ScopeStatsText.Text =
-            $"Samples: {_sampleCount:N0} | Channels: {_channels.Count} | Time: {_elapsedSec:F1}s";
+            $"Samples: {_sampleCount:N0} | Channels: {_channels.Count} | Time: {_elapsedSec:F1}s"
+            + Drops.Summary();
 
         // Measured, not assumed. The overlay was previously told "50 Hz, simulating" on every tick
         // regardless of the source or the actual throughput.
@@ -322,6 +347,7 @@ MainPlot.Plot.Axes.AutoScale();
         foreach (ScopeChannelSeries channel in _channels) channel.Clear();
         _channels.Clear();
         _channelIndex.Clear();
+        Drops.Reset();
         _sampleCount = 0;
         _startTime = DateTime.Now;
         _elapsedSec = 0;

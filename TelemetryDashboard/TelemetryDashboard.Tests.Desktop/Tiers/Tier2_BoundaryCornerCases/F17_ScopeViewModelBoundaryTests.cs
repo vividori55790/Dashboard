@@ -1,73 +1,22 @@
-using TelemetryDashboard.UI.ViewModels;
-
 namespace TelemetryDashboard.Tests.Desktop.Tiers.Tier2_BoundaryCornerCases;
 
-/// <summary>F17: ScottPlot 5 WPF 2D scope boundary cases.</summary>
+/// <summary>
+/// F17's five boundary tests are gone with the class they exercised.
+/// </summary>
 /// <remarks>
-/// <c>ScopeViewModel</c> is the view model behind the ScottPlot.WPF surface, so it can only be
-/// constructed with the UI assembly present. The F23 and F24 regions that shared its original file
-/// exercise Core types instead, and stayed in the portable project rather than following the WPF
-/// half across the split.
+/// They asked their questions of <c>ScopeViewModel</c>, which no scope ever used. It guarded every
+/// buffer with a lock, on the stated premise that "samples arrive on serial and parser threads
+/// while the dispatcher clears and re-reads the same buffers" — and that is not what the running
+/// control does. <c>ScopeViewControl</c> never lets an ingest thread near its buffers at all: a
+/// push enqueues onto a ConcurrentQueue and a dispatcher timer is the only thing that drains it,
+/// so there is nothing for a lock to protect and no contention on the render path.
+/// <para>
+/// The one idea worth taking survived. The view model held a valid-point count beside a total one
+/// and documented the pair as a decode-health indicator; the running scope counted nothing at all,
+/// down three separate discard paths. <c>ScopeDropAccountingTests</c> covers what replaced it, and
+/// the buffer questions are asked of <c>ScopeChannelSeries</c>, which is what the scope really uses.
+/// </para>
 /// </remarks>
-public class F17_ScopeViewModelBoundaryTests
+public static class F17_ScopeViewModelBoundaryTests
 {
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F17_Boundary_DoubleNaNValues_SkippedInRendering()
-    {
-        var scope = new ScopeViewModel();
-        double[] data = new double[] { 1.0, double.NaN, 3.0, double.PositiveInfinity };
-
-        Action act = () => scope.AddDataPoints("TEMP", data);
-        act.Should().NotThrow();
-        scope.GetValidPointCount("TEMP").Should().Be(2);
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F17_Boundary_ExtremePointCount_100kPoints_NoBufferOverflow()
-    {
-        var scope = new ScopeViewModel();
-        double[] largeData = new double[100_000];
-        Array.Fill(largeData, 42.0);
-
-        scope.AddDataPoints("VIB", largeData);
-        scope.GetTotalPointCount("VIB").Should().Be(100_000);
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F17_Boundary_ZeroDataPoints_RendersEmptyPlotArea()
-    {
-        var scope = new ScopeViewModel();
-        scope.ClearPoints();
-
-        scope.GetTotalPointCount("TEMP").Should().Be(0);
-        scope.IsPlotAreaEmpty.Should().BeTrue();
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F17_Boundary_InfiniteYAxisRange_AutoScalesToDefaults()
-    {
-        var scope = new ScopeViewModel();
-        scope.AddDataPoints("VOLT", new double[] { double.NegativeInfinity, double.PositiveInfinity });
-
-        scope.AutoScaleYAxis();
-        scope.YMin.Should().BeGreaterThan(double.NegativeInfinity);
-        scope.YMax.Should().BeLessThan(double.PositiveInfinity);
-    }
-
-    [Fact]
-    [Trait("Category", "Tier2")]
-    public void F17_Boundary_RapidClearAndStream_NoConcurrencyRaceCondition()
-    {
-        var scope = new ScopeViewModel();
-        Parallel.For(0, 50, i =>
-        {
-            if (i % 2 == 0) scope.AddDataPoints("TEMP", new double[] { i });
-            else scope.ClearPoints();
-        });
-        scope.GetTotalPointCount("TEMP").Should().BeGreaterThanOrEqualTo(0);
-    }
 }

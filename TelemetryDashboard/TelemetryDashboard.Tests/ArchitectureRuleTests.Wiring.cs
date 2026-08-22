@@ -255,8 +255,22 @@ public partial class ArchitectureRuleTests
         // codebase -- while PythonScriptEngine, which is what actually loads a .py plugin,
         // ran files and hooks with no budget at all. That mechanism now guards both the load
         // and the per-packet invoke; the wrapper was a second entry point to one interpreter.
+        // ScopeViewModel left this baseline by being deleted. Its premise did not describe the
+        // control it was written for: it locked every buffer because "samples arrive on serial and
+        // parser threads while the dispatcher re-reads the same buffers", and ScopeViewControl
+        // never lets an ingest thread near its buffers -- a push enqueues onto a ConcurrentQueue
+        // and a dispatcher timer is the only drainer. A second, locked copy of the same state would
+        // have been two records of what the scope is showing, free to disagree.
+        //
+        // Its one real idea was taken across. It held a valid-point count beside a total one and
+        // called the pair a decode-health indicator; the running scope counted nothing, down three
+        // discard paths -- non-finite readings, queue overflow, and channels past the plot's
+        // sixteen-channel ceiling. That last one loses whole channels rather than samples, and
+        // derived channels make it likely: a ten-channel rig with intervals and drift reports
+        // thirty. Measured on the running application with a twenty-channel profile:
+        // "Samples: 2,176 | Channels: 16 | Time: 33.8s | dropped 544 (544 past channel cap)",
+        // where before it said only the first three fields.
         "SampleTelemetryPlugin",
-        "ScopeViewModel",
         // SessionReplayPlayer retired from this baseline: ReplayTelemetrySource attaches it as a
         // source behind --replay, so a recording can be played back through the pipeline that wrote
         // it and the whole stack -- routing, analytics, console, spectrum, alignment, DVR -- works

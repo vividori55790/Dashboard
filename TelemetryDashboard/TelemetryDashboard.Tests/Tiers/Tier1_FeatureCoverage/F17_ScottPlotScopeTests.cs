@@ -1,5 +1,20 @@
 namespace TelemetryDashboard.Tests.Tiers.Tier1_FeatureCoverage;
 
+/// <summary>
+/// Scope buffer arithmetic, asked of a model declared in this file.
+/// </summary>
+/// <remarks>
+/// The method names say ScopeViewModel and nothing here has ever touched it: every test constructs
+/// <c>ScottPlotScopeState</c>, a stand-in living beside them. That was true while ScopeViewModel
+/// existed and it is still true now that it does not, which is the point worth recording — a test
+/// named after a production type but exercising a local fake reports on itself, and this project
+/// has now found four of them.
+/// <para>
+/// They are kept because the arithmetic they check is real and the portable project cannot
+/// reference the WPF assembly. What the scope actually does with its buffers is checked against
+/// <c>ScopeChannelSeries</c> in the desktop project.
+/// </para>
+/// </remarks>
 public class F17_ScottPlotScopeTests
 {
     [Fact]
