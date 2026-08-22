@@ -93,6 +93,46 @@ public class ScopeDropAccountingTests
         tally.NonFinite.Should().Be(1000);
     }
 
+    // ---- how many channels are drawn, and how many are held ------------------
+
+    [WpfFact]
+    [Trait("Category", "Tier1")]
+    public void ChannelsPastTheDrawingBudgetStillExistAndCanBeTicked()
+    {
+        // The defect this replaced. One cap of sixteen refused to *create* the seventeenth channel
+        // a rig reported, so it never reached the toggle list -- the operator could not tick it,
+        // untick something else, or learn it existed. The panel whose job is to show channels was
+        // hiding them, and derived channels make a twenty- or thirty-channel rig ordinary.
+        ScopeChannelBudget.StartsVisible(ScopeChannelBudget.DefaultPlotted - 1).Should().BeTrue();
+        ScopeChannelBudget.StartsVisible(ScopeChannelBudget.DefaultPlotted).Should().BeFalse(
+            "past the budget it arrives unticked, not absent");
+
+        ScopeChannelBudget.HasRoom(ScopeChannelBudget.DefaultPlotted).Should().BeTrue(
+            "the budget is about drawing, not about holding");
+    }
+
+    [WpfFact]
+    [Trait("Category", "Tier1")]
+    public void ASourceInventingChannelNamesIsStillStoppedSomewhere()
+    {
+        // The ceiling is a different question from the budget and still needed: a malformed parse,
+        // or a device putting a serial number in the variable field, emits a fresh channel name per
+        // packet. Far above any real rig, and what is refused past it is counted rather than
+        // dropped in silence.
+        ScopeChannelBudget.HasRoom(ScopeChannelBudget.Ceiling - 1).Should().BeTrue();
+        ScopeChannelBudget.HasRoom(ScopeChannelBudget.Ceiling).Should().BeFalse();
+        ScopeChannelBudget.Ceiling.Should().BeGreaterThan(ScopeChannelBudget.DefaultPlotted * 4);
+    }
+
+    [WpfFact]
+    [Trait("Category", "Tier2")]
+    public void AChannelIsDrawnByDefaultSoTheBudgetIsWhatWithholdsIt()
+    {
+        // If a series defaulted to hidden, every channel would need a tick before anything appeared
+        // and the budget would be doing nothing.
+        new ScopeChannelSeries("TEMP", index: 0).IsVisible.Should().BeTrue();
+    }
+
     // ---- the buffer behaviours the deleted view model used to stand in for ----
 
     [WpfFact]

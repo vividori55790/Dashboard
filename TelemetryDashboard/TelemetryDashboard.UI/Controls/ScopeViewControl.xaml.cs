@@ -19,9 +19,6 @@ namespace TelemetryDashboard.UI.Controls;
 /// </remarks>
 public partial class ScopeViewControl : UserControl
 {
-    /// <summary>Maximum channels charted simultaneously before new ones are ignored.</summary>
-    private const int MaxChannels = 16;
-
     /// <summary>Backlog cap; excess is dropped oldest-first during a flood.</summary>
     private const int MaxPendingSamples = 4000;
 
@@ -222,8 +219,11 @@ public partial class ScopeViewControl : UserControl
     /// <summary>The counters under the toolbar, refreshed with the figure rather than per sample.</summary>
     private void UpdateScopeReadouts()
     {
+        int hidden = _channels.Count(c => !c.IsVisible);
+        string unticked = hidden > 0 ? $" ({hidden} unticked)" : string.Empty;
+
         ScopeStatsText.Text =
-            $"Samples: {_sampleCount:N0} | Channels: {_channels.Count} | Time: {_elapsedSec:F1}s"
+            $"Samples: {_sampleCount:N0} | Channels: {_channels.Count}{unticked} | Time: {_elapsedSec:F1}s"
             + Drops.Summary();
 
         // Measured, not assumed. The overlay was previously told "50 Hz, simulating" on every tick
@@ -236,9 +236,14 @@ public partial class ScopeViewControl : UserControl
     private ScopeChannelSeries? Resolve(string channelName, ref bool channelAdded)
     {
         if (_channelIndex.TryGetValue(channelName, out ScopeChannelSeries? existing)) return existing;
-        if (_channels.Count >= MaxChannels) return null;
+        if (!ScopeChannelBudget.HasRoom(_channels.Count)) return null;
 
         var series = new ScopeChannelSeries(channelName, _channels.Count);
+
+        // Past the drawing budget a channel is still created, still counted and still in the toggle
+        // list -- just not drawn until somebody ticks it. Refusing to create it was how a channel
+        // became invisible to the one control that exists to show channels.
+        series.IsVisible = ScopeChannelBudget.StartsVisible(_channels.Count);
         _channelIndex[channelName] = series;
         _channels.Add(series);
         channelAdded = true;
