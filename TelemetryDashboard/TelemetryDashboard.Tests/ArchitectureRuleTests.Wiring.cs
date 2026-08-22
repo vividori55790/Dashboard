@@ -88,7 +88,12 @@ public partial class ArchitectureRuleTests
         // marked Built since M2 while nothing constructed it, so the page had never been opened --
         // which is how it kept a connection chip reading "WS CONNECTED" that no code updated, and a
         // widget that filled a missing field in from the temperature and then from zero.
-        "DeltaCursorService",
+        // DeltaCursorService retired from this baseline: ScopeViewControl holds one, places its
+        // cursors from real clicks on the plot and draws the delta over the trace. The scope could
+        // show a transient and offered no way to say how long it lasted or how far the rail
+        // dropped, which is the first question anyone asks of a waveform. Wiring it needed one
+        // addition -- HasAnyCursor, so the drawing code can tell "one cursor down" from "none"
+        // without inferring it from coordinates and getting a cursor at the origin wrong.
         "DerivedNumericProjection",
         // EmergencyMcuController retired from this baseline: EmergencyInterlockRelay constructs it
         // behind --emergency-stop, so the one feature that acts on the machine rather than watching

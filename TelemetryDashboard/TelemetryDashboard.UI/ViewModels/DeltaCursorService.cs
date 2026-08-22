@@ -41,6 +41,17 @@ public sealed class DeltaCursorService
     /// </remarks>
     public bool HasValidMeasurement => _hasCursor1 && _hasCursor2;
 
+    /// <summary>
+    /// True once either cursor is placed, which is when there is something to draw.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="HasValidMeasurement"/> on purpose, and the distinction is the
+    /// reason it exists: after the first click there is a cursor to paint and no delta to report.
+    /// Without it the drawing code has to infer "placed" from the coordinates, and a cursor
+    /// legitimately placed at the origin is indistinguishable from one that was never placed at all.
+    /// </remarks>
+    public bool HasAnyCursor => _hasCursor1 || _hasCursor2;
+
     /// <summary>Signed time between the cursors, second minus first.</summary>
     /// <remarks>
     /// Signed rather than absolute because the sign carries the drag direction, which is how the

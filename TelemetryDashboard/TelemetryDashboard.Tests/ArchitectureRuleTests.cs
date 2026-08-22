@@ -485,6 +485,10 @@ public partial class ArchitectureRuleTests
         // account of what happens without it.
         "TelemetryDashboard.UI/Docking/LayoutManager.cs",                          // 162 lines
 
+        // The scope's measurement cursors: placement, drawing and the readout, plus why the value
+        // delta is withheld while the axis is carrying no unit.
+        "TelemetryDashboard.UI/Controls/ScopeViewControl.Cursors.cs",              // 172 lines
+
         // Feature 12 reaching a running program for the first time. Most of the addition in each
         // file is the account of why an interlock that transmits to hardware is off by default and
         // refuses to pick its own port, which belongs beside the code that enforces it.

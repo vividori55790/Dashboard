@@ -257,6 +257,12 @@ public partial class ScopeViewControl : UserControl
         // carrying them. Promising "values move to the legend" while showing no legend would be the
         // same class of untruth as the renormalised axis this exists to avoid.
 MainPlot.Plot.Axes.AutoScale();
+
+        // After the autoscale and before the refresh. The cursors are drawn in data coordinates and
+        // the figure is cleared at the top of this method, so they are re-added every frame rather
+        // than placed once.
+        DrawCursors();
+
         MainPlot.Refresh();
     }
 
@@ -305,6 +311,9 @@ MainPlot.Plot.Axes.AutoScale();
         // caption, and the caption is never asked to render an icon.
         PauseGlyph.Text = _isPaused ? "\uE768" : "\uE769";
         PauseLabel.Text = _isPaused ? "Resume" : "Pause";
+        // The accessible name follows the caption. A button that reads "Resume" and announces
+        // "Pause" is worse than one that announces nothing.
+        System.Windows.Automation.AutomationProperties.SetName(BtnPause, PauseLabel.Text);
     }
 
     private void BtnClear_Click(object sender, RoutedEventArgs e)
@@ -316,6 +325,13 @@ MainPlot.Plot.Axes.AutoScale();
         _sampleCount = 0;
         _startTime = DateTime.Now;
         _elapsedSec = 0;
+
+        // The cursors go with the trace they were measuring. DeltaCursorService's own remarks say
+        // this is what ClearData is for -- leaving them placed keeps a measurement on screen that
+        // was taken from samples no longer in the window.
+        _cursors.ClearData();
+        _placeSecondCursor = false;
+        UpdateCursorReadout();
 
         // Cleared here too, or the next render tick would repaint the readouts this method is
         // about to set, using the elapsed figure from before the clear.
@@ -329,6 +345,12 @@ MainPlot.Plot.Axes.AutoScale();
     private void BtnAutoFit_Click(object sender, RoutedEventArgs e)
     {
         MainPlot.Plot.Axes.AutoScale();
+
+        // After the autoscale and before the refresh. The cursors are drawn in data coordinates and
+        // the figure is cleared at the top of this method, so they are re-added every frame rather
+        // than placed once.
+        DrawCursors();
+
         MainPlot.Refresh();
     }
 

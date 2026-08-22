@@ -36,14 +36,20 @@
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button x:Name="BtnPause" Margin="0,0,8,0" Click="BtnPause_Click">
+                    <!-- The name is stated because the content is a glyph and a label in a panel,
+                         and WPF cannot derive an accessible name from a composite like that: both
+                         of these buttons reported an empty name to a screen reader. It is kept in
+                         step with the caption in BtnPause_Click. -->
+                    <Button x:Name="BtnPause" Margin="0,0,8,0" Click="BtnPause_Click"
+                            AutomationProperties.Name="Pause">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="PauseGlyph" Style="{StaticResource IconText}"
                                        Text="&#xE769;" Margin="0,0,8,0"/>
                             <TextBlock x:Name="PauseLabel" Text="Pause" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BtnClear" Margin="0,0,8,0" Click="BtnClear_Click">
+                    <Button x:Name="BtnClear" Margin="0,0,8,0" Click="BtnClear_Click"
+                            AutomationProperties.Name="Clear">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource IconText}" Text="&#xE74D;" Margin="0,0,8,0"/>
                             <TextBlock Text="Clear" VerticalAlignment="Center"/>
@@ -60,6 +66,12 @@
                         carries each channel's real range. A chart that silently renormalises is
                         showing shapes while implying values.
                     -->
+                    <!-- Measurement cursors. A scope you can only watch answers "is it moving";
+                         an engineer's next question is always "how long was that, and how big",
+                         and that needs two points and the difference between them. -->
+                    <ToggleButton x:Name="BtnCursors" Content="Cursors" Margin="0,0,8,0"
+                                  ToolTip="Click the plot twice to measure the time and value between two points."
+                                  Checked="BtnCursors_Changed" Unchecked="BtnCursors_Changed"/>
                     <ToggleButton x:Name="BtnFitEach" Content="Fit each" Margin="0,0,16,0"
                                   ToolTip="Scale every channel into a common band so small ones stay readable. Values move to the legend."
                                   Checked="BtnFitEach_Changed" Unchecked="BtnFitEach_Changed"/>
@@ -95,6 +107,30 @@
             </DockPanel>
         </Border>
 
-        <ScottPlot:WpfPlot x:Name="MainPlot" Grid.Row="2" Margin="12"/>
+        <Grid Grid.Row="2">
+            <ScottPlot:WpfPlot x:Name="MainPlot" Margin="12"
+                               MouseLeftButtonDown="MainPlot_CursorClick"/>
+
+            <!-- The readout sits over the plot rather than in the toolbar, because it is read while
+                 looking at the trace. IsHitTestVisible is off so it never swallows a click meant
+                 for the canvas underneath it. -->
+            <Border x:Name="CursorHud" Visibility="Collapsed" IsHitTestVisible="False"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24,24,0,0"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                    CornerRadius="{StaticResource RadiusS}" Padding="12,8">
+                <StackPanel>
+                    <TextBlock x:Name="CursorDeltaText" Style="{StaticResource MonoText}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Text="Click the plot to place the first cursor."/>
+                    <TextBlock x:Name="CursorPointsText" Style="{StaticResource MonoText}"
+                               Foreground="{StaticResource TextTertiaryBrush}"
+                               Margin="0,4,0,0" Text=""/>
+                    <TextBlock x:Name="CursorNoteText" Style="{StaticResource MonoText}"
+                               Foreground="{StaticResource WarningBrush}"
+                               Margin="0,4,0,0" Text="" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
