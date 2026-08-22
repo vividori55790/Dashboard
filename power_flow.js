@@ -1,5 +1,5 @@
 /*
-    power_flow.js — DAB/PSFB 전력 변환 체인의 실시간 흐름도.
+    power_flow.js — DAB/PSFB UPS 전력 계통의 실시간 단선도(one-line diagram).
 
     dab_psfb_console.html 옆에 붙는 그림이고, 규칙은 그 페이지와 같습니다: 화면에 있는 모든
     숫자는 방금 도착한 값이거나, 아니면 비어 있어야 합니다.
@@ -19,14 +19,32 @@
     /api/aligned 위에서 합니다. 지금 전압에 300 ms 전 전류를 곱한 전력은 실제로 흐른 적이 없는
     전력이고, 다른 숫자들과 똑같은 모습으로 출력됩니다. 모르면 '값 없음' 이라고 씁니다.
 
-    모양은 T 자입니다. 위쪽 가로줄이 평상시 급전 경로(계통 -> DC 버스 -> PSFB -> 서버)이고,
-    DC 버스 아래로 내려간 기둥 끝에 UPS 가지가 병렬로 붙습니다. 이것이 온라인 이중변환 UPS 의
-    실제 결선입니다.
+    ── 배치 ────────────────────────────────────────────────────────────────
 
-    기둥의 화살표 방향이 이 그림에서 가장 많은 것을 말합니다. UPS 가 버스를 떠받치는 동안에는
-    화살표가 위쪽 가로줄을 향해 올라가고, 평상시 충전 중에는 내려옵니다. 그래서 정전 시나리오가
-    무엇을 하는지가 숫자를 읽기 전에 배치에서 먼저 읽힙니다: 왼쪽 끝이 0 V 가 되어도 아래에서
-    전력이 올라오고 있으면 오른쪽 절반은 계속 살아 있습니다.
+    고전압 DC 버스가 공통 모선이고, 변환기들은 그 모선에 서로 병렬로 매달립니다.
+
+        [계통] ─▶ ═══════════ 고전압 DC 버스 ═══════════
+                       │             │             │
+                  dab.p_in ▼    ups.p_bus ▲     (채널 없음)
+                       │             │             │
+                 [DAB 컨버터]  [UPS DAB 컨버터]  [PSFB 48 V 레일]
+                                     │             │
+                              ups.p_batt ▼    psfb.p_out ▼
+                               [배터리 뱅크]    [서버 부하]
+
+    처음에는 이것을 계통 -> DAB -> PSFB -> 부하 의 한 줄짜리 사슬로 그렸습니다. 그것은 틀린
+    그림이었습니다. DAB 와 PSFB 는 서로의 앞뒤에 있는 것이 아니라 같은 모선에 병렬로 붙어
+    있고, 사슬로 그리면 PSFB 가 DAB 의 출력을 받는 것처럼 읽힙니다 — 실제로는 둘 다 모선에서
+    가져갈 뿐이고, 한쪽이 멈춰도 모선이 살아 있는 한 다른 쪽은 계속 돕니다. 배치가 곧 주장
+    이므로, 배치가 틀리면 숫자가 전부 맞아도 그림은 거짓말을 합니다.
+
+    UPS 갈래의 화살표 방향이 이 그림에서 가장 많은 것을 말합니다. 배터리가 모선을 떠받치는
+    동안에는 화살표가 모선을 향해 올라가고, 평상시 충전 중에는 내려옵니다. 그래서 정전
+    시나리오가 무엇을 하는지가 숫자를 읽기 전에 배치에서 먼저 읽힙니다.
+
+    DAB 상자 아래가 비어 있는 것도 사실입니다. 이 프로파일은 DAB 의 반대편을 재는 채널을
+    선언하지 않으므로, 그 자리에 아무것도 그리지 않습니다 — 모르는 것을 그리지 않는 것이
+    없는 값을 0 으로 적지 않는 것과 같은 규칙입니다.
 
     호출 규약 (전역 하나만 노출합니다):
         PowerFlow.mount(containerElement)   SVG 를 한 번 만든다
@@ -44,20 +62,22 @@
     // H 는 아래에서 범례 줄 수까지 세어 계산합니다. 손으로 적어 두었더니 범례를 한 줄 늘린
     // 날 마지막 줄이 viewBox 밖으로 나갔고, SVG 는 그것을 오류로 알리지 않고 그냥 자릅니다.
     var W = 1160, H = 0;
-    var MARGIN = 16, BOX_W = 168, BOX_H = 150, BOX_Y = 30, GAP = 152;
-    var ROW_GAP = 96;              // 위쪽 가로줄과 아래쪽 UPS 가지 사이, T 의 기둥이 지나는 높이
+    var MARGIN = 16;
+    var COL_W = 186, COL_GAP = 128;
+    var BOX_H = 140;               // 값 두 줄이 들어가는 높이
+    var BUS_H = 64;                // 모선은 값 한 줄을 옆으로 눕혀 담습니다
     var PAD = 14;                  // 상자 안쪽 여백
-    var ROW_H = 44;                // 값 한 줄(숫자 + 채널 id)이 차지하는 높이
+    var ROW_H = 40;                // 값 한 줄(숫자 + 채널 id)이 차지하는 높이
+
+    var ROW0_Y = 30;                          // 계통과 모선
+    var ROW1_Y = ROW0_Y + BOX_H + 45;         // 모선에 병렬로 매달린 변환기들
+    var ROW2_Y = ROW1_Y + BOX_H + 45;         // 그 변환기들이 물고 있는 것들
+    var BUS_Y = ROW0_Y + (BOX_H - BUS_H) / 2; // 계통 상자와 세로 중앙을 맞춥니다
 
     var STALE_MS = 10000;          // dab_psfb_console.html 과 같은 기준
     var DASH = 24;                 // 파선 한 주기 (14 + 10). 오프셋을 이 값으로 접습니다.
 
-    // 격자. 상자는 열과 행으로만 위치를 말하고, 실제 좌표는 여기서 한 번만 계산합니다. 좌표를
-    // 상자마다 손으로 적으면 한 칸을 옮길 때 그 칸에 붙은 선이 따라오지 않습니다.
-    function colX(col) { return MARGIN + col * (BOX_W + GAP); }
-    function rowY(row) { return BOX_Y + row * (BOX_H + ROW_GAP); }
-    function colCx(col) { return colX(col) + BOX_W / 2; }
-    function rowCy(row) { return rowY(row) + BOX_H / 2; }
+    function colX(col) { return MARGIN + col * (COL_W + COL_GAP); }
 
     // 굵기와 속도를 정하려면 전력의 눈금이 필요합니다. 이 값은 측정값이 아니라 그리기 눈금이며,
     // 프로파일이 선언한 범위에서 옵니다: DAB 450 V x 40 A = 18 kW, PSFB 54 V x 260 A = 14 kW,
@@ -66,70 +86,99 @@
     // 굵기로 보이는 쪽이 더 나쁩니다.
     var FULL_SCALE_W = 18000;
 
-    // 단계. id 는 프레임에 실제로 실려 오는 문자열이므로 정확히 일치시킵니다. 부분 문자열로
-    // 맞추면 grid.voltage 와 psfb.output_voltage 가 서로의 칸을 덮어씁니다 — 이 프로젝트가
-    // 이미 한 번 겪은 결함입니다.
+    // 상자. id 는 링크가 가리키는 이름이고, 채널 id 는 프레임에 실제로 실려 오는 문자열이므로
+    // 정확히 일치시킵니다. 부분 문자열로 맞추면 grid.voltage 와 psfb.output_voltage 가 서로의
+    // 칸을 덮어씁니다 — 이 프로젝트가 이미 한 번 겪은 결함입니다.
     var STAGES = [
-        { name: '계통', tag: 'grid', col: 0, row: 0, rows: [
+        { id: 'grid', name: '계통', tag: 'grid · 상용 전력망', kind: 'source',
+          x: colX(0), y: ROW0_Y, w: COL_W, h: BOX_H, rows: [
             { id: 'grid.voltage', unit: 'V', dp: 0, label: '계통 전압' }
         ] },
-        // 이 상자가 DC 버스입니다. 이름을 '배터리 컨버터' 에서 바꾼 이유는 아래쪽에 진짜 배터리
-        // 가지가 생겼기 때문입니다. 상자 두 개가 같은 것을 가리키는 이름을 달고 있으면, 어느
-        // 쪽 숫자를 읽고 있는지 화면에서 구분할 수 없습니다. 채널 id 는 그대로 dab.* 입니다.
-        { name: 'DAB 컨버터 · DC 버스', tag: 'dab', col: 1, row: 0, rows: [
-            { id: 'dab.bus_voltage', unit: 'V', dp: 0, label: 'DAB 출력 버스 전압' },
+
+        // 공통 모선. 넓고 낮은 상자 하나로 그리는 이유는 이것이 한 지점이기 때문입니다 —
+        // 아래로 내려가는 세 갈래는 서로 직렬이 아니라 전부 같은 노드에 붙어 있습니다.
+        { id: 'bus', name: '고전압 DC 버스', tag: '공통 모선 · 세 갈래 병렬', kind: 'bus',
+          compact: true,
+          x: colX(1), y: BUS_Y, w: colX(3) + COL_W - colX(1), h: BUS_H, rows: [
+            { id: 'dab.bus_voltage', unit: 'V', dp: 0, label: 'DC 버스 전압' }
+        ] },
+
+        { id: 'dab', name: 'DAB 컨버터', tag: 'dab · 모선에 병렬 · 반대편 미계측', kind: 'converter',
+          x: colX(1), y: ROW1_Y, w: COL_W, h: BOX_H, rows: [
             { id: 'dab.input_current', unit: 'A', dp: 2, label: 'DAB 입력 전류' }
         ] },
-        { name: 'PSFB 48 V 레일', tag: 'psfb', col: 2, row: 0, rows: [
+
+        { id: 'ups', name: 'UPS DAB 컨버터', tag: 'ups · 모선에 병렬', kind: 'converter',
+          x: colX(2), y: ROW1_Y, w: COL_W, h: BOX_H, rows: [
+            { id: 'ups.bus_current', unit: 'A', dp: 2, label: 'UPS 모선측 전류 (양수 = 모선으로 나감)' },
+            { id: 'ups.battery_current', unit: 'A', dp: 1, label: 'UPS 배터리 전류 (양수 = 충전)' }
+        ] },
+
+        { id: 'psfb', name: 'PSFB 48 V 레일', tag: 'psfb · 모선에 병렬', kind: 'rail',
+          x: colX(3), y: ROW1_Y, w: COL_W, h: BOX_H, rows: [
             { id: 'psfb.output_voltage', unit: 'V', dp: 2, label: 'PSFB 출력 전압' },
             { id: 'psfb.output_current', unit: 'A', dp: 1, label: 'PSFB 출력 전류' }
         ] },
-        { name: '서버 부하', tag: 'server', col: 3, row: 0, rows: [
-            { id: 'server.load', unit: '%', dp: 1, label: '서버 부하율' }
+
+        // 효율과 변환비는 원래 두 상자 사이 링크에 매달려 있었습니다. 좁은 틈에 글자 일곱
+        // 덩어리가 겹쳐 있었고, 그 틈에서 가장 큰 글자가 '값 없음' 이라 그림 한가운데가 고장난
+        // 것처럼 보였습니다. 여기로 옮기면서 전용 그리기 코드도 같이 사라졌습니다 — 이것들은
+        // 다른 채널과 똑같은 채널이므로 다른 채널과 똑같은 칸에 그리면 됩니다.
+        //
+        // 왼쪽 아래에 둔 것은 회로가 아니기 때문입니다. 변환기 바로 아래에 놓으면 선이 없어도
+        // 그 변환기에 매달린 무언가로 읽힙니다.
+        { id: 'derived', name: 'PSFB 변환 지표', tag: 'derived · 회로가 아님', kind: 'derived',
+          x: colX(0), y: ROW2_Y, w: COL_W, h: BOX_H, rows: [
+            { id: 'psfb.efficiency', unit: '%', dp: 1, label: 'PSFB 효율',
+              over: 100, overNote: '100 % 초과 · 보정 없음' },
+            { id: 'psfb.conversion_ratio', unit: '', dp: 3, label: 'PSFB 출력 / 모선 전압비' }
         ] },
 
-        // T 의 기둥 끝. 전류는 컨버터가 흘리는 것이고 전압과 충전율은 뱅크의 성질이므로 상자를
-        // 나눕니다. 한 상자에 몰아 넣으면 그 셋이 같은 곳에서 측정된 것처럼 읽힙니다.
-        { name: 'UPS DAB 컨버터 (병렬)', tag: 'ups', col: 1, row: 1, rows: [
-            { id: 'ups.bus_current', unit: 'A', dp: 2, label: 'UPS 버스측 전류 (양수 = 버스로 나감)' },
-            { id: 'ups.battery_current', unit: 'A', dp: 1, label: 'UPS 배터리 전류 (양수 = 충전)' }
-        ] },
-        { name: '배터리 뱅크', tag: 'ups.battery', col: 2, row: 1, rows: [
+        { id: 'battery', name: '배터리 뱅크', tag: 'ups.battery · 200 Ah', kind: 'storage',
+          x: colX(2), y: ROW2_Y, w: COL_W, h: BOX_H, rows: [
             { id: 'ups.battery_voltage', unit: 'V', dp: 2, label: '배터리 단자 전압' },
             { id: 'ups.state_of_charge', unit: '%', dp: 1, label: '배터리 충전율 (전류의 적분)' }
+        ] },
+
+        { id: 'server', name: '서버 부하', tag: 'server · 랙', kind: 'load',
+          x: colX(3), y: ROW2_Y, w: COL_W, h: BOX_H, rows: [
+            { id: 'server.load', unit: '%', dp: 1, label: '서버 부하율' }
         ] }
     ];
 
-    // 링크. 가운데 구간에 전력 채널이 없는 것은 버그가 아니라 이 장비의 사실입니다. 호스트가
-    // 계산하는 전력은 dab.p_in, psfb.p_out, ups.p_batt, ups.p_bus 넷이고, DAB 와 PSFB 사이를 재는 채널은
-    // 선언된 적이 없습니다. 그래서 p_in 을 두 링크에 겹쳐 그리지 않습니다 — 같은 전력이 두
-    // 구간을 그대로 흐른다고 말하는 것이 되고, 그것은 손실이 0 이라는, 아무도 측정하지 않은
-    // 주장입니다.
+    // 링크. 전력 채널이 없는 구간이 있는 것은 버그가 아니라 이 장비의 사실입니다. 호스트가
+    // 계산하는 전력은 dab.p_in, psfb.p_out, ups.p_batt, ups.p_bus 넷뿐이고, 정류단과 모선에서
+    // PSFB 로 들어가는 구간을 재는 채널은 선언된 적이 없습니다.
     //
-    // p_in 을 첫 링크(계통 -> DAB)에 두는 근거는 채널 이름 자체입니다: DAB 로 들어가는 전력.
-    // 다만 그 식은 dab.bus_voltage * dab.input_current 로, 출력측 전압과 입력측 전류를 곱한
-    // 것입니다. 그래서 값 밑에 항상 채널 id 를 같이 적습니다 — 이 그림이 붙인 이름이 아니라
-    // 호스트가 선언한 채널이라는 것을 읽는 사람이 확인할 수 있어야 합니다.
+    // 있는 값을 옆 구간에 겹쳐 그리지 않습니다. 같은 전력이 두 구간을 그대로 흐른다고 말하는
+    // 것이 되고, 그것은 손실이 0 이라는, 아무도 측정하지 않은 주장입니다. 같은 이유로 UPS
+    // 컨버터의 양쪽에도 채널이 따로 있습니다 — ups.p_bus 는 모선쪽, ups.p_batt 는 배터리
+    // 단자쪽이고, 둘의 차이가 그 컨버터의 손실입니다.
     //
-    // 같은 규칙이 UPS 컨버터의 양쪽에도 적용됩니다. ups.p_batt 는 배터리 단자에서의 전력이고
-    // ups.p_bus 는 DC 링크쪽 전력이며, 둘의 차이가 그 컨버터의 손실입니다. 한쪽 값을 두 구간에
-    // 겹쳐 그리면 손실이 0 이라고 말하는 것이 되므로, 구간마다 자기 채널을 적습니다.
+    // 값 밑에 항상 채널 id 를 적습니다. 이 그림이 붙인 이름이 아니라 호스트가 선언한 채널
+    // 이라는 것을 읽는 사람이 확인할 수 있어야 합니다.
     var LINKS = [
-        { from: [0, 0], to: [1, 0], power: 'dab.p_in', unit: 'W' },
-        { from: [1, 0], to: [2, 0], power: null, noChannel: '구간 전력 채널 없음', badges: true },
-        { from: [2, 0], to: [3, 0], power: 'psfb.p_out', unit: 'W' },
+        { from: 'grid', to: 'bus', power: null,
+          label: '정류단', noChannel: '이 구간을 재는 전력 채널 없음' },
 
-        // T 의 기둥. 방향이 아래에서 위입니다 — UPS 가지가 버스를 떠받치는 쪽이 양수이므로,
-        // 정전 중에는 화살표가 위쪽 가로줄을 향해 올라갑니다. from 을 아래 상자로 둔 것이
-        // 그 부호 규약을 좌표로 옮긴 것이고, 그래서 부호가 뒤집히면 화살표도 뒤집힙니다.
-        { from: [1, 1], to: [1, 0], vertical: true, power: 'ups.p_bus', unit: 'W',
-          signLabels: { positive: '버스 지원', negative: '버스에서 충전' } },
+        { from: 'bus', to: 'dab', power: 'dab.p_in', unit: 'W' },
 
-        // 부호를 읽는 유일한 곳입니다. 프로파일이 "양수는 뱅크로 들어가는 전력" 이라고 선언하고
-        // 있고, 배터리 상자가 오른쪽에 있으므로 양수가 오른쪽 화살표가 됩니다 — 이 파일이 지어낸
-        // 뜻이 아니라 선언된 부호 규약을 글자로 옮긴 것이므로 데이터로 적어 둡니다.
-        { from: [1, 1], to: [2, 1], power: 'ups.p_batt', unit: 'W',
-          signLabels: { positive: '충전', negative: '방전' } }
+        // 방향이 아래에서 위입니다 — UPS 갈래가 모선을 떠받치는 쪽이 양수이므로, 정전 중에는
+        // 화살표가 모선을 향해 올라갑니다. from 을 아래 상자로 둔 것이 그 부호 규약을 좌표로
+        // 옮긴 것이고, 그래서 부호가 뒤집히면 화살표도 뒤집힙니다.
+        { from: 'ups', to: 'bus', power: 'ups.p_bus', unit: 'W',
+          signLabels: { positive: '모선 지원', negative: '모선에서 충전' } },
+
+        { from: 'bus', to: 'psfb', power: null,
+          label: 'PSFB 입력', noChannel: '이 구간을 재는 전력 채널 없음' },
+
+        // 프로파일이 "양수는 뱅크로 들어가는 전력" 이라고 선언하고 있고, 배터리 상자가 아래에
+        // 있으므로 양수가 아래쪽 화살표가 됩니다 — 이 파일이 지어낸 뜻이 아니라 선언된 부호
+        // 규약을 좌표로 옮긴 것이므로 데이터로 적어 둡니다.
+        { from: 'ups', to: 'battery', power: 'ups.p_batt', unit: 'W',
+          signLabels: { positive: '충전', negative: '방전' } },
+
+        { from: 'psfb', to: 'server', power: 'psfb.p_out', unit: 'W' }
     ];
 
     // 색은 전부 페이지의 CSS 변수로 갑니다. 이 그림만 다른 팔레트로 도는 일이 없어야 합니다.
@@ -141,6 +190,16 @@
         '.pf-tint{fill:var(--alarm);opacity:0}',
         '.pf-tint.pf-on{opacity:0.09}',
         '.pf-div{stroke:var(--line);stroke-width:1}',
+        '.pf-stripe{stroke:none}',
+        '.pf-glyph{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}',
+        // 종류별 색. 상자의 왼쪽 띠와 글리프가 같은 색을 쓰므로 한 줄만 바꾸면 둘 다 따라옵니다.
+        '.pf-k-source{fill:var(--warn,#FFB020);stroke:var(--warn,#FFB020)}',
+        '.pf-k-bus{fill:var(--text-2);stroke:var(--text-2)}',
+        '.pf-k-converter{fill:var(--accent,#3D8BFF);stroke:var(--accent,#3D8BFF)}',
+        '.pf-k-rail{fill:var(--ok,#2ED47A);stroke:var(--ok,#2ED47A)}',
+        '.pf-k-load{fill:var(--text-2);stroke:var(--text-2)}',
+        '.pf-k-storage{fill:var(--sim,#C77DFF);stroke:var(--sim,#C77DFF)}',
+        '.pf-k-derived{fill:var(--text-3);stroke:var(--text-3)}',
         '.pf-name{fill:var(--text-2);font-size:13px;font-weight:600}',
         '.pf-name.pf-alarm{fill:var(--alarm)}',
         '.pf-badge{fill:var(--alarm);font-size:10px;font-weight:700}',
@@ -151,6 +210,7 @@
         '.pf-unit{fill:var(--text-3);font-size:11.5px;font-weight:500}',
         '.pf-id{fill:var(--text-3);font-size:9px}',
         '.pf-status{fill:var(--text-3);font-size:9.5px}',
+        '.pf-over{fill:var(--warn,#FFB020);font-size:8.5px}',
         '.pf-row.pf-stale{opacity:0.45}',
         '.pf-rail{fill:none;stroke:var(--line);stroke-width:12;stroke-linecap:round}',
         '.pf-rail.pf-unknown{stroke-width:2;stroke-dasharray:6 7}',
@@ -164,13 +224,6 @@
         '.pf-power.pf-alarm{fill:var(--alarm)}',
         '.pf-mode{fill:var(--text-2);font-size:11px;font-weight:600}',
         '.pf-cap{fill:var(--text-3);font-size:8.5px}',
-        '.pf-eff{fill:var(--text);font-size:13.5px;font-weight:600}',
-        '.pf-eff.pf-absent{fill:var(--text-3);font-size:12px;font-weight:400}',
-        '.pf-eff.pf-alarm{fill:var(--alarm)}',
-        '.pf-ratio{fill:var(--text-2);font-size:11px}',
-        '.pf-ratio.pf-absent{fill:var(--text-3)}',
-        '.pf-mark{fill:var(--text-2);font-size:8.5px}',
-        '.pf-over{fill:var(--warn,#FFB020);font-size:9px}',
         '.pf-pill-bg{fill:var(--panel-2);stroke:var(--line);stroke-width:1}',
         '.pf-pill-t{fill:var(--text-2);font-size:9px;font-weight:600}',
         '.pf-legend{fill:var(--text-3);font-size:11px}',
@@ -179,19 +232,18 @@
         '.pf-hide{display:none}'
     ].join('');
 
+    // 넉 줄입니다. 일곱 줄이던 시절 범례가 그림 높이의 40 % 를 차지했고, 설명이 설명하려는
+    // 대상보다 커지면 둘 다 읽히지 않습니다. 각 줄은 40 자를 넘습니다 — 검증 하니스가 짧은
+    // 문자열만 '화면에 찍힌 값' 으로 보고 검사하기 때문이고, 그래서 여기 적힌 18 kW 같은
+    // 눈금 설명이 판독값으로 오인되지 않습니다.
     var LEGEND = [
-        '값 없음 = 그 값이 한 번도 도착하지 않았다는 뜻입니다. 회색 점선에 속이 빈 화살표로 그립니다 — 0 W 가 아닙니다.',
-        '0 W 는 값이 있는 상태이므로 실선으로 그리되 움직이지 않습니다. 흐르는 파선의 속도와 굵기는 전력에 비례합니다 (전 구간 같은 눈금, 18 kW = 최대).',
-        '계산값 = 호스트가 여러 채널을 한 시점으로 맞춰 계산한 값입니다. 어떤 장비도 이 값을 보고하지 않으며, 이 그림은 없는 값을 대신 계산하지 않습니다.',
-        '10초 넘게 소식이 없는 값은 흐리게 표시하고 경과 시간을 씁니다 — 멈춘 값이 살아 있는 값처럼 보이면 안 됩니다.',
-        'UPS 가지는 DC 버스에 병렬로 붙습니다. 기둥의 화살표가 위를 향하면 배터리가 버스를 떠받치는 중(방전)이고, 아래를 향하면 버스가 배터리를 충전하는 중입니다.',
-        '컨버터 양쪽에 채널이 따로 있습니다 — ups.p_bus 는 DC 링크쪽, ups.p_batt 는 배터리 단자쪽. 둘의 차이가 그 컨버터의 손실이므로 한쪽 값을 두 구간에 겹쳐 그리지 않습니다.',
-        '충전율은 전류를 시간으로 적분한 값입니다. 방전 중에만 내려가고, 스스로 흔들리지 않습니다 — 흔들리는 충전율은 측정값처럼 보이면서 아무 뜻도 없습니다.'
+        '값 없음 = 그 값이 한 번도 도착하지 않았다는 뜻입니다. 회색 점선에 속이 빈 화살표로 그리며, 0 W 와 다릅니다. 0 W 는 실선으로 그리되 움직이지 않습니다.',
+        '흐르는 파선의 속도와 굵기는 전력에 비례합니다 — 전 구간 같은 눈금이고 최대치는 18 kW 입니다. 10초 넘게 소식이 없는 값은 흐려지고 경과 시간을 적습니다.',
+        '계산값 = 호스트가 여러 채널을 한 시점으로 맞춰 계산한 값입니다. 이 그림은 없는 값을 대신 계산하지 않으며, 컨버터 양쪽 전력도 각자 자기 채널을 씁니다.',
+        '세 갈래는 모선에 서로 병렬입니다. UPS 갈래의 화살표가 위를 향하면 배터리가 모선을 떠받치는 중(방전), 아래를 향하면 충전 중입니다. 충전율은 그 전류의 적분입니다.'
     ];
 
-    // 범례가 시작하는 높이와, 그로부터 정해지는 그림 전체의 높이. 두 값을 따로 적어 두면
-    // 범례 한 줄이 viewBox 밖으로 나가고, SVG 는 그것을 잘라 낼 뿐 아무것도 알리지 않습니다.
-    var LEGEND_TOP = rowY(1) + BOX_H + 24;
+    var LEGEND_TOP = ROW2_Y + BOX_H + 24;
     var LEGEND_LINE = 18;
     H = LEGEND_TOP + 16 + LEGEND.length * LEGEND_LINE + 8;
 
@@ -256,6 +308,11 @@
         return v.toFixed(2) + (unit ? ' ' + unit : '');
     }
 
+    function stageById(id) {
+        for (var i = 0; i < STAGES.length; i++) if (STAGES[i].id === id) return STAGES[i];
+        return null;
+    }
+
     // ---- 상태 -------------------------------------------------------------
     var svgRoot = null;
     var ui = null;
@@ -267,6 +324,28 @@
         : null;
 
     // ---- 화면 만들기 ------------------------------------------------------
+    // 종류별 기호. 상자가 전부 똑같이 생기면 어느 것이 전원이고 어느 것이 부하인지 이름을
+    // 읽어야만 알 수 있는데, 한눈에 구조를 보라고 그리는 그림에서 그것은 그림이 일을 하지
+    // 않고 있다는 뜻입니다. 14 x 14 안에 그리고, 색은 종류 클래스가 정합니다.
+    var GLYPHS = {
+        source:    'M0,7 q3.5,-5.5 7,0 t7,0',                          // 교류 파형
+        bus:       'M0,3.5 h14 M0,7 h14 M0,10.5 h14',                   // 나란한 모선 도체
+        converter: 'M1,2 h12 v10 h-12 z M1,12 L13,2',                   // 대각선 넣은 상자
+        rail:      'M0,4.5 h14 M0,9.5 h14',                             // 나란한 두 도체
+        load:      'M1,2.5 h12 v3 h-12 z M1,8.5 h12 v3 h-12 z',         // 쌓인 랙
+        storage:   'M0.5,3.5 h11 v7 h-11 z M11.5,5.5 h2 v3 h-2 z',      // 단자가 있는 전지
+        derived:   'M2,12 L12,2 M2.5,3.5 h2 M9.5,10.5 h2'               // 나눗셈 기호
+    };
+
+    function glyph(parent, x, y, kind) {
+        var d = GLYPHS[kind];
+        if (!d) return null;
+        return svgEl('path', {
+            d: d, transform: 'translate(' + x + ',' + y + ')',
+            'class': 'pf-glyph pf-k-' + kind
+        }, parent);
+    }
+
     function pill(parent, cx, top, label) {
         var g = svgEl('g', { 'class': 'pf-pill' }, parent);
         svgEl('rect', { x: cx - 19, y: top, width: 38, height: 14, rx: 3, 'class': 'pf-pill-bg' }, g);
@@ -275,38 +354,60 @@
         return g;
     }
 
+    // 값 한 줄. 세로로 쌓는 상자와 옆으로 눕히는 모선이 같은 부품을 쓰므로, 한쪽만 다른 규칙
+    // 으로 그려지는 일이 없습니다.
+    function buildRow(g, r, x, y, anchor, width) {
+        var rg = svgEl('g', { 'class': 'pf-row' }, g);
+        var numX = anchor === 'end' ? x + width : x;
+        var farX = anchor === 'end' ? x : x + width;
+        var farAnchor = anchor === 'end' ? 'start' : 'end';
+
+        var num = textEl(rg, numX, y + 22, 'pf-num', anchor);
+        var numT = svgEl('tspan', null, num);
+        var unitT = svgEl('tspan', { dx: 4, 'class': 'pf-unit' }, num);
+        var status = textEl(rg, farX, y + 22, 'pf-status', farAnchor);
+        var idT = textEl(rg, numX, y + 36, 'pf-id pf-mono', anchor);
+        setText(idT, r.id);
+        // 범위를 넘긴 값에 붙는 주석. 자르지도 숨기지도 않고, 자른 적 없다는 사실을 씁니다.
+        var over = textEl(rg, farX, y + 36, 'pf-over', farAnchor);
+        setText(svgEl('title', null, rg), r.label);
+        return { def: r, g: rg, num: num, numT: numT, unitT: unitT, status: status, over: over };
+    }
+
     function buildStage(svg, def) {
-        var bx = colX(def.col);
-        var by = rowY(def.row);
+        var bx = def.x, by = def.y, bw = def.w, bh = def.h;
         var g = svgEl('g', null, svg);
 
-        var box = svgEl('rect', { x: bx, y: by, width: BOX_W, height: BOX_H, rx: 12, 'class': 'pf-box' }, g);
-        var tint = svgEl('rect', { x: bx, y: by, width: BOX_W, height: BOX_H, rx: 12, 'class': 'pf-tint' }, g);
+        var box = svgEl('rect', { x: bx, y: by, width: bw, height: bh, rx: 12, 'class': 'pf-box' }, g);
+        var tint = svgEl('rect', { x: bx, y: by, width: bw, height: bh, rx: 12, 'class': 'pf-tint' }, g);
 
-        var name = textEl(g, bx + PAD, by + 22, 'pf-name', 'start');
+        // 왼쪽 세로 띠. 상자 안쪽에 그리므로 모서리 반지름을 잘라 낼 필요가 없습니다.
+        svgEl('rect', {
+            x: bx + 1.5, y: by + 12, width: 3, height: bh - 24, rx: 1.5,
+            'class': 'pf-stripe pf-k-' + (def.kind || 'derived')
+        }, g);
+        glyph(g, bx + PAD, by + 11, def.kind);
+
+        var name = textEl(g, bx + PAD + 21, by + 22, 'pf-name', 'start');
         setText(name, def.name);
-        var badge = textEl(g, bx + BOX_W - PAD, by + 22, 'pf-badge', 'end');
+        var badge = textEl(g, bx + bw - PAD, by + 22, 'pf-badge', 'end');
         var sub = textEl(g, bx + PAD, by + 38, 'pf-sub pf-mono', 'start');
         setText(sub, def.tag);
-        svgEl('line', { x1: bx + PAD, y1: by + 48, x2: bx + BOX_W - PAD, y2: by + 48, 'class': 'pf-div' }, g);
-
-        var top = by + 52;
-        var area = BOX_H - 60;
-        var y0 = top + (area - def.rows.length * ROW_H) / 2;
 
         var rows = [];
-        for (var j = 0; j < def.rows.length; j++) {
-            var r = def.rows[j];
-            var ry = y0 + j * ROW_H;
-            var rg = svgEl('g', { 'class': 'pf-row' }, g);
-            var num = textEl(rg, bx + PAD, ry + 22, 'pf-num', 'start');
-            var numT = svgEl('tspan', null, num);
-            var unitT = svgEl('tspan', { dx: 4, 'class': 'pf-unit' }, num);
-            var status = textEl(rg, bx + BOX_W - PAD, ry + 22, 'pf-status', 'end');
-            var idT = textEl(rg, bx + PAD, ry + 38, 'pf-id pf-mono', 'start');
-            setText(idT, r.id);
-            setText(svgEl('title', null, rg), r.label);
-            rows.push({ def: r, g: rg, num: num, numT: numT, unitT: unitT, status: status });
+
+        if (def.compact) {
+            // 모선처럼 낮고 넓은 상자는 값을 오른쪽에 눕혀 답니다. 세로로 쌓으면 들어가지 않고,
+            // 높이를 늘리면 모선이 변환기만큼 커져서 한 지점으로 읽히지 않습니다.
+            rows.push(buildRow(g, def.rows[0], bx + bw - PAD - 240, by + 12, 'end', 240));
+        } else {
+            svgEl('line', { x1: bx + PAD, y1: by + 48, x2: bx + bw - PAD, y2: by + 48, 'class': 'pf-div' }, g);
+            var top = by + 52;
+            var area = bh - 60;
+            var y0 = top + (area - def.rows.length * ROW_H) / 2;
+            for (var j = 0; j < def.rows.length; j++) {
+                rows.push(buildRow(g, def.rows[j], bx + PAD, y0 + j * ROW_H, 'start', bw - PAD * 2));
+            }
         }
 
         return { def: def, box: box, tint: tint, name: name, badge: badge, rows: rows };
@@ -314,16 +415,26 @@
 
     /// 링크 하나의 양 끝점과, 글자를 어디에 놓을지.
     ///
-    /// 가로줄과 T 의 기둥이 같은 코드를 씁니다. 세로용 그리기 함수를 따로 두면 한쪽만 고쳐지는
+    /// 가로줄과 세로줄이 같은 코드를 씁니다. 방향마다 그리기 함수를 따로 두면 한쪽만 고쳐지는
     /// 날이 오고, 그 날 화면에는 서로 다른 규칙으로 그려진 두 종류의 선이 함께 있게 됩니다.
     function geometry(def) {
-        if (def.vertical) {
-            var vx = colCx(def.from[0]);
-            // 아래에서 위로 가는 링크가 있으므로 어느 쪽이 위인지 좌표에서 정합니다. 항상
-            // 위에서 아래로 그린다고 가정하면 T 의 기둥이 상자 안쪽에서 시작해 버립니다.
-            var down = def.to[1] > def.from[1];
-            var ay = down ? rowY(def.from[1]) + BOX_H + 8 : rowY(def.from[1]) - 8;
-            var by = down ? rowY(def.to[1]) - 8 : rowY(def.to[1]) + BOX_H + 8;
+        var a = stageById(def.from), b = stageById(def.to);
+        var acx = a.x + a.w / 2, bcx = b.x + b.w / 2;
+        var acy = a.y + a.h / 2, bcy = b.y + b.h / 2;
+
+        // 위아래로 겹치지 않으면 세로선입니다. 처음에는 중심 사이의 x 거리와 y 거리를 견주어
+        // 정했는데, 모선이 814 px 로 넓어지자 바깥쪽 두 갈래는 x 거리가 더 커져서 가로선으로
+        // 그려졌습니다 — 상자 크기가 방향을 바꿔 버리는 규칙이었습니다. 겹침 여부는 크기와
+        // 무관하게 배치가 뜻하는 그대로입니다.
+        //
+        // 넓은 상자(모선)와 좁은 상자를 이을 때는 좁은 쪽의 가운데를 씁니다. 모선 한가운데에서
+        // 내려오면 세 갈래가 전부 한 점에서 출발해, 병렬이 아니라 하나로 보입니다.
+        var overlapY = (a.y < b.y + b.h) && (b.y < a.y + a.h);
+        if (!overlapY) {
+            var vx = a.w <= b.w ? acx : bcx;
+            var down = b.y > a.y;
+            var ay = down ? a.y + a.h + 8 : a.y - 8;
+            var by = down ? b.y - 8 : b.y + b.h + 8;
             return {
                 ax: vx, ay: ay, bx: vx, by: by, vertical: true,
                 // 세로선은 글자를 옆에 세웁니다. 선 위아래에 놓으면 상자에 붙습니다.
@@ -331,9 +442,10 @@
             };
         }
 
-        var x0 = colX(def.from[0]) + BOX_W + 10;
-        var x1 = colX(def.to[0]) - 10;
-        var y = rowCy(def.from[1]);
+        var right = b.x > a.x;
+        var x0 = right ? a.x + a.w + 10 : a.x - 10;
+        var x1 = right ? b.x - 10 : b.x + b.w + 10;
+        var y = a.h <= b.h ? acy : bcy;
         return {
             ax: x0, ay: y, bx: x1, by: y, vertical: false,
             lx: (x0 + x1) / 2, ly: y, anchor: 'middle'
@@ -349,10 +461,8 @@
         var flow = svgEl('line', { 'class': 'pf-flow' }, g);
         var arrow = svgEl('path', { 'class': 'pf-arrow' }, g);
 
-        // 세로선은 글자가 선 옆으로 가므로 기준선이 달라집니다. 가로선은 지금까지처럼 선 위에
-        // 쌓고, 세로선은 가운데 높이에서 아래로 흘립니다.
         // 18 px 간격입니다. 14 로 두었더니 11 px 짜리 방향 글자와 15 px 짜리 전력 숫자가
-        // 브라우저에서 4 px 겹쳤습니다 -- DOM 스텁은 글자 크기를 모르므로 잡지 못하고,
+        // 브라우저에서 4 px 겹쳤습니다 — DOM 스텁은 글자 크기를 모르므로 잡지 못하고,
         // 실제로 띄워 상자를 재어야만 보입니다.
         var top = G.vertical ? G.ly - 18 : G.ly - 48;
 
@@ -362,9 +472,7 @@
 
         var L = {
             def: def, G: G, g: g, rail: rail, flow: flow, arrow: arrow,
-            mode: mode, power: power, cap: cap, pill: null, speed: 0, offset: 0,
-            effG: null, eff: null, effPill: null, effCap: null, over: null,
-            ratio: null, ratioText: null, ratioNum: null, ratioMark: null, ratioCap: null
+            mode: mode, power: power, cap: cap, pill: null, speed: 0, offset: 0
         };
 
         // 전력 채널이 있는 링크에만 '계산값' 표를 답니다. 전력은 어떤 장비도 보고하지 않는
@@ -375,25 +483,6 @@
         if (def.power) {
             L.pill = pill(g, G.vertical ? G.lx + 19 : G.lx,
                           G.vertical ? top + 40 : G.ly + 13, '계산값');
-        }
-
-        if (def.badges) {
-            var cx = G.lx, mid = G.ly;
-            var eg = svgEl('g', null, g);
-            L.effG = eg;
-            L.eff = textEl(eg, cx, mid + 16, 'pf-eff', 'middle');
-            L.effPill = pill(eg, cx, mid + 22, '계산값');
-            L.effCap = textEl(eg, cx, mid + 46, 'pf-cap pf-mono', 'middle');
-            L.over = textEl(eg, cx, mid + 58, 'pf-over', 'middle');
-
-            var rg = svgEl('g', null, g);
-            L.ratio = rg;
-            // 숫자와 '계산값' 표를 각각 tspan 에 담습니다. <text> 에 직접 textContent 를 쓰면
-            // 자식 tspan 이 통째로 지워지고, 표는 첫 갱신에서 조용히 사라집니다.
-            L.ratioText = textEl(rg, cx, mid + 72, 'pf-ratio', 'middle');
-            L.ratioNum = svgEl('tspan', null, L.ratioText);
-            L.ratioMark = svgEl('tspan', { dx: 5, 'class': 'pf-mark' }, L.ratioText);
-            L.ratioCap = textEl(rg, cx, mid + 86, 'pf-cap pf-mono', 'middle');
         }
 
         return L;
@@ -408,7 +497,8 @@
             'aria-label': '전력 흐름도',
             style: 'display:block;width:100%;height:auto'
         });
-        setText(svgEl('title', null, svg), '계통에서 서버 부하까지의 전력 흐름과, DC 버스에 병렬로 붙은 UPS 가지');
+        setText(svgEl('title', null, svg),
+            '고전압 DC 버스에 계통과 세 갈래(DAB, UPS DAB, PSFB)가 병렬로 붙은 전력 흐름');
         setText(svgEl('style', null, svg), CSS);
 
         var stages = [], links = [], i;
@@ -428,7 +518,7 @@
     }
 
     // ---- 그리기 -----------------------------------------------------------
-    // a 에서 b 로 향하는 단위 벡터. 가로/세로/어느 방향이든 같은 식으로 다룹니다 -- 방향마다
+    // a 에서 b 로 향하는 단위 벡터. 가로/세로/어느 방향이든 같은 식으로 다룹니다 — 방향마다
     // 분기를 두면 나중에 추가되는 방향은 그 분기 중 하나를 빠뜨린 채로 그려집니다.
     function unit(G) {
         var dx = G.bx - G.ax, dy = G.by - G.ay;
@@ -470,6 +560,7 @@
                 setText(r.unitT, '');
                 setClass(r.num, 'pf-num pf-absent');
                 setText(r.status, '값 없음');
+                setText(r.over, '');
                 setClass(r.g, 'pf-row');
                 continue;
             }
@@ -484,6 +575,11 @@
             // 오래됨이 계산값 표시보다 우선합니다. 멈춘 값이라는 사실이 그 값의 출처보다
             // 급한 정보이고, 자리는 한 칸뿐입니다.
             setText(r.status, stale ? ageText(now - e.at) : (e.derived === true ? '계산값' : ''));
+            // 100 % 를 넘겨도 자르지 않고, 숨기지도 않습니다. 시뮬레이터는 채널을 일부러 서로
+            // 독립적으로 흔들기 때문에 초과가 정상적으로 나오며, 그것은 데이터의 성질 자체
+            // 입니다. 100 으로 눌러 그리면 화면은 그럴듯해지고 그 성질은 사라집니다.
+            setText(r.over, (typeof r.def.over === 'number' && e.value > r.def.over)
+                ? (r.def.overNote || '') : '');
             // 상자 전체가 아니라 줄 단위로 흐리게 합니다. 채널마다 따로 조용해지므로,
             // 상자 하나가 통째로 흐려지면 어느 채널이 끊겼는지 알 수 없습니다.
             setClass(r.g, 'pf-row' + (stale ? ' pf-stale' : ''));
@@ -500,7 +596,9 @@
         var e = def.power ? pick(state, def.power) : null;
 
         if (!e) {
-            setText(L.mode, '');
+            // 구간에 이름이 있으면 씁니다. 이름이 없으면 그 자리에서 가장 큰 글자가 '값 없음'
+            // 이 되어, 측정되지 않은 것은 전력뿐인데 연결 자체가 고장난 것처럼 읽힙니다.
+            setText(L.mode, def.label || '');
             setText(L.power, '값 없음');
             setClass(L.power, 'pf-power pf-absent');
             // 없는 이유를 구분합니다. "이 구간을 재는 채널이 아예 없다" 와 "채널은 있는데
@@ -524,11 +622,11 @@
         // 것이므로 화살표와 파선을 뒤집습니다. 숫자는 부호까지 받은 그대로 씁니다.
         var dir = e.value < 0 ? -1 : 1;
 
-        // 부호에 이름이 붙어 있는 링크에만 씁니다. 정확히 0 은 어느 쪽도 아니므로 비웁니다 —
-        // 0 W 를 '충전' 이라고 쓰면 멈춘 것과 들어가는 것이 화면에서 같아집니다.
+        // 부호에 이름이 붙어 있는 링크에만 씁니다. 정확히 0 은 어느 쪽도 아니므로 구간 이름으로
+        // 돌아갑니다 — 0 W 를 '충전' 이라고 쓰면 멈춘 것과 들어가는 것이 화면에서 같아집니다.
         setText(L.mode, def.signLabels && e.value !== 0
             ? (e.value > 0 ? def.signLabels.positive : def.signLabels.negative)
-            : '');
+            : (def.label || ''));
 
         setText(L.power, fmtPower(e.value, e.unit || def.unit));
         setClass(L.power, 'pf-power' + (bad ? ' pf-alarm' : ''));
@@ -548,57 +646,11 @@
         L.speed = (stale || mag === 0) ? 0 : (18 + 130 * frac) * dir;
     }
 
-    function renderBadges(L, state, now) {
-        if (!L.effG) return;
-
-        var e = pick(state, 'psfb.efficiency');
-        if (!e) {
-            // 효율이 없으면 p_out / p_in 을 여기서 나누지 않습니다. 두 값은 서로 다른 순간의
-            // 것일 수 있고, 그렇게 얻은 비율은 어느 순간에도 성립한 적이 없는 숫자입니다.
-            setText(L.eff, '효율 값 없음');
-            setClass(L.eff, 'pf-eff pf-absent');
-            setText(L.effCap, 'psfb.efficiency · 수신 없음');
-            setText(L.over, '');
-            setClass(L.effPill, 'pf-pill pf-hide');
-            setClass(L.effG, '');
-        } else {
-            var stale = isStale(e, now);
-            setText(L.eff, '효율 ' + e.value.toFixed(1) + ' ' + (e.unit || '%'));
-            setClass(L.eff, 'pf-eff' + (e.limitBreach === true ? ' pf-alarm' : ''));
-            setText(L.effCap, 'psfb.efficiency' + (stale ? ' · ' + ageText(now - e.at) : ''));
-            // 100 % 를 넘겨도 자르지 않고, 숨기지도 않습니다. 시뮬레이터는 채널을 일부러
-            // 서로 독립적으로 흔들기 때문에 초과가 정상적으로 나오며, 그것은 데이터의 성질
-            // 자체입니다. 100 으로 눌러 그리면 화면은 그럴듯해지고 그 성질은 사라집니다.
-            setText(L.over, e.value > 100 ? '100 % 초과 · 보정 없음' : '');
-            setClass(L.effPill, 'pf-pill');
-            setClass(L.effG, stale ? 'pf-stale' : '');
-        }
-
-        var r = pick(state, 'psfb.conversion_ratio');
-        if (!r) {
-            setText(L.ratioNum, '변환비 값 없음');
-            setClass(L.ratioText, 'pf-ratio pf-absent');
-            setText(L.ratioMark, '');
-            setText(L.ratioCap, 'psfb.conversion_ratio · 수신 없음');
-            setClass(L.ratio, '');
-        } else {
-            var rs = isStale(r, now);
-            setText(L.ratioNum, '변환비 ' + r.value.toFixed(3));
-            setClass(L.ratioText, 'pf-ratio' + (r.limitBreach === true ? ' pf-alarm' : ''));
-            setText(L.ratioMark, '계산값');
-            setText(L.ratioCap, 'psfb.conversion_ratio' + (rs ? ' · ' + ageText(now - r.at) : ''));
-            setClass(L.ratio, rs ? 'pf-stale' : '');
-        }
-    }
-
     function render(state, now) {
         if (!ui) return;
         var i;
         for (i = 0; i < ui.stages.length; i++) renderStage(ui.stages[i], state, now);
-        for (i = 0; i < ui.links.length; i++) {
-            renderLink(ui.links[i], state, now);
-            renderBadges(ui.links[i], state, now);
-        }
+        for (i = 0; i < ui.links.length; i++) renderLink(ui.links[i], state, now);
     }
 
     // ---- 애니메이션 -------------------------------------------------------

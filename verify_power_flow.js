@@ -262,20 +262,15 @@ function boxes(node, out) {
     out = out || [];
     if (String(node.nodeName).toLowerCase() === 'rect'
         && node.attrs && node.attrs.class === 'pf-box') {
-        out.push({ x: Number(node.attrs.x), y: Number(node.attrs.y) });
+        out.push({ x: Number(node.attrs.x), y: Number(node.attrs.y),
+                   w: Number(node.attrs.width), h: Number(node.attrs.height) });
     }
     (node.children || []).forEach(c => boxes(c, out));
     return out;
 }
 const rects = boxes(ups);
 const ys = [...new Set(rects.map(b => b.y))].sort((a, b) => a - b);
-check('the diagram is two rows, not one line',
-    rects.length >= 6 && ys.length === 2 && ys[1] > ys[0],
-    `${rects.length} boxes on row y=${ys.join(' and y=')}`);
 
-// The stem. A link drawn between two rows has to actually be vertical; drawn as a horizontal line
-// between two boxes at different heights it would still render, and would look like a diagonal or
-// like nothing at all.
 function railLines(node, out) {
     out = out || [];
     const cls = node.attrs && node.attrs.class;
@@ -286,14 +281,27 @@ function railLines(node, out) {
     return out;
 }
 const rails = railLines(ups);
-const stems = rails.filter(r => Number(r.x1) === Number(r.x2) && Number(r.y1) !== Number(r.y2));
-// Only that it is vertical and lands between the two rows. Which end is y1 depends on which way
-// the link is declared to run, and the stem runs upward on purpose -- an assertion that pinned the
-// coordinate order would be pinning the sign convention by accident.
-const spans = stems.filter(r => Math.min(+r.y1, +r.y2) > ys[0] && Math.max(+r.y1, +r.y2) < ys[1]);
-check('a vertical stem joins the two rows',
-    stems.length === 1 && spans.length === 1,
-    `${rails.length} links, ${stems.length} vertical, ${spans.length} between the rows`);
+
+// The bus is one node and the converters hang off it in parallel. Asserted rather than eyeballed,
+// because the diagram was wrong about exactly this once: it was drawn as a chain
+// grid -> DAB -> PSFB -> load, which reads as the PSFB being fed by the DAB's output. They are
+// both simply on the bus. Every number can be right while the picture states something about the
+// hardware that is not true, and the layout is the part nothing else here checks.
+const widest = rects.reduce((a, b) => (b.w > a.w ? b : a), rects[0]);
+const below = rects.filter(b => b.y > widest.y + widest.h);
+check('one wide bus node, with its branches below it rather than after one another',
+    rects.length >= 7 && widest.w > 600 && below.length >= 5,
+    `bus ${widest.w} wide at y=${widest.y}; ${below.length} boxes below it; rows y=${ys.join(',')}`);
+
+// Parallel means several separate drops from the same node at different x. In series there would
+// be one drop, or drops that begin where the previous one ended.
+const fromBus = rails.filter(r => Number(r.x1) === Number(r.x2)
+    && Math.min(+r.y1, +r.y2) > widest.y
+    && Math.min(+r.y1, +r.y2) < widest.y + widest.h + 40);
+const busXs = [...new Set(fromBus.map(r => Number(r.x1)))].sort((a, b) => a - b);
+check('three branches leave the bus at three separate points, in parallel',
+    busXs.length === 3,
+    `drops from the bus at x = ${busXs.join(', ')}`);
 
 // Read one link's own labels, not the whole picture. Written the lazy way first, and all three of
 // the checks below failed on the legend and on a tooltip: the legend explains what 충전 and 방전
