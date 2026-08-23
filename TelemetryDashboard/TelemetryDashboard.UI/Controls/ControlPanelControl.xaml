@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Operator control panel.
 
     This is the right-hand dock pane, so it is laid out for a narrow column rather than for the
@@ -25,8 +25,8 @@
 
         <!-- Headline reading tile. -->
         <Style x:Key="StatTile" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource RadiusS}"/>
             <Setter Property="Padding" Value="10,8"/>
@@ -52,7 +52,7 @@
              subordinate to the reading they describe. -->
         <Style x:Key="StatsNote" TargetType="TextBlock" BasedOn="{StaticResource MonoText}">
             <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
@@ -70,7 +70,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{StaticResource CanvasBrush}">
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -212,8 +212,8 @@
                 <Border Style="{StaticResource PanelSection}">
                     <StackPanel>
                         <TextBlock Style="{StaticResource SubtitleText}" Text="Temperature trend"/>
-                        <Border Background="{StaticResource InsetBrush}"
-                                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                        <Border Background="{DynamicResource InsetBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
                                 CornerRadius="{StaticResource RadiusS}" Height="56" Padding="1">
                             <Grid>
                                 <Canvas x:Name="CanvasSparkline" ClipToBounds="True"/>
@@ -268,7 +268,7 @@
                                         </Grid.ColumnDefinitions>
 
                                         <Border x:Name="LevelBar" Grid.Column="0"
-                                                Background="{StaticResource BorderDefaultBrush}"
+                                                Background="{DynamicResource BorderDefaultBrush}"
                                                 CornerRadius="2" Margin="0,1,10,1"/>
 
                                         <StackPanel Grid.Column="1">
@@ -292,15 +292,15 @@
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding Level}" Value="WARN">
                                             <Setter TargetName="LevelBar" Property="Background"
-                                                    Value="{StaticResource WarningBrush}"/>
+                                                    Value="{DynamicResource WarningBrush}"/>
                                             <Setter TargetName="ReadingText" Property="Foreground"
-                                                    Value="{StaticResource WarningBrush}"/>
+                                                    Value="{DynamicResource WarningBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Level}" Value="CRIT">
                                             <Setter TargetName="LevelBar" Property="Background"
-                                                    Value="{StaticResource DangerBrush}"/>
+                                                    Value="{DynamicResource DangerBrush}"/>
                                             <Setter TargetName="ReadingText" Property="Foreground"
-                                                    Value="{StaticResource DangerBrush}"/>
+                                                    Value="{DynamicResource DangerBrush}"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -357,8 +357,8 @@
         </ScrollViewer>
 
         <!-- Pinned: the last thing the panel did should not scroll out of sight. -->
-        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
                 Padding="16,8">
             <TextBlock x:Name="TxtSystemStatus" Style="{StaticResource CaptionText}"
                        Text="No commands sent yet" TextTrimming="CharacterEllipsis"/>

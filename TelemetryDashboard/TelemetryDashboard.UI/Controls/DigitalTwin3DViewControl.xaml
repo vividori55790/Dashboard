@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Digital twin viewport.
 
     Both toolbar buttons had a fixed Width of 90, measured against "Reset View"; "Toggle Grid" is
@@ -21,7 +21,7 @@
              xmlns:helix="http://helix-toolkit.org/wpf"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="800">
-    <Grid Background="{StaticResource CanvasBrush}">
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -31,7 +31,7 @@
             <DockPanel>
                 <TextBlock x:Name="ModelText" DockPanel.Dock="Right"
                            Style="{StaticResource MonoText}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            AutomationProperties.AutomationId="TwinModelReadout"
                            Text="placeholder"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
@@ -41,7 +41,7 @@
                      is the half an operator is watching. -->
                 <TextBlock x:Name="ThermalText" DockPanel.Dock="Right"
                            Style="{StaticResource MonoText}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            AutomationProperties.AutomationId="TwinThermalReadout"
                            Text="온도 대기 중"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
@@ -66,11 +66,10 @@
 
         <helix:HelixViewport3D x:Name="Viewport3D" Grid.Row="1" Margin="12"
                                ShowFrameRate="True" ShowCoordinateSystem="True"
-                               Background="{StaticResource InsetBrush}">
+                               Background="{DynamicResource InsetBrush}">
             <helix:DefaultLights/>
             <helix:GridLinesVisual3D x:Name="GridLines" Width="20" Length="20"
-                                     MajorDistance="5" MinorDistance="1" Thickness="0.03"
-                                     Fill="{StaticResource GridLineBrush}"/>
+                                     MajorDistance="5" MinorDistance="1" Thickness="0.03"/>
 
             <!--
                 One host the code swaps the contents of, rather than a box declared here. The mesh

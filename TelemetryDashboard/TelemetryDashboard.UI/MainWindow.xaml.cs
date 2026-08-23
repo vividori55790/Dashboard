@@ -78,7 +78,11 @@ public partial class MainWindow : Window
         // The theme the operator chose last time, applied before anything is shown. Nothing read
         // the stored choice back before, so the app opened dark however it had been left.
         _themeService.ApplyStoredTheme();
-        _themeService.ApplyMicaBackdrop(this);
+
+        // Subscribed after the first apply, not before: the report walks the visual tree, and in
+        // the constructor there is not one yet. From here on every change is reported the same way
+        // whether a person pressed the button or Windows changed underneath the application.
+        _themeService.ThemeChanged += (_, _) => ReportThemeToLog();
 
         ResolveHtmlClientPath();
         RegisterDefaultRoutingRules();
@@ -289,6 +293,12 @@ public partial class MainWindow : Window
         }
 
         _commandPaletteService.RegisterCommand("Toggle Theme", "View", () => _themeService.ToggleTheme());
+
+        // The third state, and it needs its own entry because a button that cycles three ways gives
+        // an operator no way to know which press they are on. Dark and Light are the two the button
+        // swaps between; following Windows is a deliberate choice, so it is asked for by name.
+        _commandPaletteService.RegisterCommand("Follow System Theme", "View",
+            () => _themeService.ApplyTheme(AppTheme.System));
         _commandPaletteService.RegisterCommand("Scope Layout", "Workspace", () => _layoutManager.ApplyPreset(LayoutPreset.ScopeMode));
         _commandPaletteService.RegisterCommand("Start Dual-MCU Simulator", "Simulation", () => StartSimulator());
         _commandPaletteService.RegisterCommand("Stop Dual-MCU Simulator", "Simulation", () => StopSimulator());
@@ -365,5 +375,9 @@ public partial class MainWindow : Window
         _streamingServer.Stop();
         _simulatorEngine?.StopSimulation();
         ShutdownArchive();
+
+        // SystemEvents keeps its handlers in a static list, so a window that closed while following
+        // the Windows theme would be kept alive by it and would go on repainting a dead tree.
+        _themeService.Dispose();
     }
 }

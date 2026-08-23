@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -73,7 +73,7 @@ public partial class MainWindow
         Title = $"{ProductName} — {portName} 연결됨";
 
         StatusConnectionText.Text = "연결됨";
-        StatusConnectionText.Foreground = (Brush)FindResource("SuccessBrush");
+        StatusConnectionText.SetResourceReference(ForegroundProperty, "SuccessBrush");
         StatusPortText.Text = $"{portName} · {baudRate} baud";
 
         ConnectButtonLabel.Text = "연결 해제";
@@ -86,7 +86,7 @@ public partial class MainWindow
         Title = ProductName;
 
         StatusConnectionText.Text = "연결 안 됨";
-        StatusConnectionText.Foreground = (Brush)FindResource("DangerBrush");
+        StatusConnectionText.SetResourceReference(ForegroundProperty, "DangerBrush");
         StatusPortText.Text = "포트 없음";
 
         ConnectButtonLabel.Text = "연결";

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     The path a sample takes from the wire to the screen.
 
     The heading used to read "ORGANIC DATA TOPOLOGY NETWORK", which names nothing an operator could
@@ -18,8 +18,8 @@
              d:DesignHeight="200" d:DesignWidth="900">
     <UserControl.Resources>
         <Style x:Key="NodeCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource RadiusM}"/>
             <Setter Property="Padding" Value="12"/>
@@ -40,13 +40,13 @@
         <Style x:Key="ConnectorLine" TargetType="Rectangle">
             <Setter Property="Height" Value="1"/>
             <Setter Property="Width" Value="18"/>
-            <Setter Property="Fill" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="Fill" Value="{DynamicResource BorderStrongBrush}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
         <Style x:Key="ConnectorHead" TargetType="Path">
             <Setter Property="Data" Value="M0,0 L5,4 L0,8 Z"/>
-            <Setter Property="Fill" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="Fill" Value="{DynamicResource BorderStrongBrush}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,4,0"/>
         </Style>
@@ -62,14 +62,14 @@
             <DockPanel Grid.Row="0" Margin="0,0,0,16">
                 <TextBlock x:Name="ThroughputText" DockPanel.Dock="Right"
                            Style="{StaticResource MonoText}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            Text="No data received yet"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Ellipse x:Name="StatusLed" Width="8" Height="8" Margin="0,0,8,0"
                              VerticalAlignment="Center"
-                             Fill="{StaticResource TextTertiaryBrush}"/>
+                             Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock Style="{StaticResource SubtitleText}" Margin="0"
                                VerticalAlignment="Center" Text="Telemetry pipeline"/>
                     <TextBlock Style="{StaticResource CaptionText}" Margin="10,0,0,0"

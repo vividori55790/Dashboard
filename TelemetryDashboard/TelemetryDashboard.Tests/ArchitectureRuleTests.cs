@@ -483,9 +483,9 @@ public partial class ArchitectureRuleTests
         // The digital-twin panel's code-behind, joining the five other WPF code-behinds above it.
         // Its two testable halves are already out: reading a file into geometry is TwinModelLoader
         // and flattening a scene is TwinMeshFlattener, both of which have tests the control cannot
-        // have -- it calls FindResource while it works, so it cannot be constructed outside a
-        // running application. What is left is a viewport, four button handlers and a readout.
-        "TelemetryDashboard.UI/Controls/DigitalTwin3DViewControl.xaml.cs",         // 154 lines
+        // have. What is left is a viewport, four button handlers and a readout; the palette half is
+        // its own file, because a 3D material cannot take a live brush and that needed explaining.
+        "TelemetryDashboard.UI/Controls/DigitalTwin3DViewControl.xaml.cs",         // 161 lines
 
         // The lock screen now has two jobs -- ask for the password, or ask the operator to choose
         // one on an installation that has none -- plus a cooldown it counts down on screen. It was
@@ -495,11 +495,6 @@ public partial class ArchitectureRuleTests
         // Keyboard handling for a palette is a switch over keys, and each arm carries the account
         // of a key that used to do nothing -- which is the part worth keeping next to the code.
         "TelemetryDashboard.UI/Controls/CommandPaletteOverlay.xaml.cs",            // 161 lines
-
-        // Most of the growth is the account of why a theme switch has to install the palette before
-        // the first window rather than repaint afterwards -- WPF freezes brushes loaded from BAML,
-        // which is not deducible from the code and cost a full run to find.
-        "TelemetryDashboard.UI/Services/ThemeService.cs",                          // 214 lines
 
         // Grew by the content-resolution callback that makes restoring a layout safe, and by the
         // account of what happens without it.

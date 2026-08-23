@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Industrial frame decoder, run by hand against a pasted payload.
 
     The combo box was labelled "프로토콜 선택" and changed nothing but the sample bytes: the bridge
@@ -12,8 +12,8 @@
         Title="프로토콜 브리지"
         Height="620" Width="840" MinHeight="500" MinWidth="640"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -72,7 +72,7 @@
                                VerticalAlignment="Center" Text="—"/>
                 </DockPanel>
                 <TextBox Grid.Row="1" x:Name="TxtConvertedJson" Style="{StaticResource ConsoleTextBox}"
-                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
                          Text="변환할 프레임을 입력하고 [변환]을 누르세요."/>
             </Grid>
         </Border>

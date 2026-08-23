@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Real-time scope.
 
     No button here sets a Width. The previous toolbar measured each caption once, in English, and
@@ -18,7 +18,7 @@
              xmlns:controls="clr-namespace:TelemetryDashboard.UI.Controls"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="900">
-    <Grid Background="{StaticResource CanvasBrush}">
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -31,7 +31,7 @@
             <DockPanel>
                 <TextBlock x:Name="ScopeStatsText" DockPanel.Dock="Right"
                            Style="{StaticResource MonoText}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            Text="Samples: 0 | Channels: 0"
                            VerticalAlignment="Center" Margin="16,0,0,0"/>
 
@@ -98,7 +98,7 @@
                                 <!-- Empty unless the scope is scaling per channel, at which point
                                      the axis stops carrying units and this is where they went. -->
                                 <TextBlock Text="{Binding ScaleNote}" Style="{StaticResource MonoText}"
-                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
                                            VerticalAlignment="Center" Margin="6,0,0,0"/>
                             </StackPanel>
                         </DataTemplate>
@@ -116,18 +116,18 @@
                  for the canvas underneath it. -->
             <Border x:Name="CursorHud" Visibility="Collapsed" IsHitTestVisible="False"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24,24,0,0"
-                    Background="{StaticResource SurfaceBrush}"
-                    BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
                     CornerRadius="{StaticResource RadiusS}" Padding="12,8">
                 <StackPanel>
                     <TextBlock x:Name="CursorDeltaText" Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
                                Text="Click the plot to place the first cursor."/>
                     <TextBlock x:Name="CursorPointsText" Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource TextTertiaryBrush}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
                                Margin="0,4,0,0" Text=""/>
                     <TextBlock x:Name="CursorNoteText" Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource WarningBrush}"
+                               Foreground="{DynamicResource WarningBrush}"
                                Margin="0,4,0,0" Text="" Visibility="Collapsed"/>
                 </StackPanel>
             </Border>

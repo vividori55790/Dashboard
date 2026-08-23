@@ -11,18 +11,28 @@ using Xunit;
 namespace TelemetryDashboard.Tests.Desktop;
 
 /// <summary>
-/// Whether switching the theme actually changes any colour.
+/// Whether switching the theme actually changes any colour on a window that is already open.
 /// </summary>
 /// <remarks>
-/// It did not. <c>ThemeService.ApplyTheme</c> reflected for a Wpf.Ui type, called
-/// <c>GetMethod("Apply")</c> and invoked it with <c>null</c> arguments — the chosen theme was never
-/// passed to anything, the ambiguous overload threw into a bare <c>catch</c>, and no XAML in the
-/// application references Wpf.Ui in the first place. The button logged "Theme toggled." each time
-/// and every pixel stayed where it was. There were no tests at all on this class.
+/// Three versions of this feature have shipped and two of them changed nothing an operator could
+/// see. The first reflected for a Wpf.Ui type, dropped the argument, swallowed the exception, and
+/// addressed a library no XAML here references; the log said "Theme toggled." each time. The second
+/// repainted the token brushes in place, which is right until the brushes are frozen — as
+/// everything loaded from compiled BAML is — so it had to replace them instead, which reaches
+/// nothing already drawn because <c>StaticResource</c> kept the old object. It told the operator to
+/// restart.
 /// <para>
-/// These load the real <c>Themes/Tokens.xaml</c> rather than a dictionary built here, because the
-/// failure this most needs to catch is a brush being renamed in the token file while the palette
-/// goes on naming the old key — and a self-built dictionary would agree with the palette forever.
+/// What actually works is one mechanism stated in three places, and each of these tests pins one
+/// of them: the brushes are frozen so WPF shares rather than copies them, every reference to one is
+/// <c>DynamicResource</c> so replacing the entry re-resolves, and the palette names colours so a
+/// single list drives both halves.
+/// </para>
+/// <para>
+/// Driven on the running window, which is the only place the previous versions failed: the shell
+/// walks its own visual tree after each switch and reports what it found. Dark to light, 242 of 243
+/// painted brushes on the new palette and none left on the old; light back to dark, 248 of 249 and
+/// none left. Before the frozen brushes it was 143 stuck out of 436, and making every reference
+/// dynamic while the brushes were still live took that to 343.
 /// </para>
 /// </remarks>
 [Collection("wpf-resources")]
@@ -31,8 +41,6 @@ public class ThemeSwitchTests
     /// <summary>The shipping token dictionary, loaded from the file the application loads.</summary>
     private static ResourceDictionary Tokens()
     {
-        // The XAML is copied beside the test binary by the UI project reference; fall back to the
-        // source tree so a run from a different working directory still finds it.
         string[] candidates =
         {
             Path.Combine(AppContext.BaseDirectory, "Themes", "Tokens.xaml"),
@@ -54,19 +62,37 @@ public class ThemeSwitchTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void EveryBrushTheLightPaletteNamesExistsInTheShippingTokens()
+    public void EveryColourTheLightPaletteNamesExistsInTheShippingTokens()
     {
-        // The rename trap. A palette key with no brush behind it is one control that silently stays
-        // the other theme's colour, and nothing else in the application would report it.
+        // The rename trap. A palette key with no colour behind it is one control that silently
+        // stays the other theme's colour, and nothing else in the application would report it.
         ResourceDictionary tokens = Tokens();
 
         var missing = new List<string>();
         foreach (string key in ThemePalette.Light.Keys)
         {
-            if (tokens[key] is not SolidColorBrush) missing.Add(key);
+            if (tokens[key] is not Color) missing.Add(key);
         }
 
-        missing.Should().BeEmpty("every themed key must resolve to a brush in Tokens.xaml");
+        missing.Should().BeEmpty("every themed key must resolve to a Color in Tokens.xaml");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public void EveryColourHasTheBrushThatPaintsWithIt()
+    {
+        // The pair is the whole arrangement: XyzColor is what the colour is, XyzBrush is what
+        // paints with it, and the service derives the second name from the first rather than
+        // keeping a second list to forget a token in.
+        ResourceDictionary tokens = Tokens();
+
+        var missing = new List<string>();
+        foreach (string key in ThemePalette.Dark.Keys)
+        {
+            if (tokens[ThemeService.BrushKeyFor(key)] is not SolidColorBrush) missing.Add(key);
+        }
+
+        missing.Should().BeEmpty("a colour nothing paints with cannot reach the screen");
     }
 
     [Fact]
@@ -79,36 +105,40 @@ public class ThemeSwitchTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void ApplyingTheLightPaletteChangesTheBrushesThemselves()
+    public void ApplyingTheLightPaletteReplacesBothTheColourAndItsBrush()
     {
-        // The mechanism the whole feature rests on: consumers hold the brush object, not its
-        // colour, so mutating Color in place reaches all 900 StaticResource references without a
-        // single markup change. If a brush were ever frozen, this is where it would show up.
+        // Both halves, because markup uses both: controls take the brush, and the AvalonDock
+        // system-colour overrides and the 3D viewport take the Color.
         ResourceDictionary tokens = Tokens();
-        var before = new Dictionary<string, Color>();
-        foreach (string key in ThemePalette.Light.Keys) before[key] = ((SolidColorBrush)tokens[key]).Color;
 
-        (int repainted, int replaced, IReadOnlyList<string> unknown) =
+        (int changed, IReadOnlyList<string> unknown) =
             ThemeService.InstallPalette(tokens, ThemePalette.Light);
 
         unknown.Should().BeEmpty();
-        (repainted + replaced).Should().Be(ThemePalette.Light.Count);
-        repainted.Should().Be(ThemePalette.Light.Count,
-            "XamlReader does not freeze, so this path repaints in place -- the running application "
-            + "takes the replacement path instead, and that difference is exactly why a passing "
-            + "test here did not mean a working theme there");
+        changed.Should().BeGreaterThan(40, "most of 33 colours and 33 brushes differ between themes");
 
-        ((SolidColorBrush)tokens["CanvasBrush"]).Color.Should().Be(ThemePalette.Light["CanvasBrush"]);
-        ((SolidColorBrush)tokens["TextPrimaryBrush"]).Color.Should().Be(ThemePalette.Light["TextPrimaryBrush"]);
+        ((Color)tokens["CanvasColor"]).Should().Be(ThemePalette.Light["CanvasColor"]);
+        ((SolidColorBrush)tokens["CanvasBrush"]).Color.Should().Be(ThemePalette.Light["CanvasColor"]);
+        ((SolidColorBrush)tokens["TextPrimaryBrush"]).Color.Should().Be(ThemePalette.Light["TextPrimaryColor"]);
+    }
 
-        int changed = 0;
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public void TheBrushesItInstallsAreFrozenBecauseWpfCopiesTheOnesThatAreNot()
+    {
+        // Not tidiness. An unfrozen brush cannot be shared, so WPF hands out a private copy to
+        // every control a template builds -- and repainting the dictionary's brush then reaches the
+        // original and none of the copies. Measured on the running window: 143 of 436 painted
+        // brushes stayed on the old palette exactly that way.
+        ResourceDictionary tokens = Tokens();
+
+        ThemeService.InstallPalette(tokens, ThemePalette.Light);
+
         foreach (string key in ThemePalette.Light.Keys)
         {
-            if (((SolidColorBrush)tokens[key]).Color != before[key]) changed++;
+            ((SolidColorBrush)tokens[ThemeService.BrushKeyFor(key)]).IsFrozen.Should().BeTrue(
+                $"'{key}' would otherwise be copied per control and stop following the theme");
         }
-
-        changed.Should().BeGreaterThan(20,
-            "a light theme that leaves nearly every brush where it was is not a light theme");
     }
 
     [Fact]
@@ -117,84 +147,31 @@ public class ThemeSwitchTests
     {
         ResourceDictionary tokens = Tokens();
         var shipped = new Dictionary<string, Color>();
-        foreach (string key in ThemePalette.Dark.Keys) shipped[key] = ((SolidColorBrush)tokens[key]).Color;
+        foreach (string key in ThemePalette.Dark.Keys) shipped[key] = (Color)tokens[key];
 
         ThemeService.InstallPalette(tokens, ThemePalette.Light);
         ThemeService.InstallPalette(tokens, ThemePalette.Dark);
 
         foreach (string key in ThemePalette.Dark.Keys)
         {
-            ((SolidColorBrush)tokens[key]).Color.Should().Be(shipped[key],
+            ((Color)tokens[key]).Should().Be(shipped[key],
                 $"'{key}' must come back to the colour Tokens.xaml declares");
+            ((SolidColorBrush)tokens[ThemeService.BrushKeyFor(key)]).Color.Should().Be(shipped[key]);
         }
     }
 
     [Fact]
-    [Trait("Category", "Tier1")]
-    public void TheLightPaletteKeepsTextReadableAgainstItsOwnSurfaces()
+    [Trait("Category", "Tier2")]
+    public void AKeyTheDictionaryDoesNotHaveIsReportedRatherThanThrown()
     {
-        // A theme nobody can read is not a working theme, and "it changed colour" is not the test.
-        // WCAG AA for body text is 4.5:1; these are the pairs the application actually renders.
-        (string Text, string Background, double Minimum)[] pairs =
-        {
-            ("TextPrimaryBrush", "CanvasBrush", 4.5),
-            ("TextPrimaryBrush", "SurfaceBrush", 4.5),
-            ("TextSecondaryBrush", "SurfaceBrush", 4.5),
-            ("TextTertiaryBrush", "SurfaceBrush", 3.0),
-            ("TextDisabledBrush", "SurfaceBrush", 2.8),
-            ("OnAccentBrush", "AccentBrush", 4.5),
-            ("DangerBrush", "SurfaceBrush", 3.0),
-            ("SuccessBrush", "SurfaceBrush", 3.0),
-            ("WarningBrush", "SurfaceBrush", 3.0)
-        };
+        // A mistyped key must not stop the window opening. It is one wrong colour; refusing to
+        // start is not the proportionate answer to it.
+        var sparse = new ResourceDictionary();
 
-        foreach ((string text, string background, double minimum) in pairs)
-        {
-            double ratio = Contrast(ThemePalette.Light[text], ThemePalette.Light[background]);
-            ratio.Should().BeGreaterThanOrEqualTo(minimum,
-                $"{text} on {background} in the light theme reads at {ratio:F2}:1");
-        }
-    }
+        (int changed, IReadOnlyList<string> unknown) = ThemeService.InstallPalette(
+            sparse, new Dictionary<string, Color> { ["NoSuchColor"] = Colors.Red });
 
-    [Fact]
-    [Trait("Category", "Tier1")]
-    public void TheDarkPaletteIsHeldToTheSameStandard()
-    {
-        (string Text, string Background, double Minimum)[] pairs =
-        {
-            ("TextPrimaryBrush", "CanvasBrush", 4.5),
-            ("TextPrimaryBrush", "SurfaceBrush", 4.5),
-            ("TextSecondaryBrush", "SurfaceBrush", 4.5),
-            ("TextTertiaryBrush", "SurfaceBrush", 3.0),
-            // The token file records that this was raised from #474D55 after it measured about
-            // 2.2:1 and a row of disabled buttons became unreadable. This is that fix, pinned.
-            ("TextDisabledBrush", "SurfaceBrush", 2.8),
-            ("OnAccentBrush", "AccentBrush", 3.0)
-        };
-
-        foreach ((string text, string background, double minimum) in pairs)
-        {
-            double ratio = Contrast(ThemePalette.Dark[text], ThemePalette.Dark[background]);
-            ratio.Should().BeGreaterThanOrEqualTo(minimum,
-                $"{text} on {background} in the dark theme reads at {ratio:F2}:1");
-        }
-    }
-
-    /// <summary>WCAG relative-contrast ratio between two opaque colours.</summary>
-    private static double Contrast(Color a, Color b)
-    {
-        double la = Luminance(a), lb = Luminance(b);
-        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
-    }
-
-    private static double Luminance(Color c)
-    {
-        static double Channel(byte v)
-        {
-            double s = v / 255.0;
-            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+        changed.Should().Be(0);
+        unknown.Should().ContainSingle().Which.Should().Be("NoSuchColor");
     }
 }

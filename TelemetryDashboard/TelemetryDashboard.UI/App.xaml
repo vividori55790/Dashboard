@@ -19,43 +19,13 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!--
-                Compatibility aliases, and they are scaffolding rather than design.
-
-                Every window in this application still names colours by the keys the old palette
-                used, and several name them as inline literals besides. Deleting those keys in one
-                commit would make the whole UI fail to load at once, which turns a redesign into a
-                big-bang rewrite nobody can review. So each old key is redirected at its nearest
-                honest equivalent in the new token set, screens migrate to the real tokens one at a
-                time, and this block shrinks until it can be deleted.
-
-                Two of these redirects deliberately lose information, because the old palette drew a
-                distinction the new one refuses to: five separate accent colours were used
-                interchangeably for emphasis, so teal, green and purple accents all resolve to the
-                single accent here. Anything that genuinely meant "healthy" or "alarming" should be
-                using the status tokens instead, and the flattening is what makes those cases
-                visible rather than letting them hide behind a decorative colour.
+                Nothing else here. There used to be a block of compatibility aliases — seventeen
+                brushes redirecting the old palette's key names at the new tokens, plus a CardStyle
+                — written so screens could migrate one at a time. They all migrated. The block was
+                dead: no XAML and no code-behind referred to any of it, and the aliases were
+                separate brush objects that took a colour once at load, so anything still using one
+                would have been a control that could not follow a theme change at all.
             -->
-            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource CanvasColor}"/>
-            <SolidColorBrush x:Key="SurfaceBackgroundBrush" Color="{StaticResource SurfaceColor}"/>
-            <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource SurfaceColor}"/>
-            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="{StaticResource SurfaceAltColor}"/>
-            <SolidColorBrush x:Key="CardBorderBrush" Color="{StaticResource BorderSubtleColor}"/>
-            <SolidColorBrush x:Key="CardBorderHighlightBrush" Color="{StaticResource AccentColor}"/>
-            <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextTertiaryColor}"/>
-
-            <SolidColorBrush x:Key="AccentGlowBrush" Color="{StaticResource AccentSubtleColor}"/>
-            <SolidColorBrush x:Key="AccentTealBrush" Color="{StaticResource AccentColor}"/>
-            <SolidColorBrush x:Key="AccentGreenBrush" Color="{StaticResource SuccessColor}"/>
-            <SolidColorBrush x:Key="AccentPurpleBrush" Color="{StaticResource AccentColor}"/>
-            <SolidColorBrush x:Key="AccentWarningBrush" Color="{StaticResource WarningColor}"/>
-            <SolidColorBrush x:Key="AccentErrorBrush" Color="{StaticResource DangerColor}"/>
-
-            <SolidColorBrush x:Key="ButtonBackgroundBrush" Color="{StaticResource SurfaceAltColor}"/>
-            <SolidColorBrush x:Key="ButtonPressedBrush" Color="{StaticResource AccentColor}"/>
-            <SolidColorBrush x:Key="SystemControlBackgroundBaseLowBrush" Color="{StaticResource SurfaceAltColor}"/>
-            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="{StaticResource AccentColor}"/>
-
-            <Style x:Key="CardStyle" TargetType="Border" BasedOn="{StaticResource Card}"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Anomaly detection settings and the anomalies the running engine has actually recorded.
 
     This window used to invent four channel names, push randomised readings through the live
@@ -13,8 +13,8 @@
         Title="이상 감지 분석"
         Height="560" Width="880" MinHeight="460" MinWidth="680"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>

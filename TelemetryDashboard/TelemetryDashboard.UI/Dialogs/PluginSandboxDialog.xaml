@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Filter scripts loaded from the plugins/ folder.
 
     The grid used to list three files that were not there — a .cs, a .py and a .js, all marked
@@ -15,18 +15,18 @@
         Title="플러그인"
         Height="560" Width="820" MinHeight="440" MinWidth="660"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}"
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
         Closed="Window_Closed">
 
     <Window.Resources>
         <Style x:Key="PluginGridHeader" TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="Template">
@@ -48,7 +48,7 @@
         </Style>
 
         <Style x:Key="PluginGridCell" TargetType="DataGridCell">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="Template">
@@ -60,8 +60,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSubtleBrush}"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -105,12 +105,12 @@
                 </DockPanel>
 
                 <DataGrid Grid.Row="1" x:Name="DgPlugins"
-                          Background="{StaticResource InsetBrush}"
-                          Foreground="{StaticResource TextPrimaryBrush}"
-                          BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                          Background="{DynamicResource InsetBrush}"
+                          Foreground="{DynamicResource TextPrimaryBrush}"
+                          BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
                           RowBackground="Transparent" AlternatingRowBackground="Transparent"
                           GridLinesVisibility="Horizontal"
-                          HorizontalGridLinesBrush="{StaticResource BorderSubtleBrush}"
+                          HorizontalGridLinesBrush="{DynamicResource BorderSubtleBrush}"
                           AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                           CanUserAddRows="False" SelectionMode="Single"
                           FontFamily="{StaticResource UiFont}"
@@ -133,10 +133,10 @@
 
         <!-- What running a plugin actually costs. This is a warning, not a feature list. -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,16"
-                BorderBrush="{StaticResource WarningBrush}">
+                BorderBrush="{DynamicResource WarningBrush}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Style="{StaticResource IconText}" Text="&#xE7BA;"
-                           Foreground="{StaticResource WarningBrush}" Margin="0,0,10,0"
+                           Foreground="{DynamicResource WarningBrush}" Margin="0,0,10,0"
                            VerticalAlignment="Top"/>
                 <StackPanel>
                     <TextBlock Style="{StaticResource BodyText}" TextWrapping="Wrap"

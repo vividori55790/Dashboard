@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -118,9 +118,12 @@ public partial class MainWindow
     private void ShowAlertBanner(string message, bool isCritical)
     {
         AlertBannerText.Text = message;
-        AlertBanner.Background = (Brush)FindResource(isCritical ? "DangerSubtleBrush" : "WarningSubtleBrush");
-        AlertBanner.BorderBrush = (Brush)FindResource(isCritical ? "DangerBrush" : "WarningBrush");
-        AlertBannerIcon.Foreground = (Brush)FindResource(isCritical ? "DangerBrush" : "WarningBrush");
+        AlertBanner.SetResourceReference(BackgroundProperty,
+            isCritical ? "DangerSubtleBrush" : "WarningSubtleBrush");
+        AlertBanner.SetResourceReference(BorderBrushProperty,
+            isCritical ? "DangerBrush" : "WarningBrush");
+        AlertBannerIcon.SetResourceReference(ForegroundProperty,
+            isCritical ? "DangerBrush" : "WarningBrush");
         AlertBanner.Visibility = Visibility.Visible;
 
         _alertDismissTimer?.Stop();

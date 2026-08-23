@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -71,10 +71,9 @@ public partial class DataTopologyOverlay : UserControl
         _selectedNode?.ClearValue(Border.BorderBrushProperty);
         _selectedNode = border;
 
-        if (TryFindResource("AccentBrush") is Brush accent)
-        {
-            border.BorderBrush = accent;
-        }
+        // A resource reference rather than the brush itself: a themed brush is replaced when the
+        // palette changes, so anything holding the object it used to be stays the old colour.
+        border.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
 
         OnNodeSelected?.Invoke(name);
     }

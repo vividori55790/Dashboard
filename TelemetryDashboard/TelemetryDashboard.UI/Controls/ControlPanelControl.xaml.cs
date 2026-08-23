@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -191,10 +191,6 @@ public partial class ControlPanelControl : UserControl
                 "Add a nodes list to the profile to control devices from this panel.";
         });
     }
-
-    /// <summary>Resolves a theme brush, or null outside a running application.</summary>
-    private static Brush? ThemeBrush(FrameworkElement scope, string key) =>
-        scope.TryFindResource(key) as Brush;
 
     public void LogMessage(string tag, string message)
     {
@@ -473,10 +469,9 @@ public partial class ControlPanelControl : UserControl
     /// </summary>
     private static void Recolour(TextBlock target, string brushKey)
     {
-        if (ThemeBrush(target, brushKey) is Brush brush)
-        {
-            target.Foreground = brush;
-        }
+        // A reference, not the brush: the palette replaces its brushes when the theme changes, so
+        // a control holding the object rather than the key keeps the colour it was given.
+        target.SetResourceReference(TextBlock.ForegroundProperty, brushKey);
     }
 
     private void DrawSparkline()
@@ -500,10 +495,7 @@ public partial class ControlPanelControl : UserControl
 
         double stepX = width / (_sparklineBuffer.Count - 1);
         Polyline polyline = new Polyline { StrokeThickness = 1.5 };
-        if (ThemeBrush(this, "Series1Brush") is Brush stroke)
-        {
-            polyline.Stroke = stroke;
-        }
+        polyline.SetResourceReference(Shape.StrokeProperty, "Series1Brush");
 
         for (int i = 0; i < _sparklineBuffer.Count; i++)
         {

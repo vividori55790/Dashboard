@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -14,12 +14,12 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
-        // Before base.OnStartup, which is what creates the StartupUri window. StaticResource keeps
-        // whatever object it resolved, so the palette has to be in place before anything resolves.
+        // Before base.OnStartup, which is what creates the StartupUri window. A switch now reaches
+        // an open window, so this is no longer what makes the stored theme work -- it is what stops
+        // the operator watching their window paint dark and then turn light in front of them.
         Services.ThemeService.InstallStoredPaletteAtStartup(Resources, Services.UiSettings.Load());
 
         base.OnStartup(e);
-        ApplyDarkThemeIfAvailable();
     }
 
     /// <summary>
@@ -112,25 +112,5 @@ public partial class App : Application
             return Path.Combine(folder, "crash_log.txt");
         }
     }
-
-    /// <summary>Applies the WPF-UI dark theme when that package is present.</summary>
-    /// <remarks>Reflection, so the application still starts if the optional package is absent.</remarks>
-    private static void ApplyDarkThemeIfAvailable()
-    {
-        try
-        {
-            Type? manager = Type.GetType("Wpf.Ui.Appearance.ApplicationThemeManager, Wpf.Ui");
-            if (manager is null) return;
-
-            Type? themeEnum = Type.GetType("Wpf.Ui.Appearance.ApplicationTheme, Wpf.Ui");
-            object darkTheme = themeEnum is not null ? Enum.Parse(themeEnum, "Dark") : 1;
-
-            (manager.GetMethod("Apply", new[] { themeEnum ?? typeof(object) }) ?? manager.GetMethod("Apply"))
-                ?.Invoke(null, new[] { darkTheme });
-        }
-        catch (Exception)
-        {
-            // Cosmetic only. The application's own dictionaries already define the dark palette.
-        }
-    }
 }
+

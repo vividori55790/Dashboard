@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     A bench for two primitives: AES-256-GCM and the Gorilla compressor.
 
     This window was titled "Zero-Trust 보안" and read as a security configuration screen, but nothing
@@ -14,8 +14,8 @@
         Title="암호화 및 압축 검증"
         Height="680" Width="860" MinHeight="560" MinWidth="680"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -33,14 +33,14 @@
 
         <!-- What this window does not do. It reads as a settings screen and is not one. -->
         <Border Grid.Row="1" Margin="0,0,0,12"
-                Background="{StaticResource WarningSubtleBrush}"
-                BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                Background="{DynamicResource WarningSubtleBrush}"
+                BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
                 CornerRadius="{StaticResource RadiusS}" Padding="12,10">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Style="{StaticResource IconText}" Text="&#xE946;"
-                           Foreground="{StaticResource WarningBrush}" Margin="0,0,10,0"
+                           Foreground="{DynamicResource WarningBrush}" Margin="0,0,10,0"
                            VerticalAlignment="Top"/>
-                <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource WarningBrush}"
+                <TextBlock Style="{StaticResource BodyText}" Foreground="{DynamicResource WarningBrush}"
                            TextWrapping="Wrap"
                            Text="여기서 만든 키는 이 창 안에서만 쓰입니다. 실제 텔레메트리나 저장 파일에는 적용되지 않으며, 메시 트래픽 암호화는 [클러스터 메시] 창의 클러스터 암호구절로 설정합니다."/>
             </StackPanel>

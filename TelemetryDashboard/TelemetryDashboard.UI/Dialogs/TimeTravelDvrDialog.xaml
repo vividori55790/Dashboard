@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Time-travel DVR.
 
     Three classes of thing were fixed here beyond the colours.
@@ -22,8 +22,8 @@
         Title="타임트래블 DVR"
         Height="640" Width="920" MinHeight="480" MinWidth="720"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
     <Window.Resources>
         <!-- BasedOn, always: a keyed Button style replaces the dictionary's implicit one instead of
              extending it, and a transport row without it renders as three stock Windows buttons. -->

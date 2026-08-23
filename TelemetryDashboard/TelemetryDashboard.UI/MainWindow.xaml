@@ -25,7 +25,7 @@
         Title="Telemetry Dashboard"
         Height="880" Width="1500" MinHeight="640" MinWidth="1080"
         Icon="Logo_Gemini.png"
-        Background="{StaticResource CanvasBrush}"
+        Background="{DynamicResource CanvasBrush}"
         WindowStartupLocation="CenterScreen"
         AllowDrop="True" Drop="MainWindow_Drop" PreviewDragOver="MainWindow_PreviewDragOver"
         KeyDown="MainWindow_KeyDown"
@@ -53,8 +53,8 @@
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0"
-                                    Background="{StaticResource SurfaceBrush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
                                     BorderThickness="0,0,0,1">
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                               VerticalScrollBarVisibility="Disabled"
@@ -71,8 +71,8 @@
                                  canvas under their buttons, and the ribbon looked broken rather
                                  than uniform. -->
                             <Border Grid.Row="1" MinHeight="56"
-                                    Background="{StaticResource CanvasBrush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    Background="{DynamicResource CanvasBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
                                     BorderThickness="0,0,0,1"
                                     Padding="16,12">
                                 <ContentPresenter x:Name="PART_SelectedContentHost"
@@ -157,16 +157,16 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border x:Name="Bar" Background="{StaticResource BorderStrongBrush}"
+                        <Border x:Name="Bar" Background="{DynamicResource BorderStrongBrush}"
                                 CornerRadius="{StaticResource RadiusS}" Margin="3"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bar" Property="Background"
-                                        Value="{StaticResource TextTertiaryBrush}"/>
+                                        Value="{DynamicResource TextTertiaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsDragging" Value="True">
                                 <Setter TargetName="Bar" Property="Background"
-                                        Value="{StaticResource TextSecondaryBrush}"/>
+                                        Value="{DynamicResource TextSecondaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -175,7 +175,7 @@
         </Style>
 
         <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{StaticResource InsetBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InsetBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
@@ -305,15 +305,15 @@
                         no-file case, so its presence always means there is something to read.
                     -->
                     <Border x:Name="ProfileLoadBanner" Visibility="Collapsed" Margin="0,0,0,12"
-                            Background="{StaticResource WarningSubtleBrush}"
-                            BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                            Background="{DynamicResource WarningSubtleBrush}"
+                            BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
                             CornerRadius="{StaticResource RadiusS}" Padding="12,10">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource IconText}" Text="&#xE7BA;"
-                                       Foreground="{StaticResource WarningBrush}"
+                                       Foreground="{DynamicResource WarningBrush}"
                                        Margin="0,0,10,0" VerticalAlignment="Top"/>
                             <TextBlock x:Name="ProfileLoadText" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"/>
+                                       Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
@@ -514,50 +514,50 @@
              itself in Windows' light system colours in the middle of a dark application. -->
         <dock:DockingManager x:Name="DockManager" Grid.Row="2" Margin="8"
                              Loaded="DockManager_Loaded"
-                             Background="{StaticResource CanvasBrush}"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             BorderBrush="{StaticResource BorderSubtleBrush}"
+                             Background="{DynamicResource CanvasBrush}"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             BorderBrush="{DynamicResource BorderSubtleBrush}"
                              BorderThickness="0">
             <dock:DockingManager.Resources>
                 <!-- The dock's chrome resolves the remaining greys through the system palette.
                      Redirecting those keys inside this subtree is the only lever available without
                      taking a dependency on one of the AvalonDock theme packages. -->
                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}"
-                                 Color="{StaticResource SurfaceColor}"/>
+                                 Color="{DynamicResource SurfaceColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlLightBrushKey}"
-                                 Color="{StaticResource SurfaceAltColor}"/>
+                                 Color="{DynamicResource SurfaceAltColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlLightLightBrushKey}"
-                                 Color="{StaticResource SurfaceAltColor}"/>
+                                 Color="{DynamicResource SurfaceAltColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}"
-                                 Color="{StaticResource BorderDefaultColor}"/>
+                                 Color="{DynamicResource BorderDefaultColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}"
-                                 Color="{StaticResource TextPrimaryColor}"/>
+                                 Color="{DynamicResource TextPrimaryColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.GrayTextBrushKey}"
-                                 Color="{StaticResource TextDisabledColor}"/>
+                                 Color="{DynamicResource TextDisabledColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}"
-                                 Color="{StaticResource CanvasColor}"/>
+                                 Color="{DynamicResource CanvasColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}"
-                                 Color="{StaticResource TextPrimaryColor}"/>
+                                 Color="{DynamicResource TextPrimaryColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ActiveCaptionBrushKey}"
-                                 Color="{StaticResource SurfaceAltColor}"/>
+                                 Color="{DynamicResource SurfaceAltColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ActiveCaptionTextBrushKey}"
-                                 Color="{StaticResource TextPrimaryColor}"/>
+                                 Color="{DynamicResource TextPrimaryColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.InactiveCaptionBrushKey}"
-                                 Color="{StaticResource SurfaceColor}"/>
+                                 Color="{DynamicResource SurfaceColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.InactiveCaptionTextBrushKey}"
-                                 Color="{StaticResource TextSecondaryColor}"/>
+                                 Color="{DynamicResource TextSecondaryColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.ActiveBorderBrushKey}"
-                                 Color="{StaticResource BorderStrongColor}"/>
+                                 Color="{DynamicResource BorderStrongColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.InactiveBorderBrushKey}"
-                                 Color="{StaticResource BorderSubtleColor}"/>
+                                 Color="{DynamicResource BorderSubtleColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"
-                                 Color="{StaticResource AccentSubtleColor}"/>
+                                 Color="{DynamicResource AccentSubtleColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"
-                                 Color="{StaticResource TextPrimaryColor}"/>
+                                 Color="{DynamicResource TextPrimaryColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}"
-                                 Color="{StaticResource SurfaceColor}"/>
+                                 Color="{DynamicResource SurfaceColor}"/>
                 <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}"
-                                 Color="{StaticResource TextPrimaryColor}"/>
+                                 Color="{DynamicResource TextPrimaryColor}"/>
             </dock:DockingManager.Resources>
 
             <dock:DockingManager.Layout>
@@ -615,15 +615,15 @@
         </dock:DockingManager>
 
         <!-- ============================== Status bar ============================= -->
-        <Border Grid.Row="3" Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+        <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
                 Padding="12,6">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <!-- Red because the machine is reporting a state, not for emphasis. -->
                     <TextBlock x:Name="StatusConnectionText" Text="연결 안 됨"
                                Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource DangerBrush}" Margin="0,0,20,0"/>
+                               Foreground="{DynamicResource DangerBrush}" Margin="0,0,20,0"/>
                     <TextBlock x:Name="StatusPortText" Text="포트 없음"
                                Style="{StaticResource CaptionText}" Margin="0,0,20,0"/>
                     <!-- Says only what the recorder reports. It used to read "Rx Packets: 0 |
@@ -654,7 +654,7 @@
                         AutomationProperties.Name="Dismiss alert"
                         Style="{StaticResource RibbonCommand}" Margin="12,0,0,0"/>
                 <TextBlock x:Name="AlertBannerText" Style="{StaticResource MonoText}"
-                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
                            VerticalAlignment="Center" TextWrapping="Wrap" Text=""/>
             </DockPanel>
         </Border>

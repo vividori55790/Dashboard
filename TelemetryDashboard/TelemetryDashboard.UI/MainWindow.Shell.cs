@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,6 +13,8 @@ using TelemetryDashboard.Core.Services;
 using TelemetryDashboard.Core.Simulator;
 using TelemetryDashboard.UI.Dialogs;
 using TelemetryDashboard.UI.Docking;
+
+using TelemetryDashboard.UI.Themes;
 
 namespace TelemetryDashboard.UI;
 
@@ -88,8 +90,8 @@ public partial class MainWindow
             // The pane's own frame, for the same reason as the tabs: its template binds these two
             // to the control, and the style behind it hands them a white border, which drew a
             // bright 1px rectangle around each pane.
-            pane.Background = (Brush)FindResource("CanvasBrush");
-            pane.BorderBrush = (Brush)FindResource("BorderSubtleBrush");
+            pane.SetResourceReference(BackgroundProperty, "CanvasBrush");
+            pane.SetResourceReference(BorderBrushProperty, "BorderSubtleBrush");
 
             if (pane.ItemContainerStyle is not Style dockStyle)
             {
@@ -176,15 +178,29 @@ public partial class MainWindow
     /// this application uses. A message written whether or not the work happened is worse than no
     /// message: it is the evidence someone checks.
     /// </remarks>
-    private void BtnToggleTheme_Click(object sender, RoutedEventArgs e)
-    {
-        _themeService.ToggleTheme();
+    private void BtnToggleTheme_Click(object sender, RoutedEventArgs e) => _themeService.ToggleTheme();
 
-        string detail = _themeService.NeedsRestartToShow
-            ? $"{_themeService.CurrentTheme} theme saved. WPF froze the brushes this application "
-              + "resolved at load, so the change shows on the next start rather than now."
-            : $"{_themeService.CurrentTheme} theme applied to "
-              + $"{_themeService.RepaintedBrushes} brushes.";
+    /// <summary>
+    /// Says what the window is now painted with, having gone and looked.
+    /// </summary>
+    /// <remarks>
+    /// Counted off the realised visual tree rather than off the service's own opinion of its work,
+    /// because the two previous versions of this feature both had a service that believed it had
+    /// succeeded. What an operator wants to know is whether the screen in front of them changed,
+    /// and that is a question only the screen can answer.
+    /// </remarks>
+    private void ReportThemeToLog()
+    {
+        ThemeProbeResult probe = ThemeProbe.Sample(
+            this,
+            ThemePalette.For(_themeService.EffectiveIsLight),
+            ThemePalette.For(!_themeService.EffectiveIsLight));
+
+        string chosen = _themeService.FollowsSystem
+            ? $"Following the Windows theme, which is {(_themeService.EffectiveIsLight ? "light" : "dark")}"
+            : $"{_themeService.CurrentTheme} theme applied";
+
+        string detail = $"{chosen}. {_themeService.ChangedColours} colours changed. {probe.Describe()}";
 
         if (_themeService.UnknownKeys.Count > 0)
         {
@@ -193,24 +209,6 @@ public partial class MainWindow
         }
 
         ControlPanel.LogMessage("SYSTEM", detail);
-
-        if (!_themeService.NeedsRestartToShow) return;
-
-        // Offered rather than done. Restarting drops a live serial connection and any recording in
-        // progress, which is not a thing to do to an operator because they pressed a theme button.
-        MessageBoxResult answer = MessageBox.Show(this,
-            $"{_themeService.CurrentTheme} 테마가 저장되었습니다."
-            + Environment.NewLine + Environment.NewLine
-            + "이 응용 프로그램은 시작할 때 색을 확정하므로 지금 화면에는 반영되지 않습니다."
-            + Environment.NewLine
-            + "지금 다시 시작할까요? 진행 중인 기록과 연결은 끊어집니다.",
-            "테마 전환", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-        if (answer != MessageBoxResult.Yes) return;
-
-        string? entry = Environment.ProcessPath;
-        if (entry is not null) Process.Start(entry);
-        Application.Current.Shutdown();
     }
 
     /// <summary>Starts or stops the CSV recording, and says which of those actually happened.</summary>

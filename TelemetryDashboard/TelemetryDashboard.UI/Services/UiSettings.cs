@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TelemetryDashboard.UI.Services;
 
@@ -28,6 +29,16 @@ public sealed class UiSettings
     /// <summary>UI culture, e.g. <c>ko-KR</c>.</summary>
     public string Language { get; set; } = "ko-KR";
 
+    /// <summary>Where these came from, and where <see cref="Save"/> writes them back to.</summary>
+    /// <remarks>
+    /// Carried on the object rather than assumed, because the alternative is a service that cannot
+    /// be exercised without writing over the settings of whoever is running the tests. Not
+    /// serialised: a file that records its own location is a file that is wrong the moment it is
+    /// copied.
+    /// </remarks>
+    [JsonIgnore]
+    public string Origin { get; set; } = DefaultPath;
+
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TelemetryDashboard", "settings.json");
@@ -43,20 +54,22 @@ public sealed class UiSettings
         path ??= DefaultPath;
         try
         {
-            return File.Exists(path)
+            UiSettings settings = File.Exists(path)
                 ? JsonSerializer.Deserialize<UiSettings>(File.ReadAllText(path)) ?? new UiSettings()
                 : new UiSettings();
+            settings.Origin = path;
+            return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new UiSettings();
+            return new UiSettings { Origin = path };
         }
     }
 
     /// <summary>Writes the settings. Returns why it could not be written, or null.</summary>
     public string? Save(string? path = null)
     {
-        path ??= DefaultPath;
+        path ??= Origin;
         try
         {
             string? directory = Path.GetDirectoryName(path);

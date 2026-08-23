@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Streaming server console.
 
     Every number on this panel now starts as a dash. The defaults shipped here were "1 Client
@@ -28,7 +28,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{StaticResource CanvasBrush}">
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -57,11 +57,11 @@
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Ellipse x:Name="ServerLed" Width="10" Height="10" Margin="0,0,10,0"
                              VerticalAlignment="Center"
-                             Fill="{StaticResource TextTertiaryBrush}"/>
+                             Fill="{DynamicResource TextTertiaryBrush}"/>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Style="{StaticResource TitleText}" Text="Streaming server"/>
                         <TextBlock x:Name="TxtServerEndpoint" Style="{StaticResource MonoText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    Text="Endpoint not known until a server is attached"
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
@@ -129,14 +129,14 @@
                 <StackPanel>
                     <TextBlock Style="{StaticResource SubtitleText}" Text="What this server does"/>
                     <TextBlock Style="{StaticResource BodyText}" TextWrapping="Wrap" LineHeight="18"
-                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
                                Text="이 시스템은 고성능 텔레메트리 데이터 수집, 시계열 보관 및 실시간 변환 파이프라인 전용 허브입니다. 모든 수신 데이터는 웹소켓 표준 프로토콜로 브로드캐스트되어 사용자가 개조한 HTML 클라이언트(stream_client.html)나 외부 전용 모니터링 앱으로 즉시 전달됩니다."/>
 
                     <Separator Margin="0,16"/>
 
                     <TextBlock Style="{StaticResource LabelText}" Text="Bundled web client page"/>
                     <TextBlock x:Name="TxtHtmlPath" Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
                                Text="No path attached yet" TextWrapping="Wrap" Margin="0,4,0,12"/>
 
                     <Button HorizontalAlignment="Left" Click="BtnOpenHtmlLocation_Click">

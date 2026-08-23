@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -123,9 +123,11 @@ public partial class LlmDiagnosisDialog : Window
         // was defined somewhere else.
         bool critical = report.SeverityLevel == "CRITICAL" || anomalies.Any(a => a.ZScore >= 3.5);
         TxtSeverity.Text = critical ? "심각도 — 위험, 조치 필요" : "심각도 — 정상";
-        BadgeSeverity.Background = (Brush)FindResource(critical ? "DangerSubtleBrush" : "SuccessSubtleBrush");
-        BadgeSeverity.BorderBrush = (Brush)FindResource(critical ? "DangerBrush" : "SuccessBrush");
-        TxtSeverity.Foreground = (Brush)FindResource(critical ? "DangerBrush" : "SuccessBrush");
+        BadgeSeverity.SetResourceReference(BackgroundProperty,
+            critical ? "DangerSubtleBrush" : "SuccessSubtleBrush");
+        BadgeSeverity.SetResourceReference(BorderBrushProperty,
+            critical ? "DangerBrush" : "SuccessBrush");
+        TxtSeverity.SetResourceReference(ForegroundProperty, critical ? "DangerBrush" : "SuccessBrush");
 
         BtnRunQuery.IsEnabled = true;
     }
@@ -135,7 +137,7 @@ public partial class LlmDiagnosisDialog : Window
         string cmd = "$CMD,SAFE_MODE,NODE_1,THROTTLE_50";
         _onCommandSend?.Invoke(cmd);
         TxtEmergencyStatus.Text = $"{DateTime.Now:HH:mm:ss} 전송: {cmd}";
-        TxtEmergencyStatus.Foreground = (Brush)FindResource("WarningBrush");
+        TxtEmergencyStatus.SetResourceReference(ForegroundProperty, "WarningBrush");
         MessageBox.Show(this,
             $"긴급 보호 명령을 전송했습니다.\n\n{cmd}\n\n장비가 명령을 받아들였는지는 이벤트 로그에서 확인하십시오.",
             "긴급 보호 명령", MessageBoxButton.OK, MessageBoxImage.Warning);

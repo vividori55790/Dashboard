@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -142,14 +142,14 @@ public partial class ProtocolBridgeDialog : Window
     private void SetOutcome(string text, string brushKey)
     {
         TxtMatchState.Text = text;
-        TxtMatchState.Foreground = (Brush)FindResource(brushKey);
+        TxtMatchState.SetResourceReference(ForegroundProperty, brushKey);
     }
 
     private void BtnCopyJson_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(TxtConvertedJson.Text);
         TxtMatchState.Text = "JSON을 클립보드에 복사했습니다.";
-        TxtMatchState.Foreground = (Brush)FindResource("TextSecondaryBrush");
+        TxtMatchState.SetResourceReference(ForegroundProperty, "TextSecondaryBrush");
     }
 
     private void BtnClose_Click(object sender, RoutedEventArgs e)

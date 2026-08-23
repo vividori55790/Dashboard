@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -38,6 +38,13 @@ public partial class DigitalTwin3DViewControl : UserControl
     public DigitalTwin3DViewControl()
     {
         InitializeComponent();
+
+        // The DynamicResource a root element cannot spell in its own markup: XAML resolves a bare
+        // attribute on the root against the WPF namespace, not against this class. Same mechanism,
+        // written where it can be read.
+        SetResourceReference(GridColorProperty, "GridLineColor");
+        SetResourceReference(MeshColorProperty, "AccentColor");
+
         Loaded += OnLoaded;
     }
 
@@ -112,7 +119,7 @@ public partial class DigitalTwin3DViewControl : UserControl
             Width = 6,
             Length = 4,
             Height = 1,
-            Fill = (System.Windows.Media.Brush)FindResource("AccentBrush")
+            Fill = FrozenBrush(MeshColor)
         });
 
         Viewport3D.ZoomExtents();

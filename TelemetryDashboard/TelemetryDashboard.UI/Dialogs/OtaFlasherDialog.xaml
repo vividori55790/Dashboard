@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Firmware transfer to an edge MCU bootloader.
 
     Three things on this screen used to be invented: a default firmware path pointing at a file
@@ -14,8 +14,8 @@
         Title="펌웨어 전송"
         Height="580" Width="780" MinHeight="480" MinWidth="620"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -35,15 +35,15 @@
 
         <!-- Whether a bootloader link exists at all. Shown before anything can be selected. -->
         <Border Grid.Row="1" x:Name="LinkBanner" Margin="0,0,0,12"
-                Background="{StaticResource WarningSubtleBrush}"
-                BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                Background="{DynamicResource WarningSubtleBrush}"
+                BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
                 CornerRadius="{StaticResource RadiusS}" Padding="12,10">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="LinkIcon" Style="{StaticResource IconText}" Text="&#xE7BA;"
-                           Foreground="{StaticResource WarningBrush}" Margin="0,0,10,0"
+                           Foreground="{DynamicResource WarningBrush}" Margin="0,0,10,0"
                            VerticalAlignment="Top"/>
                 <TextBlock x:Name="TxtLinkState" Style="{StaticResource BodyText}"
-                           Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
                            Text="부트로더 링크가 연결되지 않았습니다. 전송 경로가 없어 플래싱을 시작할 수 없습니다."/>
             </StackPanel>
         </Border>
@@ -90,12 +90,12 @@
                                Text="대기 중"/>
                     <TextBlock x:Name="TxtProgressPercent" Style="{StaticResource MonoText}"
                                HorizontalAlignment="Right" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondaryBrush}" Text="0%"/>
+                               Foreground="{DynamicResource TextSecondaryBrush}" Text="0%"/>
                 </DockPanel>
                 <ProgressBar x:Name="PbFlashProgress" Height="6" Minimum="0" Maximum="100" Value="0"
-                             Foreground="{StaticResource AccentBrush}"
-                             Background="{StaticResource InsetBrush}"
-                             BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"/>
+                             Foreground="{DynamicResource AccentBrush}"
+                             Background="{DynamicResource InsetBrush}"
+                             BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"/>
             </StackPanel>
         </Border>
 

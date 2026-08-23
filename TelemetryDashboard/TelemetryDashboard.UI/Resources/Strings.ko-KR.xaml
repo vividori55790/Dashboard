@@ -40,7 +40,7 @@
     <sys:String x:Key="Ui_Cmd_ToggleRecord_Stop">CSV 녹화 정지</sys:String>
     <sys:String x:Key="Ui_Cmd_ToggleSimulator">가상 MCU 스트림 시작</sys:String>
     <sys:String x:Key="Ui_Cmd_ToggleSimulator_Stop">가상 MCU 스트림 정지</sys:String>
-    <sys:String x:Key="Ui_Cmd_ToggleTheme">언어 전환</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleTheme">테마 전환</sys:String>
     <sys:String x:Key="Ui_Tab_AlarmsSampling">경보 및 샘플링</sys:String>
     <sys:String x:Key="Ui_Tab_AnalysisReplay">분석 및 재생</sys:String>
     <sys:String x:Key="Ui_Tab_Connection">연결</sys:String>

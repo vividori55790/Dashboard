@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -143,13 +143,14 @@ public partial class MeshClusterDialog : Window
     {
         bool encrypted = _meshSync.SecurityMode == MeshSecurityMode.Encrypted;
 
-        SolidColorBrush accent = (SolidColorBrush)FindResource(encrypted ? "SuccessBrush" : "WarningBrush");
+        string accent = encrypted ? "SuccessBrush" : "WarningBrush";
 
-        SecurityBanner.BorderBrush = accent;
-        SecurityBanner.Background = (Brush)FindResource(encrypted ? "SuccessSubtleBrush" : "WarningSubtleBrush");
-        SecurityIcon.Foreground = accent;
+        SecurityBanner.SetResourceReference(BorderBrushProperty, accent);
+        SecurityBanner.SetResourceReference(BackgroundProperty,
+            encrypted ? "SuccessSubtleBrush" : "WarningSubtleBrush");
+        SecurityIcon.SetResourceReference(ForegroundProperty, accent);
         SecurityIcon.Text = encrypted ? CheckmarkGlyph : WarningGlyph;
-        TxtSecurityState.Foreground = accent;
+        TxtSecurityState.SetResourceReference(ForegroundProperty, accent);
         TxtSecurityState.Text = encrypted
             ? "클러스터 암호구절 적용됨 — 프레임이 AES-256-GCM으로 암호화되고 서명 검증을 거칩니다."
             : "암호구절 없음 — 메시 프레임이 암호화·인증되지 않습니다. 같은 구간의 어떤 호스트도 내용을 읽고 피어를 위조할 수 있습니다.";

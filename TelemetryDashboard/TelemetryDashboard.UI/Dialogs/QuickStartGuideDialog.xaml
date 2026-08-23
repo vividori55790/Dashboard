@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     The user guide.
 
     Two things were wrong with it beyond the styling. It was written in emoji — every heading, every
@@ -14,8 +14,8 @@
         Title="사용 안내"
         Height="700" Width="980" MinHeight="480" MinWidth="640"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
     <Window.Resources>
         <Style x:Key="GuideHeading" TargetType="TextBlock" BasedOn="{StaticResource SubtitleText}">
             <Setter Property="Margin" Value="0,0,0,8"/>
@@ -28,7 +28,7 @@
         <!-- Body copy wraps and is never given a width: the guide is read at whatever size the
              operator drags the window to. -->
         <Style x:Key="GuideBody" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="LineHeight" Value="18"/>
             <Setter Property="Margin" Value="12,0,0,0"/>

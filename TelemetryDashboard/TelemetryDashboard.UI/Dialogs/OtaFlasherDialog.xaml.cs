@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Ports;
 using System.Threading.Tasks;
@@ -92,12 +92,13 @@ public partial class OtaFlasherDialog : Window
     {
         bool attached = _transport is not null;
 
-        var accent = (Brush)FindResource(attached ? "SuccessBrush" : "WarningBrush");
-        LinkBanner.Background = (Brush)FindResource(attached ? "SuccessSubtleBrush" : "WarningSubtleBrush");
-        LinkBanner.BorderBrush = accent;
-        LinkIcon.Foreground = accent;
+        string accent = attached ? "SuccessBrush" : "WarningBrush";
+        LinkBanner.SetResourceReference(BackgroundProperty,
+            attached ? "SuccessSubtleBrush" : "WarningSubtleBrush");
+        LinkBanner.SetResourceReference(BorderBrushProperty, accent);
+        LinkIcon.SetResourceReference(ForegroundProperty, accent);
         LinkIcon.Text = attached ? CheckmarkGlyph : WarningGlyph;
-        TxtLinkState.Foreground = accent;
+        TxtLinkState.SetResourceReference(ForegroundProperty, accent);
         TxtLinkState.Text = attached
             ? "부트로더 링크가 연결되어 있습니다. 각 청크는 장치의 ACK를 기다립니다."
             : "부트로더 링크가 연결되지 않았습니다. 전송 경로가 없어 플래싱을 시작할 수 없습니다.";

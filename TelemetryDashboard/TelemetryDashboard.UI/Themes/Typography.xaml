@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Text styles. Five roles, and every piece of text in the application is one of them.
 
     The old UI had no hierarchy: section headings, field labels and live readings were all 12px
@@ -17,7 +17,7 @@
     <Style x:Key="BaseText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
     </Style>
@@ -40,13 +40,13 @@
 
     <!-- Field labels and units: present, subordinate, never competing with the value beside them. -->
     <Style x:Key="LabelText" TargetType="TextBlock" BasedOn="{StaticResource BaseText}">
-        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="CaptionText" TargetType="TextBlock" BasedOn="{StaticResource BaseText}">
         <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-        <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
     </Style>
 
     <!-- Live numeric readings. Tabular figures keep the digits from shifting as the value updates. -->

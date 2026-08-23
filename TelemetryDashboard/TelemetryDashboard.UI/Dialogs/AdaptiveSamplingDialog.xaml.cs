@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
@@ -103,9 +103,8 @@ public partial class AdaptiveSamplingDialog : Window
         // Amber is state the controller reported: some channel left its nominal rate because a
         // score crossed the threshold. Nominal stays in the ordinary text colour, so a quiet
         // screen looks quiet rather than reassuringly green.
-        TxtCurrentMode.Foreground = anyElevated
-            ? (Brush)FindResource("WarningBrush")
-            : (Brush)FindResource("TextSecondaryBrush");
+        TxtCurrentMode.SetResourceReference(ForegroundProperty,
+            anyElevated ? "WarningBrush" : "TextSecondaryBrush");
     }
 
     private void BtnTriggerSurge_Click(object sender, RoutedEventArgs e)

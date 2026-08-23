@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Natural-language diagnosis.
 
     The emoji went for the usual reason — a robot, a brain, a lightbulb, a rocket, a fire and a
@@ -17,8 +17,8 @@
         Title="자연어 진단 에이전트"
         Height="780" Width="1020" MinHeight="560" MinWidth="760"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource CanvasBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
     <Window.Resources>
         <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource LabelText}">
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -30,8 +30,8 @@
         </Style>
 
         <Style x:Key="Badge" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource RadiusS}"/>
             <Setter Property="Padding" Value="10,4"/>
