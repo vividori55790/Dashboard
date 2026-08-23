@@ -56,8 +56,13 @@ So a sample carries the observing node's clock, and each node separately reports
 uncertainty against a reference. A merged view either shows data at a resolution coarser than the
 worst uncertainty, or it shows the uncertainty. It never silently interleaves.
 
-This is what the existing `TimeSyncJitterBuffer` is for. It has been sitting in the codebase
-unreferenced, which meant the problem was understood and then not addressed.
+This is what the existing `TimeSyncJitterBuffer` is for. It sat in the codebase unreferenced for a
+long time, which meant the problem was understood and then not addressed; `AlignedEndpoint` now
+constructs it and `/api/aligned` answers from it, so the half that estimates a per-node offset runs.
+The half this section is actually about does not: the buffer tracks an offset and reports no
+uncertainty for it, so a merged view can be shifted onto a common timeline but still cannot say how
+precisely two nodes' events can be ordered. An offset without an error bar is a point estimate being
+read as a guarantee.
 
 ## 4. A node must survive alone, and say so when it was
 
@@ -140,21 +145,37 @@ of the two in precisely the situation where a channel is running away.
 This document describes a target. Claiming it is implemented would be the same category of error it
 argues against, so:
 
-| Area | State |
-|---|---|
-| Provenance on every record (`Source`, `DerivedFrom`, `RawSource`) | Built |
-| Unparsed input counted and reported rather than dropped | Built |
-| Warm-up carried as "no verdict" rather than zero | Built |
-| Synthetic data marked everywhere it travels | Built |
-| Per-channel rate guard with counted, announced drops | Built |
-| Coverage ledger — who was expected, who was heard | In progress |
-| Stable per-installation node identity | In progress |
-| Display-path reduction that preserves extremes | In progress |
-| Tiered storage and rollups | In progress |
-| Bounded per-channel state with reported cardinality | In progress |
-| Clock offset and uncertainty across nodes | Not started |
-| Peer exchange, sequencing, deduplication, backfill marking | Not started |
-| Authentication between instances | Not started |
+The "Where" column exists so a row can be checked rather than believed. A state nobody can look up
+is the same kind of claim this document argues against.
 
-The right-hand column is maintained by hand and is expected to be embarrassing. That is preferable
-to a roadmap that reads as an inventory.
+| Area | State | Where |
+|---|---|---|
+| Provenance on every record (`Source`, `DerivedFrom`, `RawSource`) | Built | `Core/Records` |
+| Unparsed input counted and reported rather than dropped | Built | `Host/Startup/IngestReport.cs` |
+| Warm-up carried as "no verdict" rather than zero | Built | `Core/Analytics` |
+| Synthetic data marked everywhere it travels | Built | `simulated=true`, `SIM:` node prefix |
+| Per-channel rate guard with counted, announced drops | Built | `Core/Resilience` |
+| Coverage ledger — who was expected, who was heard | Built | `Core/Cluster/CoverageLedger*`, `Host/Startup/CoverageSetup.cs`, `--expect`, `coverage` on `/api/status` |
+| Stable per-installation node identity | Built | `Core/Cluster/NodeIdentity.cs`, `Host/Startup/HostNode.cs`; persisted, and the banner says when it could not be |
+| Display-path reduction that preserves extremes | Built | `/api/series?reduction=minmax`, `reducedFramesSent` / `reducedPointsSent` on `/api/status` |
+| Tiered storage and rollups | Built | `Core/Storage/TieredTelemetryStore`, swept on a clock by `Host/Startup/RetentionSweep.cs`, opt-in via `--retain` |
+| Bounded per-channel state with reported cardinality | Built | `Core/Resilience/BoundedChannelRegistry` — `Capacity`, `Count`, `Evictions`, and an eviction record |
+| Clock offset across nodes | Built | `Core/Services/TimeSyncJitterBuffer.GetClockOffset`, behind `/api/aligned` |
+| **Uncertainty on that offset** | Not started | nothing reports an error bar, so §3's actual requirement is unmet |
+| Peer exchange, sequencing, deduplication, backfill marking | Not started | no `LateArriving` / `Backfill` anywhere in the tree |
+| Authentication between instances | Not started | `TelemetryStreamingServer` has none and says so; loopback-only default is the whole defence |
+
+The right-hand columns are maintained by hand and are expected to be embarrassing. That is
+preferable to a roadmap that reads as an inventory.
+
+Five rows moved from "In progress" to "Built" in one pass, and none of them moved because anything
+was written that day — they had been finished for a while and the table had not been read since.
+That is the same defect as a stale claim, pointing the other way: a document that undersells is
+still a document nobody can plan from. Worth noting because the reflex is to police only the
+optimistic direction.
+
+The row that split is the interesting one. "Clock offset and uncertainty across nodes" was one line
+covering two things, and the buffer having shipped the offset made it tempting to tick the whole
+row. §3's argument is entirely about the second half — an offset places a sample, an uncertainty is
+what says whether two samples can be ordered at all — so the row is now two, and the half that
+matters reads Not started.

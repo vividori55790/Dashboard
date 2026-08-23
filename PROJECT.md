@@ -79,10 +79,21 @@ The rule now lives in `ArchitectureRuleTests.Wiring.cs` with a ratchet baseline 
 
 `ArchitectureRuleTests.NoNewProductionTypeIsUnreachable` now fails on any *new* unreachable type, and `EveryUnwiredTypeInTheBaselineIsStillUnwired` forces an entry off the baseline the moment it gains a reference, so the list can only shrink. Treat the baseline as the outstanding work it is.
 
-Current suite: **948 passing, 0 build warnings** — 880 in the portable project, 68 in the desktop one.
-This line records the size of the suite, not a claim that it is green: the count is checked against a
-real run, and if two are failing while something is mid-change, that is what the run says and what
-should be reported.
+The baseline is down to **two entries**: `NotionClient`, and `SampleTelemetryPlugin` — which is a
+false positive by construction, since a plugin the host is deliberately not compiled against is
+discovered as a file at runtime and can have no compile-time reference. So the honest count of
+production types that exist and run nowhere is one.
+
+Current suite: **1,633 passing, 0 failing, 0 build warnings** — 1,473 in the portable project, 160
+in the desktop one. This line records the size of the suite, not a claim that it is green: the count
+is checked against a real run, and if two are failing while something is mid-change, that is what
+the run says and what should be reported.
+
+The warning half of that line was untrue for a while. It said "0 build warnings" while the tree had
+two, because a warning in a 26-second build scrolls past above the line that says the build
+succeeded — the count only goes up and the claim only gets staler. `Directory.Build.props` now sets
+`TreatWarningsAsErrors` for all seven projects, so the number in this sentence is enforced instead
+of remembered.
 
 ### Verification that does not come from the test suite
 
@@ -1148,6 +1159,71 @@ collection, so that class serialised against nothing and kept running beside the
 to take turns with — while its own remarks describe the cost of exactly that.
 
 **Suite: 1,182 passing, 0 failing** (1,114 portable + 68 desktop).
+
+### The rules that fail a build, and the build they never had
+
+Everything above describes checks that are supposed to be binding. `ArchitectureRuleTests.Wiring`
+says the reachability defect "fails a build instead of waiting for an audit". `PortabilityHazardTests`
+hunts the Windows-isms that break elsewhere. Fourteen rule files, 1,633 tests.
+
+None of them were binding. There was no build for them to fail — every check ran when somebody
+remembered to run it, on one Windows machine, on a branch that had been 70 commits from `main` for
+long enough that nothing on `main` resembles the product.
+
+`.github/workflows/ci.yml` is three jobs, and adds no new check:
+
+- **windows** — the full solution. The only platform that can build all of it, because two of the
+  seven projects are WPF.
+- **portable** — `ubuntu-latest` and `macos-latest`. The 1,473 portable tests, then a self-contained
+  single-file publish that is **started and interrogated**. This is the job that can find things:
+  every document here records, accurately, that the Linux and macOS packages have valid executable
+  headers and have never been run, and that the cross-platform claim rests on static checks plus one
+  Alpine container inside Docker Desktop's utility VM. A hosted runner is a real glibc Linux and a
+  real macOS.
+- **benchmarks** — the four `Category=Benchmark` tests, which no other job runs. On request only:
+  they take minutes and measure the runner as much as the commit, and a red build caused by a noisy
+  neighbour teaches people to ignore red builds.
+
+`smoke-host.sh` is what turns a header into a run. It asserts that the ingest pipeline produced
+channels and *accepted* samples, that all thirteen advertised endpoints answer, that `/stream`
+delivers frames carrying `simulated=true`, and that the console assets shipped beside the binary —
+the last of those guarding a defect that actually shipped, where the csproj globbed `*.html` next to
+a hand-written `telemetry-client.js`, so the page was served and `power_flow.js` answered 404.
+
+It was run against a `win-x64` publish before being trusted in a pipeline, because a CI script whose
+first execution is in CI is one nobody can debug: **19 checks pass** (12 channels, 308 samples, 13
+endpoints, 297 SSE frames). The twentieth — a clean stop on SIGINT, which matters because
+`ShutdownCoordinator` holds the process open until the recorder has drained — is reported as
+*unmeasured* rather than failed on Windows. Git Bash cannot deliver a POSIX signal to a native
+Windows process, and a red mark for a signal that was never sent is the same unfounded claim as a
+green one.
+
+**What this does not establish.** Nothing here has run on a hosted runner yet; the workflow is
+written and validated as far as a Windows machine can validate it. The first push is where the
+Linux and macOS legs stop being a plan. If the portable suite fails there, that is the finding —
+1,473 tests that have only ever run on one operating system are a claim, and this is the first
+thing able to falsify it.
+
+### Eight commits this document has not caught up with
+
+Between the UPS entry above and the CI entry, `PROJECT.md` went unedited through eight commits:
+
+```
+9d91678  ask the device what it is called, instead of asking the operator
+024e645  the desktop can be told what the device on the bench is called
+91acb84  say what the device on your bench actually sends
+b987aa0  the console the shell serves gets the shell's own instruments
+7d09c11  the theme reaches the window you are looking at
+1fdbecd  a bumped cable stops ending the session
+fb95b15  the browser can tell a calm plant from an unarmed one
+cfb5c3d  prove the alarm fires without over-volting anything
+```
+
+They are listed rather than described, by somebody who did not write them. Inventing a narrative for
+work one did not do is how a document starts being more confident than the code, which is the exact
+failure the rest of this file is organised against — and the wiring audit above is what that looks
+like after a year of it. The gap is recorded here so the next person writing these up knows the
+boundary of what has been checked.
 
 ## Interface Contracts
 ### Data Ingestion & Safety (M1)
