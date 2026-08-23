@@ -141,6 +141,14 @@ public partial class ControlPanelControl : UserControl
     public event Action<string>? OnCommandSent;
 
     private readonly ObservableCollection<EventLogEntry> _eventLogEntries = new();
+
+    /// <summary>What the event log currently holds, oldest first.</summary>
+    /// <remarks>
+    /// Exposed because the log is where several of this panel's features actually deliver their
+    /// answer -- the silence watch, the limit alarms, the arming check -- and a feature whose whole
+    /// output is a line of text can only be checked by reading the line.
+    /// </remarks>
+    public IReadOnlyList<EventLogEntry> EventLogEntries => _eventLogEntries;
     private readonly ObservableCollection<NodePowerToggle> _nodeToggles = new();
     private readonly List<double> _sparklineBuffer = new();
 

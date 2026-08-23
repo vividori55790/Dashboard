@@ -119,7 +119,8 @@ public partial class MainWindow
         // with them: the previous rig's channels stop reporting because the operator changed rigs,
         // and reporting that as an outage would raise an alarm for a deliberate act.
         _simulator.Reset();
-        ControlPanel.ResetSilenceWatch();
+        ControlPanel.ResetSilenceWatch();
+        ControlPanel.ResetArmingWatch();
 
         // The safe bands travel with the rig, so they are adopted here and dropped here. A band
         // carried over from another profile would either announce a recovery for a limit nobody
