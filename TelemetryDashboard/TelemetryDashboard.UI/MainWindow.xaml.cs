@@ -392,6 +392,8 @@ public partial class MainWindow : Window
         base.OnClosed(e);
         _streamingServer.Stop();
         _simulatorEngine?.StopSimulation();
+        StopLinkReader();
+        StopWatchingPortAsync().GetAwaiter().GetResult();
         ShutdownArchive();
 
         // SystemEvents keeps its handlers in a static list, so a window that closed while following

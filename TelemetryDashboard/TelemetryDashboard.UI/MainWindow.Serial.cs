@@ -71,6 +71,12 @@ public partial class MainWindow
             try
             {
                 bool ok = await _serialManager.ConnectPortAsync(portName, baudRate);
+
+                // Watched either way. A port that opened can still be pulled out, and a port that
+                // did not open is very often one the operator is about to plug in -- both are the
+                // same instruction: keep this link up.
+                WatchPort(portName, baudRate);
+
                 if (ok)
                 {
                     _isConnected = true;
@@ -82,13 +88,12 @@ public partial class MainWindow
 
                     ShowConnected(portName, baudRate);
                     ControlPanel.LogMessage("SYSTEM", $"하드웨어 포트 {portName} @ {baudRate} baud 연결됨.");
-
-                    _serialReadCts = new CancellationTokenSource();
-                    _ = Task.Run(() => ProcessRealSerialPacketsAsync(_serialReadCts.Token));
+                    StartLinkReader();
                 }
                 else
                 {
-                    ControlPanel.LogMessage("ERROR", $"시리얼 포트 {portName} 를 열지 못했습니다. 장치 연결을 확인하세요.");
+                    ControlPanel.LogMessage("LINK",
+                        $"{portName} 를 지금은 열 수 없습니다. 포트가 나타나면 자동으로 연결합니다.");
                 }
             }
             catch (Exception ex)
@@ -99,7 +104,11 @@ public partial class MainWindow
         else
         {
             _isConnected = false;
-            _serialReadCts?.Cancel();
+
+            // The watchdog is stopped before the port is closed, or it would see a port that is
+            // present and not connected and immediately undo what the operator just asked for.
+            await StopWatchingPortAsync();
+            StopLinkReader();
             await _serialManager.DisconnectAllAsync();
 
             ShowDisconnected();
@@ -114,6 +123,9 @@ public partial class MainWindow
             await foreach (var rawPacket in _serialManager.PacketReader.ReadAllAsync(token))
             {
                 List<TelemetryPacket> packets = ResolvePackets(rawPacket);
+
+                // What a resync after a drop would ask the device to resend from.
+                NoteLinkActivity(rawPacket.Timestamp);
 
                 foreach (var pkt in packets)
                 {
