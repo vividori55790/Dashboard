@@ -119,8 +119,13 @@ public partial class MainWindow
         // with them: the previous rig's channels stop reporting because the operator changed rigs,
         // and reporting that as an outage would raise an alarm for a deliberate act.
         _simulator.Reset();
-        ControlPanel.ResetSilenceWatch();
+        ControlPanel.ResetSilenceWatch();
+
         ControlPanel.ResetArmingWatch();
+
+        // With them, for the same reason: an anomaly held open for the previous rig would announce
+        // its recovery against the new one, at the moment somebody switched deliberately.
+        _anomalies.Reset();
 
         // The safe bands travel with the rig, so they are adopted here and dropped here. A band
         // carried over from another profile would either announce a recovery for a limit nobody
@@ -344,7 +349,15 @@ public partial class MainWindow
     }
 
     /// <summary>Channels currently reading anomalous, so a run of them logs once rather than 40 times a second.</summary>
-    private readonly HashSet<string> _channelsInAnomaly = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Which channels have an announced anomaly, and when a recovery is worth saying.
+    /// </summary>
+    /// <remarks>
+    /// Was a bare set of channel names, which is edge detection over a flapping verdict: measured
+    /// on the running shell, one channel produced four events in four hundred milliseconds while
+    /// nothing about the machine changed. AnomalyTransitionTracker carries the account.
+    /// </remarks>
+    private readonly AnomalyTransitionTracker _anomalies = new();
 
     /// <summary>
     /// Logs a channel entering or leaving its anomalous state, and nothing in between.
@@ -363,27 +376,20 @@ public partial class MainWindow
     {
         string key = $"{packet.NodeId}.{packet.Variable}";
 
-        if (analysis.IsAnomaly)
+        switch (_anomalies.Observe(key, analysis.IsAnomaly, DateTime.UtcNow))
         {
-            lock (_channelsInAnomaly)
-            {
-                if (!_channelsInAnomaly.Add(key)) return;
-            }
+            case AnomalyTransition.Entered:
+                ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
+                    packet.Value, analysis.ZScore,
+                    $"{packet.Value:F3}{packet.Unit} — 검출기가 이상으로 판정 (z={analysis.ZScore:F2})");
+                break;
 
-            ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
-                packet.Value, analysis.ZScore,
-                $"{packet.Value:F3}{packet.Unit} — 검출기가 이상으로 판정 (z={analysis.ZScore:F2})");
-            return;
+            case AnomalyTransition.Cleared:
+                ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
+                    packet.Value, analysis.ZScore,
+                    $"{packet.Value:F3}{packet.Unit} — 정상 범위로 복귀");
+                break;
         }
-
-        lock (_channelsInAnomaly)
-        {
-            if (!_channelsInAnomaly.Remove(key)) return;
-        }
-
-        ControlPanel.LogTelemetryEvent(packet.NodeId, packet.Variable,
-            packet.Value, analysis.ZScore,
-            $"{packet.Value:F3}{packet.Unit} — 정상 범위로 복귀");
     }
 
     /// <summary>

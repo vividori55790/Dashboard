@@ -148,10 +148,19 @@ public partial class MainWindow
                             pkt.NodeId, pkt.Variable, pkt.Value, ml, pkt.Unit);
 
                         if (_csvRecorder.IsRecording) UpdateRecordingStatus();
-
-                        ControlPanel.LogTelemetryEvent(pkt.NodeId, pkt.Variable, pkt.Value, ml.ZScore,
-                            $"{pkt.Value:F2}{pkt.Unit} received from hardware");
                     });
+
+                    // A line per sample is not a log. At four channels and ten hertz this wrote
+                    // forty rows a second saying "received from hardware", which is the one thing
+                    // the chart beside it already shows -- and it emptied the three hundred rows
+                    // the silence watch, the limit alarms and the arming check deliver their
+                    // answers into, in under eight seconds.
+                    //
+                    // What belongs here is what the simulated path has always logged and this one
+                    // never did: the two edges of an anomaly. A device on a bench raising no
+                    // anomaly lines at all, while the simulator raised them, is the wrong way round
+                    // for the only source that matters.
+                    LogAnomalyTransition(pkt, ml);
 
                     // Broadcast real hardware packet to WebSocket & HTML
                     var realPacket = new
