@@ -1,4 +1,4 @@
-using TelemetryDashboard.Host.Archive;
+﻿using TelemetryDashboard.Host.Archive;
 using TelemetryDashboard.Host.Backtest;
 using TelemetryDashboard.Host.Configuration;
 
@@ -34,7 +34,8 @@ internal static class Subcommands
     {
         if (ExtensionCommandLine.Matches(args)) return ExtensionCommand.Run(args);
         if (BacktestCommandLine.Matches(args)) return BacktestCommand.Run(args);
-        if (ExportCommandLine.Matches(args)) return ExportCommand.Run(args);
+        if (ExportCommandLine.Matches(args)) return ExportCommand.Run(args);
+        if (SniffCommandLine.Matches(args)) return SniffCommand.Run(args);
 
         return null;
     }

@@ -47,7 +47,15 @@ public static class RoutingRuleReader
         try
         {
             file = JsonSerializer.Deserialize<RoutingRuleFile>(
-                json, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip });
+                json,
+                new JsonSerializerOptions
+                {
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    // A hand-edited file with a comma after its last entry is a file operators
+                    // produce, and it is the shape the drafted file leaves behind when a commented
+                    // mapping at the end is uncommented. Refusing it teaches nothing.
+                    AllowTrailingCommas = true
+                });
         }
         catch (JsonException ex)
         {
