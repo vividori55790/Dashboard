@@ -23,7 +23,7 @@ namespace TelemetryDashboard.Core.Cluster;
 /// forgets that a node ever existed, and its absence becomes undetectable again at exactly the
 /// moment an operator restarts the hub to investigate why data is missing.
 /// </remarks>
-public sealed class CoverageLedger
+public sealed partial class CoverageLedger
 {
     private sealed class Entry
     {
@@ -58,18 +58,19 @@ public sealed class CoverageLedger
     /// <summary>How long a node may go without sending before it is reported as missing.</summary>
     public TimeSpan SilenceThreshold { get; }
 
-    /// <summary>Every node this ledger knows about, declared or learned. Persist this.</summary>
-    public IReadOnlyList<string> KnownNodes
-    {
-        get { lock (_gate) return _nodes.Keys.ToList(); }
-    }
-
     /// <summary>Declares a node as expected before it has ever been heard from.</summary>
     /// <remarks>
     /// This is the only way a node that has never started can be reported as missing. Use it for a
     /// configured fleet, and to restore the learned set after a restart.
+    /// <para>
+    /// <paramref name="lastHeard"/> is for the restore case and changes what the node is reported
+    /// as. Without it a node remembered from a previous run comes back as never seen, which reads
+    /// as hardware that has never worked — when what actually happened is that it worked until
+    /// yesterday. It does not count as a sample: this process has received none, and inventing one
+    /// would put a reading in the record that no device sent.
+    /// </para>
     /// </remarks>
-    public void Expect(string nodeId)
+    public void Expect(string nodeId, DateTimeOffset? lastHeard = null)
     {
         if (string.IsNullOrWhiteSpace(nodeId)) return;
 
@@ -82,6 +83,13 @@ public sealed class CoverageLedger
             }
 
             entry.Declared = true;
+
+            // Newest wins, the same rule RecordSample uses: a restored stamp must never move a
+            // node that has already reported in this run backwards into silence.
+            if (lastHeard is { } stamp && (entry.LastHeard is null || stamp > entry.LastHeard))
+            {
+                entry.LastHeard = stamp;
+            }
         }
     }
 
@@ -117,35 +125,5 @@ public sealed class CoverageLedger
     public bool Retire(string nodeId)
     {
         lock (_gate) return _nodes.Remove(nodeId);
-    }
-
-    /// <summary>The current picture: who is reporting, who is missing, and for how long.</summary>
-    public CoverageSnapshot Snapshot()
-    {
-        DateTimeOffset now = _clock();
-
-        lock (_gate)
-        {
-            List<NodeCoverage> nodes = _nodes
-                .Select(pair => Describe(pair.Key, pair.Value, now))
-                .OrderBy(n => n.Presence == NodePresence.Reporting)
-                .ThenBy(n => n.NodeId, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return new CoverageSnapshot(nodes, SilenceThreshold, now);
-        }
-    }
-
-    private NodeCoverage Describe(string nodeId, Entry entry, DateTimeOffset now)
-    {
-        if (entry.LastHeard is not { } last)
-        {
-            return new NodeCoverage(nodeId, null, 0, NodePresence.NeverSeen, null);
-        }
-
-        TimeSpan staleness = now - last;
-        NodePresence presence = staleness <= SilenceThreshold ? NodePresence.Reporting : NodePresence.Silent;
-
-        return new NodeCoverage(nodeId, last, entry.Samples, presence, staleness);
     }
 }

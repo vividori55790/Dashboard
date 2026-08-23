@@ -74,6 +74,20 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --expect <ids>    Nodes this rig has, comma separated: --expect PSFB-01,DAB-01.
+                                The hub already learns a node the first time it speaks, which
+                                catches something that worked and then stopped. It cannot catch a
+                                node that has never come up at all -- to a learning-only ledger
+                                that node does not exist. This is how you say it should.
+              --coverage-state <file>
+                                Remember the learned nodes between runs. Without it a restart
+                                forgets a node ever existed, and its absence stops being reported
+                                at the moment somebody restarts the hub to find out why data is
+                                missing. Written as a JSON list at shutdown.
+              --retire <ids>    Stop expecting these nodes, for hardware removed on purpose.
+                                Applied after --coverage-state is restored, so it wins. Without
+                                it a decommissioned node is missing for ever, and an alarm nobody
+                                can clear is one people learn to ignore.
               --retain <policy> Keep the archive bounded, written as <tier>=<duration> clauses:
                                 --retain "raw=7d,minute=90d,hour=2y". Tiers are raw, second, minute
                                 and hour; a tier left out is kept forever. Units s, m, h, d, w, y.

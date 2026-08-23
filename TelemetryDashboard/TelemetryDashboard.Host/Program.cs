@@ -84,14 +84,9 @@ public static class Program
 
         // The pump is built before the plugins so they are handed the router it is publishing
         // through, and started after them so no frame is routed past a plugin that is not up yet.
-        Core.Ingest.JsonChannelMap? channelMap;
-        try
+        if (!IngestSetup.TryLoadChannelMap(options, out Core.Ingest.JsonChannelMap? channelMap, out string? mapError))
         {
-            channelMap = IngestSetup.LoadChannelMap(options);
-        }
-        catch (Exception ex) when (ex is System.IO.FileNotFoundException or System.IO.InvalidDataException)
-        {
-            Console.Error.WriteLine($"telemetry-host: {ex.Message}");
+            Console.Error.WriteLine($"telemetry-host: {mapError}");
             await console.DisposeAsync().ConfigureAwait(false);
             return ExitUsage;
         }
@@ -112,6 +107,10 @@ public static class Program
             ? null
             : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive,
                 watchIntervals: options.WatchIntervals, driftWindowSeconds: options.DriftWindowSeconds);
+        // After the pump exists (it owns the ledger) and before the banner footer, so an operator
+        // sees what the hub thinks the rig is on the same screen as everything else it opened.
+        foreach (string line in CoverageSetup.Apply(options, pump, console.Server)) Console.WriteLine(line);
+
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, IngestSetup.SerialManagerOf(source));
 
@@ -127,19 +126,18 @@ public static class Program
         {
             Console = console,
             // RunAllAsync, not RunAsync: this pump is two loops now, and which ones is its business.
-            Pumping = BackgroundWork.RunAsync(pump, archive, shutdown.Token),
+            Pumping = BackgroundWork.RunAsync(pump, archive, options, shutdown.Token),
             Plugins = plugins,
             Relays = relays,
             Source = source,
             Recorder = recorder,
-            Pump = pump
+            Pump = pump,
+            Archive = archive,
+            Options = options
         };
 
         await shutdown.WaitAsync().ConfigureAwait(false);
         await run.DrainAsync(shutdown).ConfigureAwait(false);
-
-        // After the drain, so the count covers the tail the ring was still holding.
-        if (archive is not null) Console.WriteLine("           " + archive.Summary());
 
         return 0;
     }

@@ -148,4 +148,31 @@ public static class IngestSetup
         recorder.StartRecording(options.RecordingDirectory);
         return recorder;
     }
+
+    /// <summary>
+    /// Reads the channel map if one was asked for, or explains why this file cannot be used.
+    /// </summary>
+    /// <remarks>
+    /// The refusal is a sentence rather than an exception because the caller's job is to print it
+    /// and choose an exit code -- and because a map that names channels wrongly is a run whose every
+    /// reading is mislabelled, which is worse than a run that did not start.
+    /// </remarks>
+    public static bool TryLoadChannelMap(
+        Configuration.HostOptions options, out Core.Ingest.JsonChannelMap? map, out string? refusal)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        refusal = null;
+        try
+        {
+            map = LoadChannelMap(options);
+            return true;
+        }
+        catch (Exception ex) when (ex is System.IO.FileNotFoundException or System.IO.InvalidDataException)
+        {
+            map = null;
+            refusal = ex.Message;
+            return false;
+        }
+    }
 }

@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using TelemetryDashboard.Host.Configuration;
 using TelemetryDashboard.Host.Ingest;
 
 namespace TelemetryDashboard.Host.Startup;
@@ -18,8 +19,10 @@ public static class BackgroundWork
 {
     /// <summary>Starts every background loop and completes when all of them have stopped.</summary>
     public static Task RunAsync(
-        TelemetryIngestPump? pump, ArchiveSink? archive, CancellationToken cancellationToken) =>
+        TelemetryIngestPump? pump, ArchiveSink? archive, HostOptions? options,
+        CancellationToken cancellationToken) =>
         Task.WhenAll(
             pump?.RunAllAsync(cancellationToken) ?? Task.CompletedTask,
-            RetentionSweep.RunAsync(archive, cancellationToken));
+            RetentionSweep.RunAsync(archive, cancellationToken),
+            CoverageStateSweep.RunAsync(options, pump, cancellationToken));
 }

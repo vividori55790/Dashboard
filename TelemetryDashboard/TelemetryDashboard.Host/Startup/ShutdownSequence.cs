@@ -29,6 +29,8 @@ public sealed class ShutdownSequence
     public ITelemetrySource? Source { get; init; }
     public TelemetryCsvRecorder? Recorder { get; init; }
     public TelemetryIngestPump? Pump { get; init; }
+    public ArchiveSink? Archive { get; init; }
+    public Configuration.HostOptions? Options { get; init; }
 
     public async Task DrainAsync(ShutdownCoordinator shutdown)
     {
@@ -53,6 +55,10 @@ public sealed class ShutdownSequence
             string path = Recorder.StopRecording();
             System.Console.WriteLine($"[shutdown] recording flushed: {Recorder.RecordedPacketCount} rows -> {path}");
         }
+
+        // After the drain, so both cover the tail the ring was still holding.
+        if (Archive is not null) System.Console.WriteLine("           " + Archive.Summary());
+        if (Options is not null) CoverageSetup.Save(Options, Pump);
 
         await Console.DisposeAsync().ConfigureAwait(false);
         System.Console.WriteLine("[shutdown] listener closed. Clean exit.");

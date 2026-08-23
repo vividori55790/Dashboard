@@ -242,6 +242,29 @@ public static class CommandLineParser
                     draft.ArchivePath = Path.GetFullPath(rawArchive);
                     break;
 
+                case "--expect":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawExpect)) return ArgumentCursor.MissingValue(argument);
+                    if (NodeIdList.Parse(rawExpect) is not { Count: > 0 } expected)
+                    {
+                        return ArgumentCursor.Fail($"--expect needs at least one node id, not '{rawExpect}'.");
+                    }
+                    draft.ExpectedNodes = expected;
+                    break;
+
+                case "--retire":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawRetire)) return ArgumentCursor.MissingValue(argument);
+                    if (NodeIdList.Parse(rawRetire) is not { Count: > 0 } retired)
+                    {
+                        return ArgumentCursor.Fail($"--retire needs at least one node id, not '{rawRetire}'.");
+                    }
+                    draft.RetiredNodes = retired;
+                    break;
+
+                case "--coverage-state":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawCoverage)) return ArgumentCursor.MissingValue(argument);
+                    draft.CoverageStatePath = Path.GetFullPath(rawCoverage);
+                    break;
+
                 case "--replay":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawReplay)) return ArgumentCursor.MissingValue(argument);
                     if (!File.Exists(rawReplay)) return ArgumentCursor.Fail($"recording '{rawReplay}' does not exist.");

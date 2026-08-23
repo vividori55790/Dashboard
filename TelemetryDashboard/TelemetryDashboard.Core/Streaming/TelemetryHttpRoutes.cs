@@ -161,6 +161,26 @@ public static class TelemetryHttpRoutes
                 fault = counters.FaultMessage
             }
             : null,
+        // Null when no ledger is attached, so "nobody is tracking the fleet" reads differently
+        // from "the fleet is complete". complete=false with an empty missing list is impossible.
+        coverage = server.Coverage?.Invoke() is { } fleet
+            ? new
+            {
+                summary = fleet.Describe(),
+                complete = fleet.IsComplete,
+                expected = fleet.Nodes.Count,
+                reporting = fleet.Reporting.Count,
+                silenceThresholdSec = fleet.SilenceThreshold.TotalSeconds,
+                missing = fleet.Missing.Select(node => new
+                {
+                    node = node.NodeId,
+                    presence = node.Presence.ToString(),
+                    lastHeard = node.LastHeard?.UtcDateTime,
+                    stalenessSec = node.Staleness?.TotalSeconds,
+                    samples = node.Samples
+                }).ToArray()
+            }
+            : null,
         endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/control", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 

@@ -442,7 +442,6 @@ public partial class ArchitectureRuleTests
         // the right places, and splitting them further would scatter one idea across three files
         // to satisfy an arithmetic rule.
         "TelemetryDashboard.Core/Analytics/RollingChannelStatistics.cs",           // 182 lines
-        "TelemetryDashboard.Core/Cluster/CoverageLedger.cs",                       // 151 lines
         "TelemetryDashboard.Core/Recording/TelemetryCsvRecorder.cs",               // 157 lines
         "TelemetryDashboard.Core/Ingest/JsonChannelMap.cs",                        // 175 lines
         "TelemetryDashboard.Core/Simulator/MonitoringProfileReader.cs",            // 165 lines
@@ -541,7 +540,7 @@ public partial class ArchitectureRuleTests
         "TelemetryDashboard.Core/Analytics/LimitMonitor.cs",                       // 190 lines — state records already split into LimitMonitorState.cs
         "TelemetryDashboard.Infrastructure/Plugins/EmbeddedPythonRuntime.cs",      // 211 lines — one interpreter, and the reasoning behind its interruption
         "TelemetryDashboard.Host/Configuration/UsageText.cs",                      // 158 lines — one help screen, one flag per entry
-        "TelemetryDashboard.Host/Ingest/IngestSetup.cs",                           // 151 lines — one source-selection decision per branch
+        "TelemetryDashboard.Host/Ingest/IngestSetup.cs",                           // 178 lines — one source-selection decision per branch
         "TelemetryDashboard.Core/Simulator/PowerConverterUpsProfile.cs",           // 156 lines — one worked example, entirely data
         "TelemetryDashboard.Host/Ingest/ComputedChannelPump.cs",                   // 226 lines — mostly the reasoning behind the instant it picks
         "TelemetryDashboard.Host/Ingest/TelemetryFrame.cs",                        // 157 lines — one wire contract, one field per line

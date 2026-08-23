@@ -97,6 +97,9 @@ internal sealed class HostOptionsDraft
     public double EmergencyCooldownSec = HostOptions.DefaultEmergencyCooldownSec;
     public string? PollEndpoint;
     public TimeSpan PollInterval;
+    public IReadOnlyList<string> ExpectedNodes = [];
+    public IReadOnlyList<string> RetiredNodes = [];
+    public string? CoverageStatePath;
 
     public HostOptions Build() => new()
     {
@@ -136,6 +139,9 @@ internal sealed class HostOptionsDraft
         EmergencyCommand = EmergencyCommand,
         EmergencyCooldownSec = EmergencyCooldownSec,
         PollEndpoint = PollEndpoint,
-        PollInterval = PollInterval
+        PollInterval = PollInterval,
+        ExpectedNodes = ExpectedNodes,
+        RetiredNodes = RetiredNodes,
+        CoverageStatePath = CoverageStatePath
     };
 }

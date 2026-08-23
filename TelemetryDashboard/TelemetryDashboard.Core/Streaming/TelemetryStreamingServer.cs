@@ -100,6 +100,20 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// Null when this host computes nothing, which <c>/api/status</c> reports as such rather than
     /// as zeros — a pump that published nothing and no pump at all are different situations.
     /// </remarks>
+    /// <summary>
+    /// Where to ask which nodes are expected and which are missing, or null when nobody is asking.
+    /// </summary>
+    /// <remarks>
+    /// A function rather than a snapshot, because a snapshot taken when the server started would
+    /// answer every later request with the state of the fleet at boot -- when nothing has been
+    /// heard from yet and everything is missing.
+    /// <para>
+    /// Set by the host, which owns the ledger. Coverage used to be printed once, at shutdown, so an
+    /// operator could learn a converter had stopped reporting only by stopping the hub as well.
+    /// </para>
+    /// </remarks>
+    public Func<Cluster.CoverageSnapshot>? Coverage { get; set; }
+
     public IComputedChannelCounters? ComputedCounters { get; set; }
 
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>

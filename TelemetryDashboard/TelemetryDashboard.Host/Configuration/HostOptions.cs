@@ -277,6 +277,31 @@ public sealed class HostOptions
     /// </remarks>
     public string? ReplayPath { get; init; }
 
+    /// <summary>Nodes this rig has, whether or not any of them has ever been heard from.</summary>
+    /// <remarks>
+    /// The only way a node that never started can be reported as missing. The ledger learns the
+    /// nodes that do speak, which catches the common failure — something that worked and stopped —
+    /// and is blind to the one an operator is most likely to be commissioning around: a converter
+    /// whose MCU has never come up at all. To a learning-only ledger that node does not exist.
+    /// </remarks>
+    public IReadOnlyList<string> ExpectedNodes { get; init; } = [];
+
+    /// <summary>Nodes decommissioned on purpose, so they stop being reported as missing.</summary>
+    /// <remarks>
+    /// Needed the moment the learned set is remembered across restarts: without it a node that was
+    /// removed from the rig is missing for ever, and an alarm that can never be cleared is one
+    /// people learn to ignore. Applied after the state file is restored, so it wins over it.
+    /// </remarks>
+    public IReadOnlyList<string> RetiredNodes { get; init; } = [];
+
+    /// <summary>File the learned node set is remembered in, or null to forget on every restart.</summary>
+    /// <remarks>
+    /// Opt-in because it writes a file the operator did not otherwise ask for. Worth asking for:
+    /// without it a restart forgets that a node ever existed, and its absence becomes undetectable
+    /// again at exactly the moment somebody restarts the hub to investigate why data is missing.
+    /// </remarks>
+    public string? CoverageStatePath { get; init; }
+
     /// <summary>How fast to play a recording back. 1 is real time.</summary>
     public double ReplaySpeed { get; init; } = DefaultReplaySpeed;
 
