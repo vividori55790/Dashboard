@@ -1,0 +1,51 @@
+﻿<!--
+    English ribbon captions.
+
+    One entry per caption the ribbon shows. Every key here must exist in every other
+    Strings.*.xaml: a key present in one language and missing in another renders as
+    nothing at all, which is a blank button rather than an untranslated one. There is a
+    test that compares the key sets.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <sys:String x:Key="Ui_Cmd_AdaptiveSamplingSettings">Adaptive sampling</sys:String>
+    <sys:String x:Key="Ui_Cmd_AutoScan">Auto-detect baud rate</sys:String>
+    <sys:String x:Key="Ui_Cmd_CopyWsUrl">Copy WebSocket address</sys:String>
+    <sys:String x:Key="Ui_Cmd_ExportMatlab">Export to MATLAB file</sys:String>
+    <sys:String x:Key="Ui_Cmd_FormulaCalc">Formula calculator</sys:String>
+    <sys:String x:Key="Ui_Cmd_GenerateCHeader">Generate C header</sys:String>
+    <sys:String x:Key="Ui_Cmd_LockScreen">Lock screen</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenAlertForwarder">Alert forwarding</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenCommandPalette">Command palette</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenCustomWebTemplates">Web template guide</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenLlmDiagnosis">Plain-language diagnosis agent</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenLogsFolder">Open logs folder</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenMeshCluster">Mesh cluster</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenMlAnalytics">Anomaly detection statistics</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenNoCodeBuilder">Dashboard builder</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenOtaFlasher">Firmware update (OTA)</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenPluginSandbox">Plugin sandbox</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenPowerUpsPsfbConsole">Power converter example dashboard</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenProtocolBridge">Protocol bridge</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenTimeTravelDvr">Time-travel DVR</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenWebConsole">Web client console</sys:String>
+    <sys:String x:Key="Ui_Cmd_RefreshPorts">Rescan ports</sys:String>
+    <sys:String x:Key="Ui_Cmd_ResetWorkspace">Reset layout</sys:String>
+    <sys:String x:Key="Ui_Cmd_SaveWorkspace">Save layout</sys:String>
+    <sys:String x:Key="Ui_Cmd_SecuritySettings">Security and compression</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleConnect">Connect</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleLanguage">Switch language</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleRecord">Start CSV recording</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleRecord_Stop">Stop CSV recording</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleSimulator">Start virtual MCU stream</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleSimulator_Stop">Stop virtual MCU stream</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleTheme">Switch theme</sys:String>
+    <sys:String x:Key="Ui_Tab_AlarmsSampling">Alarms &amp; sampling</sys:String>
+    <sys:String x:Key="Ui_Tab_AnalysisReplay">Analysis &amp; replay</sys:String>
+    <sys:String x:Key="Ui_Tab_Connection">Connection</sys:String>
+    <sys:String x:Key="Ui_Tab_Settings">Settings</sys:String>
+    <sys:String x:Key="Ui_Tab_Simulation">Simulation profile</sys:String>
+    <sys:String x:Key="Ui_Tab_Tools">Tools</sys:String>
+    <sys:String x:Key="Ui_Tab_WebConsole">Web console</sys:String>
+</ResourceDictionary>

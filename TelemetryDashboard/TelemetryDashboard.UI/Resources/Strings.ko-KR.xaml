@@ -1,0 +1,51 @@
+﻿<!--
+    Korean ribbon captions. The application shipped with these inline in MainWindow.xaml.
+
+    One entry per caption the ribbon shows. Every key here must exist in every other
+    Strings.*.xaml: a key present in one language and missing in another renders as
+    nothing at all, which is a blank button rather than an untranslated one. There is a
+    test that compares the key sets.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <sys:String x:Key="Ui_Cmd_AdaptiveSamplingSettings">경보 전달 설정</sys:String>
+    <sys:String x:Key="Ui_Cmd_AutoScan">포트 다시 검색</sys:String>
+    <sys:String x:Key="Ui_Cmd_CopyWsUrl">메시 클러스터</sys:String>
+    <sys:String x:Key="Ui_Cmd_ExportMatlab">CSV 녹화 시작</sys:String>
+    <sys:String x:Key="Ui_Cmd_FormulaCalc">C 헤더 생성</sys:String>
+    <sys:String x:Key="Ui_Cmd_GenerateCHeader">C 헤더 생성</sys:String>
+    <sys:String x:Key="Ui_Cmd_LockScreen">명령 팔레트</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenAlertForwarder">경보 전달 설정</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenCommandPalette">레이아웃 초기화</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenCustomWebTemplates">대시보드 빌더</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenLlmDiagnosis">자연어 진단 에이전트</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenLogsFolder">CSV 녹화 시작</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenMeshCluster">웹 템플릿 가이드</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenMlAnalytics">타임트래블 DVR</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenNoCodeBuilder">전력 변환기 예제 대시보드</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenOtaFlasher">펌웨어 업데이트 (OTA)</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenPluginSandbox">프로토콜 브릿지</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenPowerUpsPsfbConsole">전력 변환기 예제 대시보드</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenProtocolBridge">수식 계산기</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenTimeTravelDvr">자연어 진단 에이전트</sys:String>
+    <sys:String x:Key="Ui_Cmd_OpenWebConsole">보안 및 압축 설정</sys:String>
+    <sys:String x:Key="Ui_Cmd_RefreshPorts">포트 다시 검색</sys:String>
+    <sys:String x:Key="Ui_Cmd_ResetWorkspace">레이아웃 저장</sys:String>
+    <sys:String x:Key="Ui_Cmd_SaveWorkspace">테마 전환</sys:String>
+    <sys:String x:Key="Ui_Cmd_SecuritySettings">가변 샘플링 설정</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleConnect">보드레이트 자동 탐색</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleLanguage">언어 전환</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleRecord">CSV 녹화 시작</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleRecord_Stop">CSV 녹화 정지</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleSimulator">가상 MCU 스트림 시작</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleSimulator_Stop">가상 MCU 스트림 정지</sys:String>
+    <sys:String x:Key="Ui_Cmd_ToggleTheme">언어 전환</sys:String>
+    <sys:String x:Key="Ui_Tab_AlarmsSampling">경보 및 샘플링</sys:String>
+    <sys:String x:Key="Ui_Tab_AnalysisReplay">분석 및 재생</sys:String>
+    <sys:String x:Key="Ui_Tab_Connection">연결</sys:String>
+    <sys:String x:Key="Ui_Tab_Settings">설정</sys:String>
+    <sys:String x:Key="Ui_Tab_Simulation">시뮬레이션 프로파일</sys:String>
+    <sys:String x:Key="Ui_Tab_Tools">도구</sys:String>
+    <sys:String x:Key="Ui_Tab_WebConsole">웹 콘솔</sys:String>
+</ResourceDictionary>

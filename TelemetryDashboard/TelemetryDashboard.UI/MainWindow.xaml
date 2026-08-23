@@ -268,7 +268,7 @@
         <TabControl x:Name="Ribbon" Grid.Row="1" Style="{StaticResource RibbonTabs}">
 
             <!-- Tab 1: the monitored system, rendered from the selected profile. -->
-            <TabItem Header="시뮬레이션 프로파일">
+            <TabItem Header="{DynamicResource Ui_Tab_Simulation}">
                 <StackPanel>
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
@@ -288,7 +288,7 @@
 
                         <!-- Names what it actually toggles: the virtual dual-MCU packet stream that
                              feeds the parser, router and detector the real hardware path uses. -->
-                        <Button Grid.Column="1" x:Name="BtnToggleSimulator" Content="가상 MCU 스트림 시작"
+                        <Button Grid.Column="1" x:Name="BtnToggleSimulator" Content="{DynamicResource Ui_Cmd_ToggleSimulator}"
                                 Style="{StaticResource PrimaryButton}"
                                 Click="BtnToggleSimulator_Click"
                                 ToolTip="가상 MCU 패킷을 실제 하드웨어와 같은 수집 경로로 흘려보냅니다."/>
@@ -361,7 +361,7 @@
             </TabItem>
 
             <!-- Tab 2: hardware connection. -->
-            <TabItem Header="연결">
+            <TabItem Header="{DynamicResource Ui_Tab_Connection}">
                 <WrapPanel>
                     <TextBlock Text="포트" Style="{StaticResource RibbonFieldLabel}"/>
                     <ComboBox x:Name="CboPort" MinWidth="150" Margin="0,0,16,0"/>
@@ -373,7 +373,7 @@
                             Style="{StaticResource RibbonCommand}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE72C;"/>
-                            <TextBlock Style="{StaticResource CommandLabel}" Text="포트 다시 검색"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_RefreshPorts}"/>
                         </StackPanel>
                     </Button>
 
@@ -382,7 +382,7 @@
                             ToolTip="보드레이트를 순차적으로 시도해 응답하는 조합을 찾습니다.">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE721;"/>
-                            <TextBlock Style="{StaticResource CommandLabel}" Text="보드레이트 자동 탐색"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_AutoScan}"/>
                         </StackPanel>
                     </Button>
 
@@ -391,118 +391,118 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE71B;"/>
                             <TextBlock x:Name="ConnectButtonLabel"
-                                       Style="{StaticResource CommandLabel}" Text="연결"/>
+                                       Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_ToggleConnect}"/>
                         </StackPanel>
                     </Button>
                 </WrapPanel>
             </TabItem>
 
             <!-- Tab 3: analysis and playback. -->
-            <TabItem Header="분석 및 재생">
+            <TabItem Header="{DynamicResource Ui_Tab_AnalysisReplay}">
                 <WrapPanel>
-                    <Button Content="자연어 진단 에이전트" Click="BtnOpenLlmDiagnosis_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenLlmDiagnosis}" Click="BtnOpenLlmDiagnosis_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="이번 세션에 기록된 이상 징후를 근거로 진단을 요청합니다."/>
-                    <Button Content="타임트래블 DVR" Click="BtnOpenTimeTravelDvr_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenTimeTravelDvr}" Click="BtnOpenTimeTravelDvr_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="기록된 프레임을 되감아 재생합니다."/>
-                    <Button Content="이상 탐지 통계" Click="BtnOpenMlAnalytics_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenMlAnalytics}" Click="BtnOpenMlAnalytics_Click"
                             ToolTip="채널별 평균·표준편차와 Z-점수 분포를 봅니다."/>
                 </WrapPanel>
             </TabItem>
 
             <!-- Tab 4: alerting and sampling. -->
-            <TabItem Header="경보 및 샘플링">
+            <TabItem Header="{DynamicResource Ui_Tab_AlarmsSampling}">
                 <WrapPanel>
-                    <Button Content="경보 전달 설정" Click="BtnOpenAlertForwarder_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenAlertForwarder}" Click="BtnOpenAlertForwarder_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="Slack, Discord, Telegram 으로 경보를 전달합니다."/>
-                    <Button Content="가변 샘플링 설정" Click="BtnAdaptiveSamplingSettings_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_AdaptiveSamplingSettings}" Click="BtnAdaptiveSamplingSettings_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="채널 활동에 따라 샘플링 주기를 자동으로 조절합니다."/>
-                    <Button Content="보안 및 압축 설정" Click="BtnSecuritySettings_Click"/>
+                    <Button Content="{DynamicResource Ui_Cmd_SecuritySettings}" Click="BtnSecuritySettings_Click"/>
                 </WrapPanel>
             </TabItem>
 
             <!-- Tab 5: browser-facing consoles. -->
-            <TabItem Header="웹 콘솔">
+            <TabItem Header="{DynamicResource Ui_Tab_WebConsole}">
                 <WrapPanel>
                     <Button Click="BtnOpenWebConsole_Click" Style="{StaticResource RibbonCommand}"
                             ToolTip="http://localhost:8080/">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE774;"/>
-                            <TextBlock Style="{StaticResource CommandLabel}" Text="웹 클라이언트 콘솔"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_OpenWebConsole}"/>
                         </StackPanel>
                     </Button>
                     <!-- Named as the example it is. The caption used to read like the product's
                          own console, which made one customer's converter look like the subject of
                          the application rather than one of its samples. -->
-                    <Button Content="전력 변환기 예제 대시보드" Click="BtnOpenPowerUpsPsfbConsole_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenPowerUpsPsfbConsole}" Click="BtnOpenPowerUpsPsfbConsole_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="번들로 제공되는 예제 페이지 power_ups_psfb_dashboard.html 을 엽니다."/>
-                    <Button Content="대시보드 빌더" Click="BtnOpenNoCodeBuilder_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenNoCodeBuilder}" Click="BtnOpenNoCodeBuilder_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="웹 템플릿 가이드" Click="BtnOpenCustomWebTemplates_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenCustomWebTemplates}" Click="BtnOpenCustomWebTemplates_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="메시 클러스터" Click="BtnOpenMeshCluster_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenMeshCluster}" Click="BtnOpenMeshCluster_Click"
                             Style="{StaticResource RibbonCommand}"/>
                     <Button Click="BtnCopyWsUrl_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8C8;"/>
-                            <TextBlock Style="{StaticResource CommandLabel}" Text="WebSocket 주소 복사"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_CopyWsUrl}"/>
                         </StackPanel>
                     </Button>
                 </WrapPanel>
             </TabItem>
 
             <!-- Tab 6: tools that write to disk or to the device. -->
-            <TabItem Header="도구">
+            <TabItem Header="{DynamicResource Ui_Tab_Tools}">
                 <WrapPanel>
-                    <Button x:Name="BtnToggleRecord" Content="CSV 녹화 시작"
+                    <Button x:Name="BtnToggleRecord" Content="{DynamicResource Ui_Cmd_ToggleRecord}"
                             Click="BtnToggleRecord_Click" Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="MATLAB 파일로 내보내기" Click="BtnExportMatlab_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_ExportMatlab}" Click="BtnExportMatlab_Click"
                             Style="{StaticResource RibbonCommand}"/>
                     <Button Click="BtnOpenLogsFolder_Click" Style="{StaticResource RibbonCommand}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8B7;"/>
-                            <TextBlock Style="{StaticResource CommandLabel}" Text="로그 폴더 열기"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_OpenLogsFolder}"/>
                         </StackPanel>
                     </Button>
-                    <Button Content="C 헤더 생성" Click="BtnGenerateCHeader_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_GenerateCHeader}" Click="BtnGenerateCHeader_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="수식 계산기" Click="BtnFormulaCalc_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_FormulaCalc}" Click="BtnFormulaCalc_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="프로토콜 브릿지" Click="BtnOpenProtocolBridge_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenProtocolBridge}" Click="BtnOpenProtocolBridge_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="플러그인 샌드박스" Click="BtnOpenPluginSandbox_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenPluginSandbox}" Click="BtnOpenPluginSandbox_Click"
                             Style="{StaticResource RibbonCommand}"/>
                     <!-- Opens the flasher; it does not flash anything. The button that actually
                          writes to the device lives inside that dialog and is the one that earns
                          the danger style. Spending red on the entry point made an update look
                          like an alarm, and left the palette with nothing louder to say when a
                          genuine one arrives. -->
-                    <Button Content="펌웨어 업데이트 (OTA)" Click="BtnOpenOtaFlasher_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenOtaFlasher}" Click="BtnOpenOtaFlasher_Click"
                             Style="{StaticResource RibbonCommand}"/>
                 </WrapPanel>
             </TabItem>
 
             <!-- Tab 7: preferences. -->
-            <TabItem Header="설정">
+            <TabItem Header="{DynamicResource Ui_Tab_Settings}">
                 <WrapPanel>
-                    <Button Content="언어 전환" Click="BtnToggleLanguage_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_ToggleLanguage}" Click="BtnToggleLanguage_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="한국어와 영어를 번갈아 적용합니다."/>
-                    <Button Content="테마 전환" Click="BtnToggleTheme_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_ToggleTheme}" Click="BtnToggleTheme_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Content="레이아웃 저장" Click="BtnSaveWorkspace_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_SaveWorkspace}" Click="BtnSaveWorkspace_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="지금의 패널 배치를 저장합니다. 창을 닫을 때도 자동으로 저장됩니다."/>
-                    <Button Content="레이아웃 초기화" Click="BtnResetWorkspace_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_ResetWorkspace}" Click="BtnResetWorkspace_Click"
                             Style="{StaticResource RibbonCommand}"
                             ToolTip="저장된 배치를 지웁니다. 다음 시작 시 기본 배치로 돌아갑니다."/>
-                    <Button Content="명령 팔레트" Click="BtnOpenCommandPalette_Click"
+                    <Button Content="{DynamicResource Ui_Cmd_OpenCommandPalette}" Click="BtnOpenCommandPalette_Click"
                             Style="{StaticResource RibbonCommand}" ToolTip="Ctrl+Shift+P"/>
-                    <Button Content="화면 잠금" Click="BtnLockScreen_Click"/>
+                    <Button Content="{DynamicResource Ui_Cmd_LockScreen}" Click="BtnLockScreen_Click"/>
                 </WrapPanel>
             </TabItem>
         </TabControl>

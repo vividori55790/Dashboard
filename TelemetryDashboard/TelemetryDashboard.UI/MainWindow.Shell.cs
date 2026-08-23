@@ -329,11 +329,21 @@ public partial class MainWindow
         ControlPanel.LogMessage("SECURITY", "Application screen locked.");
     }
 
+    /// <summary>Switches between the two shipped languages.</summary>
+    /// <remarks>
+    /// The message says how far the switch reaches, because it does not reach everywhere yet: the
+    /// ribbon and the command palette follow, and the dialogs and panels behind them are still
+    /// written in Korean literals. Reporting "Language switched" alone is what this button did
+    /// before it changed anything at all.
+    /// </remarks>
     private void BtnToggleLanguage_Click(object sender, RoutedEventArgs e)
     {
         string nextLang = _languageService.CurrentCultureName.StartsWith("ko") ? "en-US" : "ko-KR";
         _languageService.SetLanguage(nextLang);
-        ControlPanel.LogMessage("SYSTEM", $"Language switched to {nextLang}.");
+
+        ControlPanel.LogMessage("SYSTEM",
+            $"Language switched to {nextLang}: the ribbon and the command palette. "
+            + "Dialogs and panels are not translated yet.");
     }
 
     private void BtnOpenCommandPalette_Click(object sender, RoutedEventArgs e) => TogglePalette();

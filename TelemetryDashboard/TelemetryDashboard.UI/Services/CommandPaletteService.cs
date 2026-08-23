@@ -48,6 +48,14 @@ public partial class CommandPaletteService
     public string? SelectedCommand =>
         _selectedIndex >= 0 && _selectedIndex < _filtered.Count ? _filtered[_selectedIndex] : null;
 
+    /// <summary>Forgets every registered command.</summary>
+    /// <remarks>
+    /// For a re-harvest after the ribbon's captions change language. Registration is by name, so
+    /// without this the English entries would be added beside the Korean ones and the palette would
+    /// list every command twice -- once under a caption no button carries any more.
+    /// </remarks>
+    public void ClearCommands() => _commands.Clear();
+
     public void RegisterCommand(string name, string category, Action? action)
     {
         _commands[name] = new CommandItem { Name = name, Category = category, Action = action };

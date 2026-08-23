@@ -103,7 +103,11 @@ public partial class MainWindow
     /// </remarks>
     private void ShowRecording(bool recording)
     {
-        BtnToggleRecord.Content = recording ? "CSV 녹화 정지" : "CSV 녹화 시작";
+        // A resource reference rather than a string: assigning the caption directly would freeze
+        // this button in whichever language was active when the recording started.
+        BtnToggleRecord.SetResourceReference(
+            System.Windows.Controls.ContentControl.ContentProperty,
+            recording ? "Ui_Cmd_ToggleRecord_Stop" : "Ui_Cmd_ToggleRecord");
         BtnToggleRecord.Style = (Style)FindResource(recording ? "RibbonDangerCommand" : "RibbonCommand");
 
         if (!recording) StatusRecordingText.Text = "녹화 중지";

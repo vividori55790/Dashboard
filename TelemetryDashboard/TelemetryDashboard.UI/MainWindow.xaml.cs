@@ -85,6 +85,10 @@ public partial class MainWindow : Window
         StartStreamingServer();
         PopulatePortAndBaud();
         RegisterDefaultCommands();
+
+        // The palette lists the ribbon's captions, so it has to be rebuilt when they change
+        // language -- otherwise Ctrl+Shift+P offers Korean names for buttons now reading English.
+        _languageService.LanguageChanged += (_, _) => RegisterDefaultCommands();
         SetupAlerts();
 
         // The twin says out loud which mesh it settled on and why. Routed to the event log as well
@@ -275,6 +279,10 @@ public partial class MainWindow : Window
     /// </remarks>
     private void RegisterDefaultCommands()
     {
+        // Cleared and re-read, because this also runs when the language changes: the ribbon's
+        // captions are the palette's command names, and registration is by name.
+        _commandPaletteService.ClearCommands();
+
         foreach (CommandItem command in RibbonCommandHarvest.From(Ribbon))
         {
             _commandPaletteService.RegisterCommand(command.Name, command.Category, command.Action);

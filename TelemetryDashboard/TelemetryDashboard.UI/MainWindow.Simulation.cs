@@ -274,7 +274,8 @@ public partial class MainWindow
         _simulatorReadCts = new CancellationTokenSource();
         _ = Task.Run(() => ConsumeSimulatedPacketsAsync(_simulatorReadCts.Token));
 
-        BtnToggleSimulator.Content = "가상 MCU 스트림 정지";
+        BtnToggleSimulator.SetResourceReference(
+            System.Windows.Controls.ContentControl.ContentProperty, "Ui_Cmd_ToggleSimulator_Stop");
         ControlPanel.LogMessage("SIMULATOR", "가상 MCU 스트림 시작 (COM3/COM4 수집 활성).");
     }
 
@@ -288,7 +289,8 @@ public partial class MainWindow
         _simulatorReadCts = null;
         _simulatorEngine?.StopSimulation();
 
-        BtnToggleSimulator.Content = "가상 MCU 스트림 시작";
+        BtnToggleSimulator.SetResourceReference(
+            System.Windows.Controls.ContentControl.ContentProperty, "Ui_Cmd_ToggleSimulator");
         ControlPanel.LogMessage("SIMULATOR", "가상 MCU 스트림 정지.");
     }
 
