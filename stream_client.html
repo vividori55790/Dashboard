@@ -122,6 +122,48 @@
 
     <div class="panels">
         <!--
+            The one place this product is not read-only from a browser, and until now the endpoint
+            behind it had no caller anywhere.
+
+            What that cost is commissioning. An engineer installing this has to prove the alarm
+            fires before trusting it, and with no way to put a channel at a chosen value the only
+            proof available was over-volting real hardware. Now: drive a channel out of its band
+            here, and watch the panel above go from 감시 중 to 위반.
+
+            It commands a generated source and nothing else. A host reading a real device has no
+            control object at all and the endpoint says so, which is what this panel shows: acting
+            on a real machine is the emergency interlock's job and is armed separately.
+        -->
+        <div class="panel">
+            <h2>시운전 제어 · /api/control</h2>
+            <div class="row">
+                <select id="ctl-ch"><option value="">채널 선택</option></select>
+                <input id="ctl-value" type="number" step="any" style="width:120px" placeholder="값">
+                <button id="ctl-set">설정값 적용</button>
+                <span class="note" id="ctl-range">—</span>
+            </div>
+            <div class="row">
+                <select id="ctl-shape">
+                    <option value="sine">사인</option>
+                    <option value="square">사각</option>
+                    <option value="triangle">삼각</option>
+                    <option value="sawtooth">톱니</option>
+                    <option value="noise">잡음</option>
+                </select>
+                <input id="ctl-hz" type="number" step="any" style="width:90px" placeholder="Hz">
+                <input id="ctl-amp" type="number" step="any" style="width:90px" placeholder="진폭">
+                <button id="ctl-signal">파형 주입</button>
+                <button id="ctl-signal-off">주입 해제</button>
+            </div>
+            <div class="row">
+                <select id="ctl-scenario"><option value="">시나리오 선택</option></select>
+                <button id="ctl-run">시나리오 실행</button>
+                <button id="ctl-reset">전체 초기화</button>
+            </div>
+            <div class="stat" id="ctl-stat">읽는 중…</div>
+        </div>
+
+        <!--
             Which safe bands this host declared, and whether any of them is actually judging
             anything. The endpoint has always answered it and nothing on this page asked.
 
@@ -531,6 +573,158 @@
         }
         list.innerHTML = html;
     }
+
+    // ---- commissioning control -------------------------------------------
+    //
+    // The only write path this page has. Everything it can reach is a generated source: the host
+    // refuses the endpoint outright when it is reading a real device, and that refusal is shown
+    // here word for word rather than turned into a disabled button with no explanation.
+    var controlChannels = [];
+
+    function controlDisable(on) {
+        ['ctl-ch', 'ctl-value', 'ctl-set', 'ctl-shape', 'ctl-hz', 'ctl-amp',
+         'ctl-signal', 'ctl-signal-off', 'ctl-scenario', 'ctl-run', 'ctl-reset']
+            .forEach(function (id) { document.getElementById(id).disabled = on; });
+    }
+
+    function controlChannel() {
+        var id = document.getElementById('ctl-ch').value;
+        for (var i = 0; i < controlChannels.length; i++) {
+            if (controlChannels[i].Id === id) { return controlChannels[i]; }
+        }
+        return null;
+    }
+
+    function showControlRange() {
+        var c = controlChannel();
+        var note = document.getElementById('ctl-range');
+        if (!c) { note.textContent = '—'; return; }
+
+        // The declared range is shown beside the box because the endpoint clamps to it, and a
+        // caller who asks for 999 and is told "Success" would believe the bus went there.
+        note.textContent = '범위 ' + fmt(c.Minimum) + '–' + fmt(c.Maximum) + ' ' + (c.Unit || '') +
+            ' · 기준 ' + fmt(c.Nominal) + ' · 현재 설정 ' + fmt(c.Setpoint) +
+            (c.Signal ? ' · 주입 중: ' + c.Signal : '');
+    }
+
+    function renderControl(d) {
+        var stat = document.getElementById('ctl-stat');
+
+        if (d.Status !== 'Success') {
+            controlDisable(true);
+            stat.textContent = d.Reason || '이 호스트는 제어할 수 없습니다.';
+            return;
+        }
+
+        controlDisable(false);
+        controlChannels = d.Channels || [];
+
+        var sel = document.getElementById('ctl-ch');
+        var keep = sel.value;
+        sel.innerHTML = '<option value="">채널 선택</option>' + controlChannels.map(function (c) {
+            return '<option value="' + esc(c.Id) + '">' + esc(c.Label || c.Id) + '</option>';
+        }).join('');
+        if (keep) { sel.value = keep; }
+
+        var scen = document.getElementById('ctl-scenario');
+        var keepScenario = scen.value;
+        scen.innerHTML = '<option value="">시나리오 선택</option>' + (d.Scenarios || []).map(function (x) {
+            return '<option value="' + esc(x.Id) + '" title="' + esc(x.Description || '') + '">' +
+                   esc(x.Label || x.Id) + '</option>';
+        }).join('');
+        if (keepScenario) { scen.value = keepScenario; }
+
+        showControlRange();
+        if (stat.textContent === '읽는 중…') {
+            stat.textContent = '채널당 ' + fmt(d.SampleRateHz) + ' Hz 로 생성 중입니다. ' +
+                '여기서 값을 바꾸면 위의 안전 한계 판정이 실제로 움직입니다.';
+        }
+    }
+
+    function loadControl() {
+        fetch('/api/control')
+            .then(function (r) { return r.json(); })
+            .then(renderControl)
+            .catch(function (e) {
+                controlDisable(true);
+                document.getElementById('ctl-stat').textContent = '읽기 실패: ' + e.message;
+            });
+    }
+
+    // POST, never GET. The route answers a GET with a description on purpose: a setpoint that
+    // moved on a GET could be moved by a link somebody shared, by a browser prefetching it, or by
+    // the back button. Written the wrong way here first, and the host answered with a description
+    // instead of applying anything -- which is the refusal working.
+    function sendControl(query, describe) {
+        var stat = document.getElementById('ctl-stat');
+        fetch('/api/control?' + query, { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.Status !== 'Success') {
+                    stat.textContent = '거부됨 — ' + (d.Reason || '이유 없음');
+                    return;
+                }
+
+                // Clamping is stated first and in full. "Applied 450 instead of 999" is the
+                // difference between an alarm that did not fire and an alarm that was never given
+                // the chance, and that is the whole point of a commissioning run.
+                stat.textContent = d.Clamped
+                    ? '범위에 걸렸습니다: ' + fmt(d.Requested) + ' 요청 → ' + fmt(d.Applied) +
+                      ' 적용. ' + (d.Reason || '')
+                    : describe(d);
+
+                if (d.Unknown && d.Unknown.length) {
+                    stat.textContent += ' · 이 프로파일에 없는 채널: ' + d.Unknown.join(', ');
+                }
+
+                loadControl();
+            })
+            .catch(function (e) { stat.textContent = '요청 실패: ' + e.message; });
+    }
+
+    document.getElementById('ctl-ch').addEventListener('change', showControlRange);
+
+    document.getElementById('ctl-set').addEventListener('click', function () {
+        var c = controlChannel();
+        var v = document.getElementById('ctl-value').value;
+        if (!c) { document.getElementById('ctl-stat').textContent = '채널을 먼저 선택하세요.'; return; }
+
+        sendControl('cmd=setpoint&channel=' + encodeURIComponent(c.Id) + '&value=' + encodeURIComponent(v),
+            function (d) { return c.Id + ' = ' + fmt(d.Applied) + ' ' + (c.Unit || '') + ' 적용됨.'; });
+    });
+
+    document.getElementById('ctl-signal').addEventListener('click', function () {
+        var c = controlChannel();
+        if (!c) { document.getElementById('ctl-stat').textContent = '채널을 먼저 선택하세요.'; return; }
+
+        sendControl('cmd=signal&channel=' + encodeURIComponent(c.Id) +
+                    '&shape=' + encodeURIComponent(document.getElementById('ctl-shape').value) +
+                    '&hz=' + encodeURIComponent(document.getElementById('ctl-hz').value) +
+                    '&amplitude=' + encodeURIComponent(document.getElementById('ctl-amp').value),
+            function (d) { return d.Reason || (c.Id + ' 에 파형을 주입했습니다.'); });
+    });
+
+    document.getElementById('ctl-signal-off').addEventListener('click', function () {
+        var c = controlChannel();
+        if (!c) { document.getElementById('ctl-stat').textContent = '채널을 먼저 선택하세요.'; return; }
+
+        sendControl('cmd=signal-off&channel=' + encodeURIComponent(c.Id),
+            function (d) { return d.Reason || (c.Id + ' 의 주입을 해제했습니다.'); });
+    });
+
+    document.getElementById('ctl-run').addEventListener('click', function () {
+        var id = document.getElementById('ctl-scenario').value;
+        if (!id) { document.getElementById('ctl-stat').textContent = '시나리오를 먼저 선택하세요.'; return; }
+
+        sendControl('cmd=scenario&id=' + encodeURIComponent(id),
+            function (d) { return d.Reason || ('시나리오 ' + id + ' 을 적용했습니다.'); });
+    });
+
+    document.getElementById('ctl-reset').addEventListener('click', function () {
+        sendControl('cmd=reset', function (d) { return d.Reason || '모든 채널을 기준값으로 되돌렸습니다.'; });
+    });
+
+    loadControl();
 
     // ---- limits ----------------------------------------------------------
     //
