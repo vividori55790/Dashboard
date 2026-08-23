@@ -65,7 +65,7 @@ public class RouterRuleSwapTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void AFrameArrivingDuringTheSwapSeesOneRuleSetOrTheOther()
+    public async Task AFrameArrivingDuringTheSwapSeesOneRuleSetOrTheOther()
     {
         // The reason the swap is one assignment. Routing reads a single reference; the writer
         // builds the next set and publishes it whole, so there is no instant at which a frame can
@@ -89,7 +89,16 @@ public class RouterRuleSwapTests
         }
 
         stop.Cancel();
-        reader.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        // Awaited rather than Task.Wait(timeout): a blocking wait inside a test occupies the
+        // thread it is waiting on, which on a saturated CI agent is how a passing test becomes a
+        // deadlock nobody can reproduce locally. WhenAny keeps the same assertion -- the loop must
+        // observe the cancellation and end -- and the await afterwards surfaces anything it threw,
+        // which the boolean on its own would have discarded.
+        Task finished = await Task.WhenAny(reader, Task.Delay(TimeSpan.FromSeconds(5)));
+        finished.Should().BeSameAs(reader, "the routing loop has to notice the cancellation and stop");
+        await reader;
+
         missed.Should().Be(0, "a frame that matched no rule would be parsed positionally as Field_1");
     }
 

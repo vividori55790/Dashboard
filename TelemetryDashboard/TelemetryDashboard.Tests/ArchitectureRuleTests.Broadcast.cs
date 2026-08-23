@@ -84,8 +84,11 @@ public partial class ArchitectureRuleTests
     {
         if (argument.StartsWith("new", StringComparison.Ordinal)) return Braced(source, callIndex);
 
-        // A local declared just above, which is how the serial path writes it.
-        System.Text.RegularExpressions.Match local = Regex.Matches(
+        // A local declared just above, which is how the serial path writes it. Nullable because
+        // LastOrDefault answers null for a call whose argument names no local, and the check below
+        // is the one that decides -- not a null slipping into a non-nullable and being dereferenced
+        // somewhere further on. (Qualified: Moq.Match is a global using here.)
+        System.Text.RegularExpressions.Match? local = Regex.Matches(
                 source[..callIndex], $@"var\s+{Regex.Escape(argument.TrimEnd(')', ' '))}\s*=\s*new")
             .Cast<System.Text.RegularExpressions.Match>().LastOrDefault();
 

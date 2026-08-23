@@ -1,0 +1,31 @@
+<Project>
+
+  <!--
+    Applies to all seven projects in the solution.
+
+    PROJECT.md has recorded "0 build warnings" for a long time, and by the time anyone measured it
+    the tree had two: a CS8600 in the broadcast rule and an xUnit1031 blocking wait in the router
+    swap test. Neither was noticed, and neither could be — a warning in a 26-second build scrolls
+    past above the line that says the build succeeded, so the count only ever goes up and the claim
+    only ever gets staler.
+
+    A warning here is a claim that something is probably wrong. This project's whole argument is
+    that "probably wrong" is worth acting on before it becomes an incident, so the build is where
+    that gets enforced rather than a document that says it was.
+
+    Deliberately not scoped to Release or to CI. A warning an operator's machine reports and a
+    developer's does not is the same defect discovered later, by someone with less context.
+  -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!--
+      Restore-time warnings stay warnings. NU1701/NU1603 are already waived per-project for
+      packages that resolve against an older framework; promoting the rest of the NU family to
+      errors would turn a transient feed outage into a compile failure, which describes the network
+      rather than the code.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+</Project>
