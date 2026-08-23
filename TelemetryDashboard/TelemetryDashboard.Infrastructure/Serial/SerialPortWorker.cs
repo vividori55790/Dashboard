@@ -1,8 +1,9 @@
-namespace TelemetryDashboard.Infrastructure.Serial;
+﻿namespace TelemetryDashboard.Infrastructure.Serial;
 
 using System.IO.Ports;
 using System.Threading.Channels;
 using TelemetryDashboard.Core.Models;
+using TelemetryDashboard.Core.Events;
 
 /// <summary>
 /// Owns one open serial port and pushes each complete line onto the shared packet channel.

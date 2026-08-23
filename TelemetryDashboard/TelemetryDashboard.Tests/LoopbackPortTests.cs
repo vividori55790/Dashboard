@@ -1,5 +1,6 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.RegularExpressions;
+using TelemetryDashboard.Core.Events;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Parsers;
 using TelemetryDashboard.Core.Services;
@@ -96,6 +97,73 @@ public class LoopbackPortTests
 
         manager.WriteCount.Should().Be(1);
         manager.Written.Should().ContainSingle().Which.Should().Contain("STOP");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public async Task DroppingTheLinkIsAnnouncedTheWayARealOneWouldBe()
+    {
+        // The recovery is the part of a link an engineer most needs to trust before leaving a rig
+        // unattended, and proving it used to mean pulling a real connector on a real machine.
+        var manager = new LoopbackSerialManager();
+        await manager.ConnectPortAsync("loopback");
+
+        SerialPortFaultEventArgs? fault = null;
+        manager.PortFaulted += (_, e) => fault = e;
+
+        manager.FaultPort("loopback", "link dropped on request").Should().BeTrue();
+
+        fault.Should().NotBeNull();
+        fault!.PortName.Should().Be("loopback");
+        fault.Describe().Should().Contain("link dropped on request");
+        manager.ActivePorts["loopback"].Should().Be(PortConnectionStatus.Faulted);
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public async Task WhileTheLinkIsDownFramesAreLostRatherThanQueued()
+    {
+        // What a device's bytes do while a connector is out. Queuing them would make the recovery
+        // look instantaneous and the outage invisible, which is the opposite of the point.
+        var manager = new LoopbackSerialManager();
+        await manager.ConnectPortAsync("loopback");
+        manager.FaultPort("loopback", "dropped");
+
+        manager.Deliver("loopback", Frame("TELE,RIG,rail,48.2,V")).Should().BeFalse();
+
+        await manager.ConnectPortAsync("loopback");
+        manager.Deliver("loopback", Frame("TELE,RIG,rail,48.3,V")).Should().BeTrue();
+
+        RawPacket packet = await manager.PacketReader.ReadAsync();
+        packet.RawLine.Should().Contain("48.3", "the frame from during the outage is gone");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public async Task ReopeningAFaultedPortIsReportedAsARecovery()
+    {
+        // A port coming back from Faulted is a recovery rather than a first connection, and the
+        // difference is the whole content of the message an operator wants to see.
+        var manager = new LoopbackSerialManager();
+        await manager.ConnectPortAsync("loopback");
+
+        string? recovered = null;
+        manager.PortRecovered += (_, name) => recovered = name;
+
+        await manager.ConnectPortAsync("loopback");
+        recovered.Should().BeNull("it never faulted");
+
+        manager.FaultPort("loopback", "dropped");
+        await manager.ConnectPortAsync("loopback");
+
+        recovered.Should().Be("loopback");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier2")]
+    public void APortNobodyOpenedCannotBeDropped()
+    {
+        new LoopbackSerialManager().FaultPort("loopback", "dropped").Should().BeFalse();
     }
 
     [Fact]

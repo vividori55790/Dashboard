@@ -28,7 +28,7 @@ namespace TelemetryDashboard.Infrastructure.Serial;
 /// port it was told to, and nothing about what happened after that.
 /// </para>
 /// </remarks>
-public sealed class LoopbackSerialManager : ISerialManager
+public sealed partial class LoopbackSerialManager : ISerialManager
 {
     private readonly ConcurrentDictionary<string, MockSerialPort> _ports = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PortConnectionStatus> _status = new(StringComparer.OrdinalIgnoreCase);
@@ -46,10 +46,16 @@ public sealed class LoopbackSerialManager : ISerialManager
     /// <inheritdoc />
     public event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
 
-    /// <summary>Commands this host has written to a port, in order.</summary>
+    /// <inheritdoc />
+    public event EventHandler<SerialPortFaultEventArgs>? PortFaulted;
+
+    /// <inheritdoc />
+    public event EventHandler<string>? PortRecovered;
+
+    /// <summary>Commands written to a port, in order.</summary>
     /// <remarks>
-    /// Kept so a run can be asked afterwards what it sent, rather than only what it decided. The
-    /// two differ whenever a queue drops or a port refuses, and the decision is the easy half.
+    /// Kept so a run can be asked what it sent, not only what it decided; the two differ whenever
+    /// a queue drops or a port refuses.
     /// </remarks>
     public IReadOnlyCollection<string> Written => _written;
 
@@ -59,9 +65,14 @@ public sealed class LoopbackSerialManager : ISerialManager
     /// <inheritdoc />
     public Task<bool> ConnectPortAsync(string portName, int baudRate = 115200, CancellationToken cancellationToken = default)
     {
+        bool recovering = _status.TryGetValue(portName, out PortConnectionStatus previous)
+                          && previous == PortConnectionStatus.Faulted;
+
         MockSerialPort port = _ports.GetOrAdd(portName, name => new MockSerialPort(name, baudRate));
         port.Connect();
         _status[portName] = PortConnectionStatus.Connected;
+
+        if (recovering) PortRecovered?.Invoke(this, portName);
 
         DeviceChanged?.Invoke(this, new DeviceChangeEventArgs(DeviceChangeType.Arrival, portName));
         return Task.FromResult(true);
@@ -80,7 +91,7 @@ public sealed class LoopbackSerialManager : ISerialManager
     /// <inheritdoc />
     public async Task DisconnectAllAsync()
     {
-        foreach (string port in _ports.Keys) await DisconnectPortAsync(port).ConfigureAwait(false);
+        foreach (string p in _ports.Keys) await DisconnectPortAsync(p).ConfigureAwait(false);
     }
 
     /// <summary>

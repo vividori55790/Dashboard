@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,6 +44,8 @@ public class EmergencyInterlockTests
 
         /// <summary>Required by the interface. This fake never raises it, so it holds no field.</summary>
         public event EventHandler<DeviceChangeEventArgs>? DeviceChanged { add { } remove { } }
+        public event EventHandler<TelemetryDashboard.Core.Events.SerialPortFaultEventArgs>? PortFaulted { add { } remove { } }
+        public event EventHandler<string>? PortRecovered { add { } remove { } }
 
         public Task<bool> ConnectPortAsync(string portName, int baudRate = 115200, CancellationToken cancellationToken = default)
         {

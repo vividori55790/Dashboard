@@ -30,8 +30,11 @@
     <sys:String x:Key="Ui_Cmd_OpenProtocolBridge">Protocol bridge</sys:String>
     <sys:String x:Key="Ui_Cmd_OpenTimeTravelDvr">Time-travel DVR</sys:String>
     <sys:String x:Key="Ui_Cmd_OpenWebConsole">Web client console</sys:String>
-    <sys:String x:Key="Ui_Cmd_LoadWireRules">Load wire rules</sys:String>
-    <sys:String x:Key="Ui_Cmd_DraftWireRules">Draft wire rules</sys:String>
+    <sys:String x:Key="Ui_Cmd_DropLink">Drop the link</sys:String>
+    <sys:String x:Key="Ui_Cmd_LoadWireRules">Load wire rules</sys:String>
+
+    <sys:String x:Key="Ui_Cmd_DraftWireRules">Draft wire rules</sys:String>
+
     <sys:String x:Key="Ui_Cmd_RefreshPorts">Rescan ports</sys:String>
     <sys:String x:Key="Ui_Cmd_ResetWorkspace">Reset layout</sys:String>
     <sys:String x:Key="Ui_Cmd_SaveWorkspace">Save layout</sys:String>

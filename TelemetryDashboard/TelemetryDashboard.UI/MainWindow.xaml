@@ -370,7 +370,8 @@
                     <ComboBox x:Name="CboBaudRate" MinWidth="110" Margin="0,0,16,0"/>
 
                     <Button x:Name="BtnRefreshPorts" Click="BtnRefreshPorts_Click"
-                            Style="{StaticResource RibbonCommand}"
+                            Style="{StaticResource RibbonCommand}"
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_RefreshPorts}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE72C;"/>
@@ -380,7 +381,8 @@
 
                     <Button x:Name="BtnAutoScan" Click="BtnAutoScan_Click"
                             Style="{StaticResource RibbonCommand}"
-                            ToolTip="보드레이트를 순차적으로 시도해 응답하는 조합을 찾습니다."
+                            ToolTip="보드레이트를 순차적으로 시도해 응답하는 조합을 찾습니다."
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_AutoScan}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE721;"/>
@@ -390,7 +392,8 @@
 
                     <Button x:Name="BtnLoadWireRules" Click="BtnLoadWireRules_Click"
                             Style="{StaticResource RibbonCommand}"
-                            ToolTip="장비가 보내는 이름을 프로파일의 채널 이름으로 바꾸는 규칙 파일을 불러옵니다."
+                            ToolTip="장비가 보내는 이름을 프로파일의 채널 이름으로 바꾸는 규칙 파일을 불러옵니다."
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_LoadWireRules}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8E5;"/>
@@ -400,7 +403,8 @@
 
                     <Button x:Name="BtnDraftWireRules" Click="BtnDraftWireRules_Click"
                             Style="{StaticResource RibbonCommand}"
-                            ToolTip="지금 들어오는 프레임을 15초 동안 듣고, 규칙 파일 초안을 만들어 저장합니다."
+                            ToolTip="지금 들어오는 프레임을 15초 동안 듣고, 규칙 파일 초안을 만들어 저장합니다."
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_DraftWireRules}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE720;"/>
@@ -408,8 +412,19 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="BtnDropLink" Click="BtnDropLink_Click"
+                            Style="{StaticResource RibbonCommand}"
+                            AutomationProperties.Name="{DynamicResource Ui_Cmd_DropLink}"
+                            ToolTip="loopback 포트의 링크를 끊어, 자동 재연결이 실제로 동작하는지 확인합니다.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8CD;"/>
+                            <TextBlock Style="{StaticResource CommandLabel}" Text="{DynamicResource Ui_Cmd_DropLink}"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button x:Name="BtnToggleConnect" Click="BtnToggleConnect_Click"
-                            Style="{StaticResource PrimaryButton}"
+                            Style="{StaticResource PrimaryButton}"
+
                             AutomationProperties.Name="{Binding Text, ElementName=ConnectButtonLabel}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE71B;"/>
@@ -451,7 +466,8 @@
             <TabItem Header="{DynamicResource Ui_Tab_WebConsole}">
                 <WrapPanel>
                     <Button Click="BtnOpenWebConsole_Click" Style="{StaticResource RibbonCommand}"
-                            ToolTip="http://localhost:8080/"
+                            ToolTip="http://localhost:8080/"
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_OpenWebConsole}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE774;"/>
@@ -470,7 +486,8 @@
                             Style="{StaticResource RibbonCommand}"/>
                     <Button Content="{DynamicResource Ui_Cmd_OpenMeshCluster}" Click="BtnOpenMeshCluster_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Click="BtnCopyWsUrl_Click"
+                    <Button Click="BtnCopyWsUrl_Click"
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_CopyWsUrl}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8C8;"/>
@@ -487,7 +504,8 @@
                             Click="BtnToggleRecord_Click" Style="{StaticResource RibbonCommand}"/>
                     <Button Content="{DynamicResource Ui_Cmd_ExportMatlab}" Click="BtnExportMatlab_Click"
                             Style="{StaticResource RibbonCommand}"/>
-                    <Button Click="BtnOpenLogsFolder_Click" Style="{StaticResource RibbonCommand}"
+                    <Button Click="BtnOpenLogsFolder_Click" Style="{StaticResource RibbonCommand}"
+
                             AutomationProperties.Name="{DynamicResource Ui_Cmd_OpenLogsFolder}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource CommandIcon}" Text="&#xE8B7;"/>

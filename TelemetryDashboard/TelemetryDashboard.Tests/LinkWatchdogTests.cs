@@ -39,6 +39,11 @@ public class LinkWatchdogTests
         // cannot assume exists.
 #pragma warning disable CS0067
         public event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
+
+#pragma warning disable CS0067
+        public event EventHandler<TelemetryDashboard.Core.Events.SerialPortFaultEventArgs>? PortFaulted;
+        public event EventHandler<string>? PortRecovered;
+#pragma warning restore CS0067
 #pragma warning restore CS0067
 
         public Task<bool> ConnectPortAsync(string portName, int baudRate = 115200, CancellationToken token = default)

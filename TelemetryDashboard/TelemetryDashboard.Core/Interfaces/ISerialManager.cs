@@ -1,4 +1,4 @@
-namespace TelemetryDashboard.Core.Interfaces;
+﻿namespace TelemetryDashboard.Core.Interfaces;
 
 using System.Threading.Channels;
 using TelemetryDashboard.Core.Events;
@@ -45,4 +45,17 @@ public interface ISerialManager : IAsyncDisposable, IDisposable
     /// Event fired when hardware device arrival/removal occurs.
     /// </summary>
     event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
+
+    /// <summary>Raised when a port stops producing lines without being asked to.</summary>
+    /// <remarks>
+    /// Declared here rather than on one implementation, which is where it used to live. A shell
+    /// that can hold either manager could not subscribe to it at all, so a cable pulled out of the
+    /// desktop application was announced by nothing: the charts stopped, the indicator went on
+    /// saying connected, and the only evidence was the silence watch reporting channel after
+    /// channel going quiet -- which reads as a machine shutting down.
+    /// </remarks>
+    event EventHandler<SerialPortFaultEventArgs>? PortFaulted;
+
+    /// <summary>Raised when a port that had faulted is carrying data again.</summary>
+    event EventHandler<string>? PortRecovered;
 }

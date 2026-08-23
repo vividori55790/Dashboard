@@ -1,4 +1,4 @@
-namespace TelemetryDashboard.Tests;
+﻿namespace TelemetryDashboard.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -30,6 +30,11 @@ public class EmpiricalAutoBaudScannerTests
         // the build output is where real ones go to hide.
 #pragma warning disable CS0067
         public event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
+
+#pragma warning disable CS0067
+        public event EventHandler<TelemetryDashboard.Core.Events.SerialPortFaultEventArgs>? PortFaulted;
+        public event EventHandler<string>? PortRecovered;
+#pragma warning restore CS0067
 #pragma warning restore CS0067
 
         public int CurrentlyConnectedBaud { get; private set; } = 0;

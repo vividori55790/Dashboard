@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Infrastructure.Serial;
+using TelemetryDashboard.Core.Events;
 
 namespace TelemetryDashboard.Host.Ingest;
 

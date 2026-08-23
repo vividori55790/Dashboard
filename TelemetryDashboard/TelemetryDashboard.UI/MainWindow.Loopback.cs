@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Windows;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Simulator;
@@ -88,6 +89,25 @@ public partial class MainWindow
         _dataRouter.SourceIsSimulated = false;
     }
 
+    /// <summary>
+    /// Drops the in-memory link, so the recovery path can be proved without pulling a connector.
+    /// </summary>
+    /// <remarks>
+    /// The recovery is the part of a link an engineer most needs to trust before leaving a rig
+    /// unattended, and on a desk with no MCU there was no way to see it happen at all.
+    /// </remarks>
+    private void BtnDropLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (_loopback is null)
+        {
+            ControlPanel.LogMessage("LINK",
+                "링크 끊김 시험은 loopback 포트에서만 할 수 있습니다. 실제 포트는 케이블이 결정합니다.");
+            return;
+        }
+
+        _loopback.FaultPort(LoopbackPort, "link dropped on request");
+    }
+
     private async Task PumpLoopbackAsync(CancellationToken token)
     {
         ProfileSimulatorEngine? engine = _loopbackEngine;
@@ -100,7 +120,11 @@ public partial class MainWindow
             {
                 // The line, not the packet. It goes into the port's buffer and comes back out of
                 // the reader, so what the ingest path receives is what a device would have sent.
-                if (!port.Deliver(LoopbackPort, raw.RawLine)) return;
+                //
+                // A refused delivery is not the end of the feed. The port is closed -- somebody
+                // dropped the link deliberately -- and these frames are lost exactly as a device's
+                // would be while a connector is out. When the watchdog reopens it, they resume.
+                port.Deliver(LoopbackPort, raw.RawLine);
             }
         }
         catch (OperationCanceledException)

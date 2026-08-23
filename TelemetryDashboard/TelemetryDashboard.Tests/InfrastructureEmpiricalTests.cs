@@ -1,4 +1,4 @@
-namespace TelemetryDashboard.Tests;
+﻿namespace TelemetryDashboard.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -266,6 +266,11 @@ public class InfrastructureEmpiricalTests
         public IReadOnlyDictionary<string, PortConnectionStatus> ActivePorts => _statuses;
 
         public event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
+
+#pragma warning disable CS0067
+        public event EventHandler<TelemetryDashboard.Core.Events.SerialPortFaultEventArgs>? PortFaulted;
+        public event EventHandler<string>? PortRecovered;
+#pragma warning restore CS0067
 
         public List<string> WrittenCommands { get; } = new();
         public bool SimulateConnectSuccess { get; set; } = true;

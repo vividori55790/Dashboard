@@ -1,4 +1,4 @@
-namespace TelemetryDashboard.Tests;
+﻿namespace TelemetryDashboard.Tests;
 
 using System;
 using System.Collections.Concurrent;
@@ -321,6 +321,11 @@ public class Challenger1EmpiricalStressTests
         public bool SimulateConnectSuccess { get; set; } = true;
 
         public event EventHandler<DeviceChangeEventArgs>? DeviceChanged;
+
+#pragma warning disable CS0067
+        public event EventHandler<TelemetryDashboard.Core.Events.SerialPortFaultEventArgs>? PortFaulted;
+        public event EventHandler<string>? PortRecovered;
+#pragma warning restore CS0067
 
         public void SetPortStatus(string portName, PortConnectionStatus status) => _statuses[portName] = status;
 

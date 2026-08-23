@@ -76,9 +76,14 @@ public partial class MainWindow
 
                 bool ok = await Serial.ConnectPortAsync(portName, baudRate);
 
-                // Watched either way -- except the in-memory one, which cannot come or go, and
-                // whose name a watchdog scanning the machine's ports would never find.
-                if (!IsLoopback(portName)) WatchPort(portName, baudRate);
+                // Watched either way. A port that opened can still be pulled out, and a port that
+                // did not open is very often one the operator is about to plug in -- both are the
+                // same instruction: keep this link up.
+                WatchPort(portName, baudRate);
+
+                // The manager tells us when a link drops. Subscribed after the watchdog exists, so
+                // the two do not race to describe the same moment.
+                Serial.PortFaulted += OnPortLost;
 
                 if (ok)
                 {
@@ -114,6 +119,7 @@ public partial class MainWindow
 
             // The watchdog is stopped before the port is closed, or it would see a port that is
             // present and not connected and immediately undo what the operator just asked for.
+            Serial.PortFaulted -= OnPortLost;
             await StopWatchingPortAsync();
             StopLinkReader();
             await Serial.DisconnectAllAsync();

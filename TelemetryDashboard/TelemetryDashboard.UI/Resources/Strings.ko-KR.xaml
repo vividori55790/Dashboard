@@ -30,8 +30,11 @@
     <sys:String x:Key="Ui_Cmd_OpenProtocolBridge">수식 계산기</sys:String>
     <sys:String x:Key="Ui_Cmd_OpenTimeTravelDvr">자연어 진단 에이전트</sys:String>
     <sys:String x:Key="Ui_Cmd_OpenWebConsole">보안 및 압축 설정</sys:String>
-    <sys:String x:Key="Ui_Cmd_LoadWireRules">이름 매핑 불러오기</sys:String>
-    <sys:String x:Key="Ui_Cmd_DraftWireRules">이름 매핑 만들기</sys:String>
+    <sys:String x:Key="Ui_Cmd_DropLink">링크 끊김 시험</sys:String>
+    <sys:String x:Key="Ui_Cmd_LoadWireRules">이름 매핑 불러오기</sys:String>
+
+    <sys:String x:Key="Ui_Cmd_DraftWireRules">이름 매핑 만들기</sys:String>
+
     <sys:String x:Key="Ui_Cmd_RefreshPorts">포트 다시 검색</sys:String>
     <sys:String x:Key="Ui_Cmd_ResetWorkspace">레이아웃 저장</sys:String>
     <sys:String x:Key="Ui_Cmd_SaveWorkspace">테마 전환</sys:String>
