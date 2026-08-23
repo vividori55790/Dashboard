@@ -1,0 +1,12 @@
+# Shell scripts are checked out with LF everywhere, including on Windows.
+#
+# core.autocrlf is true on the development machine, so without this the CI smoke
+# script gets CRLF in the working tree. Git normalises it back on commit, so the
+# repository stays correct and the defect stays invisible -- right up until a copy
+# with CRLF reaches a Linux runner, where bash reads the carriage return as part of
+# the command and answers `$'\r': command not found` on the first line. That failure
+# names nothing that would lead anyone to line endings.
+#
+# Deliberately narrow. A broad set of rules here would renormalise files this commit
+# has no business touching.
+*.sh text eol=lf
