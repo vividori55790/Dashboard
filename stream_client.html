@@ -159,6 +159,28 @@
             <canvas id="hist-canvas" style="width:100%;height:170px;display:block"></canvas>
             <div class="stat mono" id="hist-stat" style="margin-top:8px">아직 불러오지 않았습니다.</div>
         </div>
+
+        <!--
+            One channel over a window is the history panel above. This is the other question, and
+            the one an alarm actually raises: at 14:32, what was EVERYTHING doing? The endpoint
+            answered it and nothing here could ask.
+        -->
+        <div class="panel">
+            <h2>사건 조회 · /api/incident</h2>
+            <div class="row">
+                <input type="datetime-local" id="inc-at" step="1">
+                <button id="inc-now">지금</button>
+                <button id="inc-alarm" disabled>최근 이상 시각</button>
+                <select id="inc-span">
+                    <option value="10,2" selected>앞 10초 · 뒤 2초</option>
+                    <option value="30,10">앞 30초 · 뒤 10초</option>
+                    <option value="60,30">앞 60초 · 뒤 30초</option>
+                </select>
+                <button id="inc-go">불러오기</button>
+            </div>
+            <div class="stat mono" id="inc-stat" style="margin-top:8px">알람이 가리키는 순간을 넣으면, 그때 모든 채널이 무엇을 하고 있었는지 보여줍니다.</div>
+            <div id="inc-list" style="margin-top:8px"></div>
+        </div>
     </div>
 </main>
 
@@ -261,6 +283,12 @@
         // engine deliberately withheld during warm-up.
         ch.z = (typeof p.anomalyScore === 'number') ? p.anomalyScore : null;
         ch.isAnomaly = p.isAnomaly === true;
+        // The moment an alarm names, kept so the incident panel can be pointed at it rather than
+        // at a time the operator has to reconstruct from the log.
+        if (ch.isAnomaly) {
+            lastAlarmAt = Date.now();
+            document.getElementById('inc-alarm').disabled = false;
+        }
         // Kept apart from isAnomaly, because they answer different questions. A z-score says the
         // reading is unusual for this channel lately; a limit says it is outside what the machine
         // may safely do. A bus that settles above its ceiling stops being unusual within a minute
@@ -376,6 +404,104 @@
             })
             .catch(function (e) { stat.textContent = '요청 실패: ' + e.message; });
     });
+
+    // ---- incident --------------------------------------------------------
+    var lastAlarmAt = null;
+
+    function toLocalInput(d) {
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' +
+               pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    document.getElementById('inc-now').addEventListener('click', function () {
+        document.getElementById('inc-at').value = toLocalInput(new Date());
+    });
+
+    document.getElementById('inc-alarm').addEventListener('click', function () {
+        if (lastAlarmAt) document.getElementById('inc-at').value = toLocalInput(new Date(lastAlarmAt));
+    });
+
+    document.getElementById('inc-go').addEventListener('click', function () {
+        var raw = document.getElementById('inc-at').value;
+        var stat = document.getElementById('inc-stat');
+        var list = document.getElementById('inc-list');
+
+        if (!raw) { stat.textContent = '시각을 먼저 지정하세요. 이 조회는 한 순간을 중심으로 합니다.'; return; }
+        var at = new Date(raw);
+        if (isNaN(at.getTime())) { stat.textContent = '시각을 읽을 수 없습니다.'; return; }
+
+        var span = document.getElementById('inc-span').value.split(',');
+        stat.textContent = '불러오는 중…';
+        list.innerHTML = '';
+
+        fetch('/api/incident?at=' + encodeURIComponent(at.toISOString()) +
+              '&lead=' + span[0] + '&trail=' + span[1])
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.Status !== 'Success') {
+                    stat.textContent = '사건 조회 불가: ' + (d.Reason || '알 수 없는 이유');
+                    return;
+                }
+                renderIncident(d);
+            })
+            .catch(function (e) { stat.textContent = '요청 실패: ' + e.message; });
+    });
+
+    var INCIDENT_ROWS = 12;
+
+    function renderIncident(d) {
+        var stat = document.getElementById('inc-stat');
+        var list = document.getElementById('inc-list');
+
+        if (!d.Channels || d.Channels.length === 0) {
+            stat.textContent = '이 구간에 기록된 채널이 없습니다. 창을 넓히거나 다른 시각을 보세요.';
+            return;
+        }
+
+        // Unjudged is counted apart from quiet on purpose: a window where most channels could not
+        // be judged answers nothing, and must not read as a clean bill of health.
+        stat.textContent =
+            d.ChannelCount + ' 채널 · ' + d.TotalSamples + ' 샘플 · ' +
+            '앞 ' + d.LeadSec + '초 / 뒤 ' + d.TrailSec + '초 · ' +
+            (d.Anomalous.length > 0 ? ('이상 ' + d.Anomalous.length + '개') : '이상 없음') +
+            (d.UnjudgedChannels > 0 ? (' · 판정 불가 ' + d.UnjudgedChannels + '개') : '');
+
+        // Anomalous first in the order the host ranked them, worst first, then the ones it could
+        // not judge, then the rest. Reading thirty channels to find the one that moved is what
+        // this ordering exists to avoid.
+        var byName = {};
+        d.Channels.forEach(function (c) { byName[c.NodeId + '.' + c.Variable] = c; });
+
+        var ordered = [];
+        d.Anomalous.forEach(function (n) { if (byName[n]) { ordered.push(byName[n]); byName[n] = null; } });
+        d.Channels.forEach(function (c) {
+            var n = c.NodeId + '.' + c.Variable;
+            if (byName[n] && !c.Judged) { ordered.push(c); byName[n] = null; }
+        });
+        d.Channels.forEach(function (c) {
+            var n = c.NodeId + '.' + c.Variable;
+            if (byName[n]) { ordered.push(c); byName[n] = null; }
+        });
+
+        var html = ordered.slice(0, INCIDENT_ROWS).map(function (c) {
+            var verdict = !c.Judged ? { cls: '', text: '판정 불가' }
+                        : c.IsAnomaly ? { cls: 'alarm', text: '이상 ' + c.PeakZScore.toFixed(2) + 'σ' }
+                        : { cls: 'ok', text: '정상' };
+            return '<div style="padding:6px 0;border-top:1px solid var(--line)">' +
+                   '<div><span class="mono">' + esc(c.NodeId + '.' + c.Variable) + '</span> ' +
+                   '<span class="v ' + verdict.cls + '">' + esc(verdict.text) + '</span></div>' +
+                   '<div class="note mono">' + fmt(c.Minimum) + ' – ' + fmt(c.Maximum) +
+                   esc(c.Unit || '') + ' · ' + c.Samples + ' 샘플</div>' +
+                   '<div class="note">' + esc(c.Verdict) + '</div></div>';
+        }).join('');
+
+        if (ordered.length > INCIDENT_ROWS) {
+            html += '<div class="note" style="padding-top:6px">' +
+                    (ordered.length - INCIDENT_ROWS) + '개 채널을 더 접었습니다 — 이상과 판정 불가가 먼저입니다.</div>';
+        }
+        list.innerHTML = html;
+    }
 
     // ---- history ---------------------------------------------------------
     document.getElementById('hist-go').addEventListener('click', function () {

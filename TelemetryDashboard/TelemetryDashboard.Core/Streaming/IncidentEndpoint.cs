@@ -66,6 +66,15 @@ public static class IncidentEndpoint
         /// <summary>The worst score the rolling detector would have given anywhere in the window.</summary>
         public double PeakZScore { get; init; }
 
+        /// <summary>Whether a verdict was reached at all, as against one being negative.</summary>
+        /// <remarks>
+        /// Carried so a client can separate "nothing was wrong here" from "there was not enough
+        /// data to tell" without reading <see cref="Verdict"/>, which is a sentence for a person.
+        /// The count below used to be taken by matching the start of that sentence, and anything
+        /// wanting to show which channels those were had to repeat the match.
+        /// </remarks>
+        public bool Judged { get; init; } = true;
+
         /// <summary>What that verdict rests on, including when it is a refusal to give one.</summary>
         /// <remarks>
         /// This endpoint used to hand back thirty channels of raw numbers and say nothing about any
@@ -178,6 +187,7 @@ public static class IncidentEndpoint
                     ValueBefore = last?.Value,
                     IsAnomaly = verdict.IsAnomaly,
                     PeakZScore = verdict.ZScore,
+                    Judged = verdict.Judged,
                     Verdict = verdict.Reason,
                     Values = values,
                     Timestamps = ordered
@@ -199,7 +209,7 @@ public static class IncidentEndpoint
                 .OrderByDescending(c => c.PeakZScore)
                 .Select(c => $"{c.NodeId}.{c.Variable}")
                 .ToList(),
-            UnjudgedChannels = channels.Count(c => c.Verdict.StartsWith("Not judged", StringComparison.Ordinal)),
+            UnjudgedChannels = channels.Count(c => !c.Judged),
             Channels = channels
         };
     }

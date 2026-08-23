@@ -65,7 +65,7 @@ public sealed partial class AnomalyEngine
                 false,
                 $"Insufficient data: {usable.Count} usable samples, {MinimumUsableSamples} required.",
                 0.0,
-                usable.Count);
+                usable.Count) { Judged = false };
         }
 
         RollingChannelStatistics baseline = new(usable.Count);

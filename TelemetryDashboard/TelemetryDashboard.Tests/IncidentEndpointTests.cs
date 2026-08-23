@@ -180,4 +180,63 @@ public class IncidentEndpointTests
         result.ChannelCount.Should().Be(1);
         result.Channels.Single().NodeId.Should().Be("COM4");
     }
+
+    /// <summary>One dense channel and one that reports too rarely to be judged in the window.</summary>
+    private static FakeStore OneDenseOneSparse()
+    {
+        var store = new FakeStore();
+        for (int i = -120; i <= 120; i++)
+        {
+            store.Seed(new TelemetryPacket("COM3", "dab.bus_voltage", 400 + i * 0.1, "V", Instant.AddSeconds(i)));
+        }
+
+        // Two samples inside a ten-second lead: enough to appear, not enough to judge.
+        store.Seed(new TelemetryPacket("COM3", "coolant.flow", 12.0, "L/min", Instant.AddSeconds(-8)));
+        store.Seed(new TelemetryPacket("COM3", "coolant.flow", 12.1, "L/min", Instant.AddSeconds(-3)));
+        return store;
+    }
+
+    [Fact]
+    public async Task AChannelWithTooLittleDataIsUnjudgedRatherThanNormal()
+    {
+        // "Nothing was wrong" and "there was not enough data to tell" are the same to anything
+        // reading IsAnomaly alone, and an operator who cannot separate them reads an unjudged
+        // channel as a healthy one.
+        IncidentEndpoint.Result result =
+            await IncidentEndpoint.QueryAsync(OneDenseOneSparse(), Instant, 0, 0, null);
+
+        IncidentEndpoint.ChannelWindow sparse = result.Channels.Single(c => c.Variable == "coolant.flow");
+        sparse.Judged.Should().BeFalse();
+        sparse.IsAnomaly.Should().BeFalse("no verdict was reached, which is not the same as a negative one");
+
+        result.Channels.Single(c => c.Variable == "dab.bus_voltage").Judged.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TheUnjudgedCountIsTakenFromTheFlagRatherThanFromTheWording()
+    {
+        // It used to be Verdict.StartsWith("Not judged"), so rewording a sentence written for a
+        // person would silently have changed a count -- and any client wanting to show WHICH
+        // channels those were had to repeat the same match against the same prose.
+        IncidentEndpoint.Result result =
+            await IncidentEndpoint.QueryAsync(OneDenseOneSparse(), Instant, 0, 0, null);
+
+        result.UnjudgedChannels.Should().Be(result.Channels.Count(c => !c.Judged));
+        result.UnjudgedChannels.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AWindowNothingCouldBeJudgedInIsNotACleanBillOfHealth()
+    {
+        // The shape an operator must not misread: no anomalies found, because nothing was judged.
+        var store = new FakeStore();
+        store.Seed(new TelemetryPacket("COM3", "dab.bus_voltage", 400, "V", Instant.AddSeconds(-2)));
+        store.Seed(new TelemetryPacket("COM3", "dab.bus_voltage", 401, "V", Instant.AddSeconds(-1)));
+
+        IncidentEndpoint.Result result = await IncidentEndpoint.QueryAsync(store, Instant, 0, 0, null);
+
+        result.Anomalous.Should().BeEmpty();
+        result.UnjudgedChannels.Should().Be(result.ChannelCount,
+            "an answer of 'no anomalies' here rests on no verdicts at all");
+    }
 }

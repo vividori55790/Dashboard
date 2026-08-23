@@ -27,4 +27,20 @@ public sealed record AnomalyEvaluation(
     bool IsAnomaly,
     string Reason,
     double ZScore,
-    int ProcessedSampleCount);
+    int ProcessedSampleCount)
+{
+    /// <summary>Whether a verdict was reached at all, as against one being negative.</summary>
+    /// <remarks>
+    /// "Nothing was wrong" and "there was not enough data to tell" are the same to anything reading
+    /// <see cref="IsAnomaly"/> alone, and the difference lived only in <see cref="Reason"/> — prose
+    /// written for a person. So the one place that counted unjudged channels did it by matching the
+    /// beginning of that sentence, and anything else wanting the same distinction had to repeat the
+    /// match. Rewording a message for clarity would have silently changed a count.
+    /// <para>
+    /// True by default because a verdict is the normal outcome: the two paths that refuse one say
+    /// so explicitly, and a new path that forgets is a bug in that path rather than a silent
+    /// reclassification of everything else.
+    /// </para>
+    /// </remarks>
+    public bool Judged { get; init; } = true;
+}

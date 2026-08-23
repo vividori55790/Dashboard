@@ -97,4 +97,55 @@ public partial class ArchitectureRuleTests
         page.Should().Contain("d.Truncated", "a partial read must not look like a complete one");
         page.Should().Contain("d.Reason", "the host explains why it cannot answer; show what it said");
     }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void EveryQueryParameterTheConsoleSendsToAnIncidentIsRead()
+    {
+        string page = ConsolePage();
+        int at = page.IndexOf("/api/incident?", StringComparison.Ordinal);
+        at.Should().BeGreaterThan(0, "the console asks what everything was doing at an instant");
+
+        string request = page[at..(at + 300)];
+        string[] sent = Regex.Matches(request, @"[?&]([a-zA-Z]+)=")
+            .Select(m => m.Groups[1].Value).Distinct().ToArray();
+
+        sent.Should().Contain(new[] { "at", "lead", "trail" });
+
+        string route = HistoryRouteSource();
+        foreach (string parameter in sent)
+        {
+            route.Should().Contain($"QueryString[\"{parameter}\"]",
+                $"the console sends ?{parameter}= and the route has to read it");
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void TheConsoleTellsAnUnjudgedChannelApartFromAHealthyOne()
+    {
+        // The distinction the incident endpoint exists to carry. A page that showed only IsAnomaly
+        // would report a window nothing could be judged in as a window with nothing wrong in it.
+        string page = ConsolePage();
+
+        page.Should().Contain("c.Judged", "a channel with no verdict must not be drawn as a negative one");
+        page.Should().Contain("d.UnjudgedChannels", "and the count belongs in the summary");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void NothingReadsAVerdictByMatchingItsWording()
+    {
+        // The count used to be Verdict.StartsWith("Not judged"), which made a sentence written for
+        // a person load-bearing for code. Anything wanting the distinction now reads the flag.
+        foreach (string file in new[]
+        {
+            Path.Combine(SolutionRoot, "TelemetryDashboard.Core", "Streaming", "IncidentEndpoint.cs"),
+            Path.Combine(Directory.GetParent(SolutionRoot)!.FullName, "stream_client.html")
+        })
+        {
+            File.ReadAllText(file).Should().NotContain("Not judged",
+                $"{Path.GetFileName(file)} should read Judged rather than match the prose");
+        }
+    }
 }

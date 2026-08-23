@@ -50,7 +50,7 @@ public sealed partial class AnomalyEngine
                 false,
                 $"Not judged: {usable.Count} usable sample(s), {MinimumUsableSamples} required.",
                 0.0,
-                usable.Count);
+                usable.Count) { Judged = false };
         }
 
         var rolling = new RollingChannelStatistics(WindowBaselineSamples);
