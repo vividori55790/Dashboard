@@ -12,7 +12,6 @@ public sealed class ScoredPowerFrame
     public required AnomalyResult Psfb { get; init; }
     public required AnomalyResult Ambient { get; init; }
     public required AnomalyResult Vibration { get; init; }
-    public required object WireFrame { get; init; }
 
     public double PeakZScore => Math.Max(Dab.ZScore, Psfb.ZScore);
     public bool HasAlarm => Dab.IsAnomaly || Psfb.IsAnomaly;
@@ -27,10 +26,16 @@ public sealed class ScoredPowerFrame
 /// for broadcast.
 /// </summary>
 /// <remarks>
-/// The wire field names are held stable because the bundled web consoles bind to them. What
-/// changed is their provenance: every <c>anomalyScore</c> now comes from
-/// <see cref="TelemetryMlAnalyticsEngine"/> scoring the same numbers the operator sees, so the
-/// simulator exercises the real detection path instead of narrating a scripted one.
+/// Scores only. This used to build two broadcast frames as well, in the shape the product used
+/// before it had a wire contract -- a flat {temp, humidity, rpm} and a nested {grid, dab, psfb,
+/// alarm} -- and its own remark said the bundled consoles bound to those names. Measured on the
+/// running shell with a browser attached: 214 frames received, 0 that any shipped page could read,
+/// because every one of them reads {nodeId, variable, value, unit} and discards the rest.
+/// <para>
+/// Every <c>anomalyScore</c> comes from <see cref="TelemetryMlAnalyticsEngine"/> scoring the same
+/// numbers the operator sees, so the simulator exercises the real detection path rather than
+/// narrating a scripted one.
+/// </para>
 /// </remarks>
 public sealed class PowerTelemetryFrameBuilder
 {
@@ -51,82 +56,15 @@ public sealed class PowerTelemetryFrameBuilder
         double peak = Math.Max(dab.ZScore, psfb.ZScore);
         bool alarm = dab.IsAnomaly || psfb.IsAnomaly;
 
-        object frame = new
-        {
-            timestamp = DateTime.Now.ToString("o"),
-            type = "POWER_GRID_TELEMETRY",
-            scenario = state.Scenario.ToString(),
-            grid = new
-            {
-                voltage = state.GridVoltage,
-                frequency = state.GridFrequency,
-                powerKw = state.GridPowerKw,
-                status = state.GridStatus
-            },
-            dab = new
-            {
-                nodeId = "DAB_CONVERTER",
-                mode = state.DabMode,
-                dcBusVoltage = state.DabBusVoltage,
-                batteryVoltage = state.DabBatteryVoltage,
-                batteryCurrent = state.DabBatteryCurrent,
-                batterySoC = state.DabStateOfCharge,
-                powerKw = state.DabPowerKw,
-                efficiency = state.DabEfficiency,
-                phaseShift = state.DabPhaseShift,
-                temp = state.DabTemperature,
-                anomalyScore = dab.ZScore,
-                isAnomaly = dab.IsAnomaly
-            },
-            psfb = new
-            {
-                nodeId = "PSFB_CONVERTER",
-                mode = state.PsfbMode,
-                inputDcVoltage = state.PsfbInputVoltage,
-                serverVoltage = state.PsfbOutputVoltage,
-                serverCurrent = state.PsfbOutputCurrent,
-                powerKw = state.PsfbPowerKw,
-                efficiency = state.PsfbEfficiency,
-                phaseShift = state.PsfbPhaseShift,
-                temp = state.PsfbTemperature,
-                serverLoad = state.ServerLoadPercent,
-                anomalyScore = psfb.ZScore,
-                isAnomaly = psfb.IsAnomaly
-            },
-            alarm = new
-            {
-                hasAlarm = alarm,
-                severity = peak >= 3.5 ? "CRITICAL" : peak >= 2.0 ? "WARNING" : "NORMAL",
-                title = DescribeTitle(dab, psfb),
-                message = DescribeMessage(state, dab, psfb),
-                zScore = peak
-            }
-        };
-
         return new ScoredPowerFrame
         {
             State = state,
             Dab = dab,
             Psfb = psfb,
             Ambient = ambient,
-            Vibration = vibration,
-            WireFrame = frame
+            Vibration = vibration
         };
     }
-
-    /// <summary>Builds the plain sensor frame for the ambient channels.</summary>
-    public object BuildAmbientFrame(PowerPlantState state, AnomalyResult ambient) => new
-    {
-        timestamp = DateTime.Now.ToString("o"),
-        nodeId = "COM3",
-        temp = state.AmbientTemperature,
-        humidity = state.AmbientHumidity,
-        vibration = state.Vibration,
-        rpm = state.Rpm,
-        anomalyScore = ambient.ZScore,
-        isAnomaly = ambient.IsAnomaly,
-        predictedTemp60s = ambient.PredictedValueIn60s
-    };
 
     private static string DescribeTitle(AnomalyResult dab, AnomalyResult psfb)
     {

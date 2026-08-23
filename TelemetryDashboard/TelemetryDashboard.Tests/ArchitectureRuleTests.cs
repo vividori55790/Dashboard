@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using TelemetryDashboard.Core.Streaming;
 using TelemetryDashboard.Core.Analytics;
@@ -417,7 +417,6 @@ public partial class ArchitectureRuleTests
         "TelemetryDashboard.Core/Services/TimeSyncJitterBuffer.cs",                // 159 lines
         "TelemetryDashboard.Core/Recording/TimeTravelDvrPlayer.cs",                 // 247 lines
         "TelemetryDashboard.Core/Simulator/PowerPlantSimulator.cs",                // 164 lines
-        "TelemetryDashboard.Core/Simulator/PowerTelemetryFrameBuilder.cs",         // 151 lines
         "TelemetryDashboard.Core/Streaming/TelemetryFrameRecorder.cs",             // 154 lines
         "TelemetryDashboard.Core/Streaming/TelemetryHttpRoutes.cs",                // 204 lines
         "TelemetryDashboard.Infrastructure/Integrations/MultiChannelAlertForwarder.cs",    // 271 lines

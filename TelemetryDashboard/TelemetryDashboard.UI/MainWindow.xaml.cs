@@ -321,8 +321,16 @@ public partial class MainWindow : Window
             state.AmbientTemperature, state.AmbientHumidity, state.Vibration, state.Rpm,
             frame.Ambient, frame.Vibration);
 
-        _streamingServer.BroadcastTelemetry(_frameBuilder.BuildAmbientFrame(state, frame.Ambient));
-        _streamingServer.BroadcastTelemetry(frame.WireFrame);
+        // Nothing is broadcast from this tick any more, and measuring is what settled it. These
+        // two lines put forty frames a second on the wire in the shape this product used before it
+        // had one -- a flat {temp, humidity, rpm} and a nested {grid, dab, psfb, alarm} -- while
+        // every page it ships reads {nodeId, variable, value, unit} and discards anything else.
+        // Counted on the running shell with a browser attached and the simulator not started: 214
+        // messages received, 0 readable. The comment above the builder said the bundled consoles
+        // bind to these names; none of them has for some time.
+        //
+        // The model still runs, because the ambient readouts and the twin's thermal field are read
+        // off it above. What it no longer does is publish.
 
         // The twin's thermal field. The node ids are the profile's, not this file's: the simulator
         // knows a DAB temperature and a PSFB temperature, and the profile in force is what says
