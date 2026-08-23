@@ -41,7 +41,7 @@ public partial class CHeaderExportDialog : Window
 
         TxtSourceNotice.Text = isExample
             ? "예시 설정으로 생성한 코드입니다. 연결된 노드의 설정에서 생성한 것이 아닙니다."
-            : "현재 노드 설정에서 생성한 코드입니다.";
+            : "현재 프로파일과 직렬 설정에서 생성한 코드입니다. 대상 플랫폼만 기본값입니다.";
         TxtSourceNotice.Foreground = isExample
             ? (System.Windows.Media.Brush)FindResource("WarningBrush")
             : (System.Windows.Media.Brush)FindResource("TextPrimaryBrush");

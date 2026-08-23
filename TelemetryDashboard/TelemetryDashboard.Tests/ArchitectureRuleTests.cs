@@ -404,7 +404,6 @@ public partial class ArchitectureRuleTests
         "TelemetryDashboard.Core/Security/Ed25519Point.cs",                        // 185 lines
         "TelemetryDashboard.Core/Security/MeshPacketCodec.cs",                     // 182 lines
         "TelemetryDashboard.Core/Services/AdaptiveSamplingController.cs",          // 198 lines
-        "TelemetryDashboard.Core/Services/CHeaderGenerator.cs",                    // 154 lines
         "TelemetryDashboard.Core/Services/DashboardExporter.cs",                   // 338 lines — embedded HTML template
         "TelemetryDashboard.Core/Services/DataRouter.cs",                          // 157 lines
         "TelemetryDashboard.Core/Services/EmergencyMcuController.cs",              // 279 lines

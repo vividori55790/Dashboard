@@ -1,6 +1,7 @@
 namespace TelemetryDashboard.Core.Services;
 
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 using TelemetryDashboard.Core.Models;
@@ -38,13 +39,19 @@ public class CHeaderGenerator
         sb.AppendLine("/* Telemetry Data Struct */");
         sb.AppendLine("typedef struct {");
 
-        if (config.Variables != null && config.Variables.Count > 0)
+        // Through CFieldNames, so the driver's data->field references and these declarations
+        // cannot drift: the two files read the same list rather than each sanitising its own.
+        IReadOnlyList<CField> fields = CFieldNames.For(config);
+        if (fields.Count > 0)
         {
-            foreach (var v in config.Variables)
+            // No comment naming the original channel. It would carry the raw name into the header,
+            // and a raw name is arbitrary text: "°C" makes the file non-ASCII, and a name holding
+            // "*/" closes the comment early and breaks the build. The driver states the mapping
+            // exactly where it has to exist anyway -- Telemetry_SendField("psfb.output_voltage",
+            // data->psfb_output_voltage, "V") -- so nothing is lost by keeping this side plain.
+            foreach (CField field in fields)
             {
-                string fieldName = SanitizeIdentifier(v.Name);
-                string dataType = string.IsNullOrWhiteSpace(v.DataType) ? "float" : v.DataType;
-                sb.AppendLine($"    {dataType} {fieldName};");
+                sb.AppendLine($"    {field.DataType} {field.Name};");
             }
         }
         else
@@ -61,72 +68,14 @@ public class CHeaderGenerator
         return sb.ToString();
     }
 
-    public string GenerateDriverCode(string? platformOrTemplatePath)
-    {
-        string platform = string.IsNullOrWhiteSpace(platformOrTemplatePath) ? "STM32" : platformOrTemplatePath.ToUpperInvariant();
+    /// <summary>Generates the driver source for <paramref name="platformOrTemplatePath"/>.</summary>
+    /// <remarks>Kept so callers that only know a platform still work; it configures nothing.</remarks>
+    public string GenerateDriverCode(string? platformOrTemplatePath) =>
+        CDriverGenerator.Generate(null, platformOrTemplatePath);
 
-        StringBuilder sb = new();
-        sb.AppendLine($"/* Auto-Generated Driver Source for {platform} */");
-        sb.AppendLine("#include \"telemetry_config.h\"");
-        sb.AppendLine("#include <stdio.h>");
-        sb.AppendLine("#include <string.h>");
-        sb.AppendLine();
-
-        if (platform.Contains("ESP32"))
-        {
-            sb.AppendLine("/* ESP32 Driver Implementation */");
-            sb.AppendLine("#include \"driver/uart.h\"");
-            sb.AppendLine();
-            sb.AppendLine("void Telemetry_SendPacket(TelemetryData_t* data) {");
-            sb.AppendLine("    /* telemetry_send_packet routine */");
-            sb.AppendLine("    char buf[TELEMETRY_BUFFER_SIZE];");
-            sb.AppendLine("    int len = snprintf(buf, sizeof(buf), \"$%s,%s,%.2f,%.2f*00\\r\\n\", TELEMETRY_TAG, TELEMETRY_NODE_ID, data->temperature, data->vibration);");
-            sb.AppendLine("    uart_write_bytes(UART_NUM_1, (const char*)buf, len);");
-            sb.AppendLine("}");
-        }
-        else if (platform.Contains("ARDUINO"))
-        {
-            sb.AppendLine("/* Arduino Driver Implementation */");
-            sb.AppendLine("#include <Arduino.h>");
-            sb.AppendLine();
-            sb.AppendLine("void Telemetry_SendPacket(TelemetryData_t* data) {");
-            sb.AppendLine("    /* telemetry_send_packet routine */");
-            sb.AppendLine("    char buf[TELEMETRY_BUFFER_SIZE];");
-            sb.AppendLine("    int len = snprintf(buf, sizeof(buf), \"$%s,%s,%.2f,%.2f*00\\r\\n\", TELEMETRY_TAG, TELEMETRY_NODE_ID, data->temperature, data->vibration);");
-            sb.AppendLine("    Serial.write((const uint8_t*)buf, len);");
-            sb.AppendLine("}");
-        }
-        else
-        {
-            // Default STM32
-            sb.AppendLine("/* STM32 HAL Driver Implementation */");
-            sb.AppendLine("#include \"stm32f4xx_hal.h\"");
-            sb.AppendLine("extern UART_HandleTypeDef huart1;");
-            sb.AppendLine();
-            sb.AppendLine("void Telemetry_SendPacket(TelemetryData_t* data) {");
-            sb.AppendLine("    /* telemetry_send_packet routine */");
-            sb.AppendLine("    char buf[TELEMETRY_BUFFER_SIZE];");
-            sb.AppendLine("    int len = snprintf(buf, sizeof(buf), \"$%s,%s,%.2f,%.2f*00\\r\\n\", TELEMETRY_TAG, TELEMETRY_NODE_ID, data->temperature, data->vibration);");
-            sb.AppendLine("    HAL_UART_Transmit(&huart1, (uint8_t*)buf, len, HAL_MAX_DELAY);");
-            sb.AppendLine("}");
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("void telemetry_send_packet(TelemetryData_t* data) {");
-        sb.AppendLine("    Telemetry_SendPacket(data);");
-        sb.AppendLine("}");
-
-        return sb.ToString();
-    }
-
-    public string GenerateDriverCode(SensorNodeConfig config, string? platformOrTemplatePath = null)
-    {
-        string platform = string.IsNullOrWhiteSpace(platformOrTemplatePath)
-            ? (config?.TargetPlatform ?? "STM32")
-            : platformOrTemplatePath;
-
-        return GenerateDriverCode(platform);
-    }
+    /// <summary>Generates the driver source that transmits <paramref name="config"/>'s channels.</summary>
+    public string GenerateDriverCode(SensorNodeConfig config, string? platformOrTemplatePath = null) =>
+        CDriverGenerator.Generate(config, platformOrTemplatePath);
 
     public static string GenerateTelemetryConfigHeader(string platform)
     {

@@ -57,9 +57,7 @@ public partial class MainWindow
             string portName = CboPort.SelectedItem.ToString() ?? string.Empty;
             if (portName.Contains(' ')) portName = portName.Split(' ')[0]; // Strip any descriptive suffix
 
-            int baudRate = 115200;
-            if (CboBaudRate.SelectedItem is int b) baudRate = b;
-            else if (int.TryParse(CboBaudRate.SelectedItem?.ToString(), out int bParsed)) baudRate = bParsed;
+            int baudRate = SelectedBaudRate();
 
             // Stop the simulation stream unconditionally. The tick timer is started at launch to
             // give the web console live data, so gating this on _isSimulating (false at startup)

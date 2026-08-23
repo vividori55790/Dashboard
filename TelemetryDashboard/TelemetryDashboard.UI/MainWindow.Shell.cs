@@ -306,9 +306,13 @@ public partial class MainWindow
 
     private void BtnGenerateCHeader_Click(object sender, RoutedEventArgs e)
     {
-        CHeaderExportDialog dlg = new CHeaderExportDialog { Owner = this };
+        SensorNodeConfig? config = FirmwareConfig();
+        CHeaderExportDialog dlg = new CHeaderExportDialog(config) { Owner = this };
         dlg.ShowDialog();
-        ControlPanel.LogMessage("TOOLS", "Opened STM32 C Header & Driver Code Generator.");
+
+        ControlPanel.LogMessage("TOOLS", config is null
+            ? "Opened the firmware generator with no profile loaded, so it shows the worked example."
+            : $"Generated firmware for {config.NodeId}: {config.Variables.Count} channel(s) at {config.BaudRate} baud.");
     }
 
     private void BtnFormulaCalc_Click(object sender, RoutedEventArgs e)
