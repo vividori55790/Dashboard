@@ -26,7 +26,7 @@ public class CommandItem
 /// which is the same test written so that it looks like it supports patterns and does not.
 /// </para>
 /// </remarks>
-public class CommandPaletteService
+public partial class CommandPaletteService
 {
     private readonly Dictionary<string, CommandItem> _commands = new(StringComparer.OrdinalIgnoreCase);
     private List<string> _filtered = new();
@@ -48,24 +48,29 @@ public class CommandPaletteService
     public string? SelectedCommand =>
         _selectedIndex >= 0 && _selectedIndex < _filtered.Count ? _filtered[_selectedIndex] : null;
 
-    public Dictionary<string, Action?> Commands =>
-        _commands.ToDictionary(k => k.Key, v => v.Value.Action, StringComparer.OrdinalIgnoreCase);
-
     public void RegisterCommand(string name, string category, Action? action)
     {
         _commands[name] = new CommandItem { Name = name, Category = category, Action = action };
     }
 
-    public void Register(string name, Action action) => RegisterCommand(name, "General", action);
+    /// <summary>Commands whose name or category contains <paramref name="query"/>.</summary>
+    /// <remarks>
+    /// The category counts because it is the ribbon tab the command sits on, and that is often what
+    /// somebody remembers: they know the export lives under 도구 without remembering what the
+    /// button is called. Matching names alone made the tab name -- the one piece of structure the
+    /// palette inherited -- unsearchable.
+    /// </remarks>
+    public List<string> FilterCommands(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return _commands.Keys.ToList();
 
-    public List<string> FilterCommands(string? query) =>
-        string.IsNullOrWhiteSpace(query)
-            ? _commands.Keys.ToList()
-            : _commands.Keys
-                .Where(k => k.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-    public List<string> Search(string query) => FilterCommands(query);
+        string needle = query.Trim();
+        return _commands.Values
+            .Where(c => c.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                     || c.Category.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Name)
+            .ToList();
+    }
 
     /// <summary>
     /// Applies a query and puts the selection on the first match.
@@ -96,25 +101,9 @@ public class CommandPaletteService
         _selectedIndex = (_selectedIndex - 1 + _filtered.Count) % _filtered.Count;
     }
 
-    public void NavigateNext() => MoveNext();
-
-    public void NavigatePrevious() => MovePrevious();
-
     public void ExecuteCommand(string? name)
     {
         if (name is not null && _commands.TryGetValue(name, out CommandItem? cmd)) cmd.Action?.Invoke();
-    }
-
-    public void Execute(string name) => ExecuteCommand(name);
-
-    /// <summary>Runs whatever Enter would run.</summary>
-    /// <returns>The command that ran, or null when nothing was selected.</returns>
-    public string? ExecuteSelected()
-    {
-        string? name = SelectedCommand;
-        if (name is null) return null;
-        ExecuteCommand(name);
-        return name;
     }
 
     /// <summary>
@@ -140,8 +129,4 @@ public class CommandPaletteService
     /// </remarks>
     public void Close() => IsVisible = false;
 
-    public void ToggleVisibility()
-    {
-        if (IsVisible) Close(); else Open();
-    }
 }

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     The application shell: identity bar, command ribbon, docked workspace, status bar.
 
     Three things were rebuilt rather than adjusted.
@@ -265,7 +265,7 @@
         </Border>
 
         <!-- =========================== Command ribbon =========================== -->
-        <TabControl Grid.Row="1" Style="{StaticResource RibbonTabs}">
+        <TabControl x:Name="Ribbon" Grid.Row="1" Style="{StaticResource RibbonTabs}">
 
             <!-- Tab 1: the monitored system, rendered from the selected profile. -->
             <TabItem Header="시뮬레이션 프로파일">

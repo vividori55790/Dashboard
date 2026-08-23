@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FluentAssertions;
 using TelemetryDashboard.UI.Services;
 using Xunit;
@@ -151,5 +151,31 @@ public class CommandPaletteTests
             service.ApplyQuery(name).Should().Contain(name,
                 $"'{name}' has to be findable by its own name");
         }
+    }
+
+    [Fact]
+    [Trait("Category", "Palette")]
+    public void ACommandIsFoundByTheTabItSitsOnAsWellAsByItsName()
+    {
+        // The category is the ribbon tab, and that is often what somebody remembers: they know the
+        // export is under 도구 without remembering the button's wording. Matching names alone left
+        // the one piece of structure the palette inherited from the ribbon unsearchable.
+        var service = new CommandPaletteService();
+        service.RegisterCommand("MATLAB 파일로 내보내기", "도구", () => { });
+        service.RegisterCommand("포트 다시 검색", "연결", () => { });
+
+        service.ApplyQuery("도구").Should().ContainSingle().Which.Should().Be("MATLAB 파일로 내보내기");
+        service.ApplyQuery("연결").Should().ContainSingle().Which.Should().Be("포트 다시 검색");
+    }
+
+    [Fact]
+    [Trait("Category", "Palette")]
+    public void AQueryMatchingNeitherNameNorCategoryFindsNothing()
+    {
+        var service = new CommandPaletteService();
+        service.RegisterCommand("포트 다시 검색", "연결", () => { });
+
+        service.ApplyQuery("디지털 트윈").Should().BeEmpty();
+        service.SelectedCommand.Should().BeNull("Enter must not run something that did not match");
     }
 }

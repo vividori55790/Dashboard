@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -263,8 +263,23 @@ public partial class MainWindow : Window
         CboBaudRate.SelectedItem = 115200;
     }
 
+    /// <summary>
+    /// Fills the palette: everything on the ribbon, then the few commands the ribbon has no button
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// The ribbon first, so a hand-written entry of the same name wins — registration is by name
+    /// and the later call replaces the earlier. The palette used to hold these five alone while the
+    /// ribbon carried some forty, which made it a shortcut to the handful of commands an operator
+    /// was least likely to be hunting for.
+    /// </remarks>
     private void RegisterDefaultCommands()
     {
+        foreach (CommandItem command in RibbonCommandHarvest.From(Ribbon))
+        {
+            _commandPaletteService.RegisterCommand(command.Name, command.Category, command.Action);
+        }
+
         _commandPaletteService.RegisterCommand("Toggle Theme", "View", () => _themeService.ToggleTheme());
         _commandPaletteService.RegisterCommand("Scope Layout", "Workspace", () => _layoutManager.ApplyPreset(LayoutPreset.ScopeMode));
         _commandPaletteService.RegisterCommand("Start Dual-MCU Simulator", "Simulation", () => StartSimulator());
