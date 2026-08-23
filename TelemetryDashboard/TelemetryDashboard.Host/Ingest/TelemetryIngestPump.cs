@@ -80,7 +80,8 @@ public sealed class TelemetryIngestPump
         JsonChannelMap? jsonMap = null,
         ArchiveSink? archive = null,
         bool watchIntervals = false,
-        int driftWindowSeconds = 0)
+        int driftWindowSeconds = 0,
+        IReadOnlyList<RoutingRule>? rules = null)
     {
         _jsonMap = jsonMap;
         _source = source;
@@ -99,7 +100,10 @@ public sealed class TelemetryIngestPump
         // frame carries rather than an unmarked copy.
         _router.SourceIsSimulated = source.IsSimulated;
 
-        foreach (RoutingRule rule in DefaultRoutingRules.Create())
+        // Whatever this run decided the wire looks like. Null means the built-in framing, which
+        // is what this product's own generated firmware emits; a rule file replaces it, because a
+        // file describing the device on the bench IS the routing configuration.
+        foreach (RoutingRule rule in rules ?? DefaultRoutingRules.Create())
         {
             _router.RegisterRule(rule);
         }

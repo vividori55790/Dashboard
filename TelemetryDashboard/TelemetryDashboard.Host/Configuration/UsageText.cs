@@ -74,6 +74,17 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --rules <file>    What the device on this bench actually sends. The built-in rules
+                                read $TELE,node,channel,value,unit, which is the framing this
+                                product's own generated firmware emits -- and the framing a real
+                                MCU does not have. A rule file says which of its names is which
+                                declared channel, and in what unit:
+                                  samples/rules.example.json
+                                Names nothing maps still arrive under their own name; what they do
+                                not do is match a band, a computed channel or a twin placement.
+                                Every mapping is checked against the profile at start-up, and what
+                                disagrees is printed there rather than discovered by the alarm that
+                                did not sound.
               --expect <ids>    Nodes this rig has, comma separated: --expect PSFB-01,DAB-01.
                                 The hub already learns a node the first time it speaks, which
                                 catches something that worked and then stopped. It cannot catch a

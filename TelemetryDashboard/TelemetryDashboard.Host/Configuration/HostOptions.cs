@@ -294,6 +294,18 @@ public sealed class HostOptions
     /// </remarks>
     public IReadOnlyList<string> RetiredNodes { get; init; } = [];
 
+    /// <summary>
+    /// File saying what the device on this bench actually sends, or null for the defaults.
+    /// </summary>
+    /// <remarks>
+    /// The built-in rules recognise the framing this product's own generated firmware emits, which
+    /// is the framing a real installation does not have. A bench STM32 names its own channels and
+    /// may report in its own units, and without a rule saying so every band, computed channel and
+    /// twin placement the profile declares matches nothing at all -- readings on screen with
+    /// nothing judging them.
+    /// </remarks>
+    public string? RulesPath { get; init; }
+
     /// <summary>File the learned node set is remembered in, or null to forget on every restart.</summary>
     /// <remarks>
     /// Opt-in because it writes a file the operator did not otherwise ask for. Worth asking for:

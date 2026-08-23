@@ -100,6 +100,7 @@ internal sealed class HostOptionsDraft
     public IReadOnlyList<string> ExpectedNodes = [];
     public IReadOnlyList<string> RetiredNodes = [];
     public string? CoverageStatePath;
+    public string? RulesPath;
 
     public HostOptions Build() => new()
     {
@@ -142,6 +143,7 @@ internal sealed class HostOptionsDraft
         PollInterval = PollInterval,
         ExpectedNodes = ExpectedNodes,
         RetiredNodes = RetiredNodes,
-        CoverageStatePath = CoverageStatePath
+        CoverageStatePath = CoverageStatePath,
+        RulesPath = RulesPath
     };
 }

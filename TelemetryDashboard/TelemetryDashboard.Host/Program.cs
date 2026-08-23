@@ -82,40 +82,42 @@ public static class Program
         await UpdateCheck.PrintAsync(options, HostVersion, shutdown.Token).ConfigureAwait(false);
         DashboardExport.Print(options);
 
-        // The pump is built before the plugins so they are handed the router it is publishing
-        // through, and started after them so no frame is routed past a plugin that is not up yet.
         if (!IngestSetup.TryLoadChannelMap(options, out Core.Ingest.JsonChannelMap? channelMap, out string? mapError))
         {
-            Console.Error.WriteLine($"telemetry-host: {mapError}");
-            await console.DisposeAsync().ConfigureAwait(false);
-            return ExitUsage;
+            return await StartupRefusal.EndAsync(console, mapError!).ConfigureAwait(false);
         }
 
-        // Opened before the pump, so nothing is published before there is somewhere to keep it.
         if (!ArchiveSetup.TryOpen(options, console.Server, out ArchiveSink? opened, out string? refusal))
         {
-            Console.Error.WriteLine($"telemetry-host: {refusal}");
-            await console.DisposeAsync().ConfigureAwait(false);
-            return ExitUsage;
+            return await StartupRefusal.EndAsync(console, refusal!).ConfigureAwait(false);
         }
         await using ArchiveSink? archive = opened;
 
-        // Before the pump: the publisher reads the limit monitor when it is constructed.
         HostFeatureSetup.Attach(options, console.Server, source);
 
+        if (!RoutingSetup.TryResolve(options, HostFeatureSetup.ActiveProfile(options),
+                out RoutingSetup.Result routing, out string? ruleRefusal))
+        {
+            return await StartupRefusal.EndAsync(console, ruleRefusal!).ConfigureAwait(false);
+        }
+
+        foreach (string line in routing.Lines) Console.WriteLine(line);
+
+        // After the archive and HostFeatureSetup, before the plugins: nothing is published before
+        // there is somewhere to keep it, and no frame is routed past a plugin that is not up yet.
         TelemetryIngestPump? pump = source is null
             ? null
             : new TelemetryIngestPump(console.Server, source, recorder, jsonMap: channelMap, archive: archive,
-                watchIntervals: options.WatchIntervals, driftWindowSeconds: options.DriftWindowSeconds);
-        // After the pump exists (it owns the ledger) and before the banner footer, so an operator
-        // sees what the hub thinks the rig is on the same screen as everything else it opened.
+                watchIntervals: options.WatchIntervals, driftWindowSeconds: options.DriftWindowSeconds,
+                rules: routing.Rules);
+        // After the pump, which owns the ledger, and before the footer so it lands in the banner.
         foreach (string line in CoverageSetup.Apply(options, pump, console.Server)) Console.WriteLine(line);
 
         using PluginHostSession plugins = PluginHostSession.Start(
             options, pump?.Router, IngestSetup.SerialManagerOf(source));
 
-        // After the pump exists, so a relay is subscribed to the stream that is actually running
-        // rather than reporting itself armed over nothing.
+        // After the pump, so a relay subscribes to a running stream rather than reporting itself
+        // armed over nothing.
         await using OutboundRelays relays = await OutboundRelays.StartAsync(
             options, pump, IngestSetup.SerialManagerOf(source), archive?.Store).ConfigureAwait(false);
         foreach (string line in relays.BannerLines) Console.WriteLine(line);

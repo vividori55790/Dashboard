@@ -260,6 +260,12 @@ public static class CommandLineParser
                     draft.RetiredNodes = retired;
                     break;
 
+                case "--rules":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawRules)) return ArgumentCursor.MissingValue(argument);
+                    if (!File.Exists(rawRules)) return ArgumentCursor.Fail($"rule file '{rawRules}' does not exist.");
+                    draft.RulesPath = Path.GetFullPath(rawRules);
+                    break;
+
                 case "--coverage-state":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawCoverage)) return ArgumentCursor.MissingValue(argument);
                     draft.CoverageStatePath = Path.GetFullPath(rawCoverage);
@@ -362,22 +368,18 @@ public static class CommandLineParser
 
         // Both sources at once would mean broadcasting synthetic and measured frames on one
         // channel, with nothing downstream able to separate them again.
-        // Naming a profile without asking for the simulator does nothing, and doing nothing
-        // quietly is how an operator concludes the flag worked. Exporting a dashboard is the
-        // second thing a profile decides, so it counts as a use of the flag: the exported page
-        // carries one card per declared channel whether the data behind it is generated or read
-        // off a wire.
-        // The loopback port generates from a profile too, so naming one is meaningful there. This
-        // check predates it and refused the only configuration that can exercise the interlock.
+        // A profile named alongside a real device used to be refused, and the reason given was that
+        // it would do nothing: the feature setup consulted a profile only for generated sources, so
+        // the flag was accepted and ignored. That premise no longer holds. A profile also declares
+        // the rig's safe bands, its derived channels and where its nodes sit, and all three apply
+        // to hardware -- an operator reading an MCU had to restate every band on the command line
+        // that the profile they already have states once.
+        //
+        // What a profile still does not decide for a real device is what it sends. That is the
+        // rule file's job, and the two are separate on purpose: the profile describes the rig, the
+        // rules describe this firmware's spelling of it.
         bool generates = draft.Simulate
             || string.Equals(draft.SerialPort, "loopback", StringComparison.OrdinalIgnoreCase);
-
-        if (draft.ProfileId is not null && !generates && draft.DashboardExportPath is null)
-        {
-            return ArgumentCursor.Fail(
-                "--profile applies to --simulate or --export-dashboard; it describes what to generate "
-                + "or what to draw, not how to read a device.");
-        }
 
         // Refused rather than ignored, and refused rather than allowed to pick a port itself. This
         // is the only flag that transmits to hardware, so the port it writes to has to be one the

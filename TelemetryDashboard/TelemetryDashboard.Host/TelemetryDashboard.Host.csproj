@@ -51,7 +51,7 @@
       A bare symbol only resolves here when it names no file on disk, so a real path always wins.
       Samples/README.md records which instrument each file is, where the data came from and when.
     -->
-    <Content Include="Samples\*.csv;Samples\README.md">
+    <Content Include="Samples\*.csv;Samples\*.json;Samples\README.md">
       <Link>samples\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

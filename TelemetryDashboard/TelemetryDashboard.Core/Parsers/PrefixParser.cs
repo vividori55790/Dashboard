@@ -122,12 +122,35 @@ public static class PrefixParser
         {
             if (tokens.Count >= 3 && double.TryParse(tokens[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double val3))
             {
+                // The device's own name for this quantity, translated into the one the profile
+                // declares. Unmapped names pass through unchanged: an installation whose firmware
+                // already speaks the declared ids -- which is what this product's own generator
+                // emits -- needs no map, and a name nobody mapped must still reach the chart rather
+                // than vanish into a rule that was meant to rename it.
+                string wireName = tokens[1];
+                string wireUnit = tokens.Count >= 4 ? tokens[3] : "";
+
+                if (rule.NameMap.TryGetValue(wireName, out Ingest.ChannelAlias? alias))
+                {
+                    packets.Add(new TelemetryPacket
+                    {
+                        NodeId = !string.IsNullOrEmpty(tokens[0]) ? tokens[0] : rule.TargetNodeId,
+                        Variable = alias.Channel,
+                        Value = alias.Apply(val3),
+                        Unit = string.IsNullOrEmpty(alias.Unit) ? wireUnit : alias.Unit,
+                        Timestamp = rawPacket.Timestamp,
+                        RawData = rawPacket.Payload,
+                        Flags = PacketFlags.None
+                    });
+                    return true;
+                }
+
                 packets.Add(new TelemetryPacket
                 {
                     NodeId = !string.IsNullOrEmpty(tokens[0]) ? tokens[0] : rule.TargetNodeId,
-                    Variable = tokens[1],
+                    Variable = wireName,
                     Value = val3,
-                    Unit = tokens.Count >= 4 ? tokens[3] : "",
+                    Unit = wireUnit,
                     Timestamp = rawPacket.Timestamp,
                     RawData = rawPacket.Payload,
                     Flags = PacketFlags.None

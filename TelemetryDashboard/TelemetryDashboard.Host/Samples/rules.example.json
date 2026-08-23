@@ -1,0 +1,41 @@
+// What the MCU on this bench actually sends, in this installation's terms.
+//
+// The built-in rules read $TELE,node,channel,value,unit and take the channel name from the frame.
+// That is what this product's own generated firmware emits. A real STM32 has its own names and
+// often its own units, and until something says which is which, every band, computed channel and
+// twin placement the profile declares matches nothing: the readings arrive, chart themselves, and
+// nothing judges them.
+//
+// Comments like these are read and skipped, so a file can explain itself to the next person.
+{
+  "name": "psfb-bench-example",
+
+  "rules": [
+    {
+      "type": "prefix",
+      "tag": "TELE",
+
+      // Which serial port this rule applies to. * means any.
+      "port": "*",
+
+      // Used only when the frame does not name a node itself.
+      "node": "PSFB-01",
+
+      // device name -> declared channel. "unit" and "gain" are optional; give them when the
+      // device does not report what the profile declares. The gain is applied first, then the
+      // offset, and the unit describes the result.
+      "channels": {
+        "Vout": { "channel": "psfb.output_voltage", "unit": "V" },
+        "Iout": { "channel": "psfb.output_current", "unit": "A" },
+
+        // A device reporting millivolts against a band written in volts. Without the gain and the
+        // unit the band refuses to judge, and a band that cannot fire looks exactly like a machine
+        // that is behaving.
+        "Vbus_mV": { "channel": "dab.bus_voltage", "unit": "V", "gain": 0.001 },
+
+        "Iin": { "channel": "dab.input_current", "unit": "A" },
+        "SoC": { "channel": "ups.state_of_charge", "unit": "%" }
+      }
+    }
+  ]
+}
