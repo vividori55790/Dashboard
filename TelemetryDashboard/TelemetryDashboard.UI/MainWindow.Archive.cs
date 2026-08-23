@@ -98,7 +98,10 @@ public partial class MainWindow
             _archiveRing = new ChannelDataLogger(ArchiveRingCapacity);
             _archiveDrain = new ChannelDataLoggerDrain(_archiveRing, _archive);
             _archiveDrain.Start();
+            PublishArchiveToConsole();
             ControlPanel.LogMessage("DATA", $"[ARCHIVE] Durable store open: {_archive.DatabasePath}");
+            ControlPanel.LogMessage("DATA",
+                "[ARCHIVE] 브라우저에서 /api/history 와 /api/incident 로 조회할 수 있습니다.");
         }
         catch (Exception ex)
         {
@@ -177,5 +180,9 @@ public partial class MainWindow
         _archive?.Dispose();
         _archiveDrain = null;
         _archive = null;
+
+        // Withdrawn before the handle is gone rather than after: a browser querying a disposed
+        // store gets an exception where it should get "this host has no archive".
+        PublishArchiveToConsole();
     }
 }

@@ -129,6 +129,8 @@ public partial class MainWindow
         {
             ControlPanel.LogMessage("ERROR", $"[LIMIT] {warning}");
         }
+
+        PublishLimitsToConsole();
         ProfileChannels.Clear();
         ProfileScenarios.Clear();
 
@@ -310,6 +312,7 @@ public partial class MainWindow
         _simulatorEngine?.Dispose();
         _simulatorEngine = new ProfileSimulatorEngine(_activeProfile ?? MonitoringProfileSet.Default);
         _simulatorEngine.StartSimulation();
+        PublishControlToConsole(_simulatorEngine);
         _simulatorReadCts = new CancellationTokenSource();
         _ = Task.Run(() => ConsumeSimulatedPacketsAsync(_simulatorReadCts.Token));
 
@@ -327,6 +330,7 @@ public partial class MainWindow
         _simulatorReadCts?.Cancel();
         _simulatorReadCts = null;
         _simulatorEngine?.StopSimulation();
+        PublishControlToConsole(null);
 
         BtnToggleSimulator.SetResourceReference(
             System.Windows.Controls.ContentControl.ContentProperty, "Ui_Cmd_ToggleSimulator");

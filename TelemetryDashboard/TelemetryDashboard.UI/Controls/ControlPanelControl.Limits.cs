@@ -47,6 +47,17 @@ public partial class ControlPanelControl
     /// <summary>How many bands are being watched, for the caller to say so.</summary>
     public int WatchedLimitCount => _limits?.Rules.Count ?? 0;
 
+    /// <summary>
+    /// The monitor in force, so the streaming server can answer <c>/api/limits</c> from it.
+    /// </summary>
+    /// <remarks>
+    /// The same instance rather than a copy, deliberately: the breach state a browser is shown has
+    /// to be the state that raised the banner on this screen. Two monitors over one profile would
+    /// each track their own entries and could disagree about whether a rail is currently outside
+    /// its band -- which is the one thing both are being asked.
+    /// </remarks>
+    public LimitMonitor? Limits => _limits;
+
     /// <summary>Compares one reading against every band that watches its channel.</summary>
     /// <remarks>
     /// Only the entry into a breach interrupts, matching what the anomaly path already does: a
