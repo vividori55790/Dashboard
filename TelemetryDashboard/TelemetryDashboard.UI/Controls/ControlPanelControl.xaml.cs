@@ -45,6 +45,24 @@ public class EventLogEntry
     /// </remarks>
     public string Reading =>
         Value == NoValue && ZScore == NoValue ? string.Empty : $"{Value}  {ZScore}";
+
+    /// <summary>The row as one sentence, for anything that reads it rather than draws it.</summary>
+    /// <remarks>
+    /// The list renders these through a template, so the columns on screen were always right — and
+    /// everything that stringifies a row without one got
+    /// "TelemetryDashboard.UI.Controls.EventLogEntry", including the name a screen reader announces
+    /// for every line of the event log. The same defect was fixed on
+    /// <see cref="Core.Simulator.MonitoringProfile"/> for the same reason.
+    /// </remarks>
+    public override string ToString()
+    {
+        string reading = Reading;
+        string where = Node == NoValue ? Variable : $"{Node} {Variable}";
+
+        return string.IsNullOrEmpty(reading)
+            ? $"{Time} {Level} {where}: {Message}"
+            : $"{Time} {Level} {where}: {Message} ({reading.Trim()})";
+    }
 }
 
 /// <summary>
@@ -335,7 +353,12 @@ public partial class ControlPanelControl : UserControl
     }
 
     /// <summary>Updates the panel for a single channel arriving from real hardware.</summary>
-    public void UpdateChannelStats(string node, string variable, double value, AnomalyResult analysis)
+    /// <param name="unit">
+    /// What the reading is in, carried because a declared limit is written in a unit and refuses to
+    /// judge a channel reporting another. Dropping it here made every band unjudgeable.
+    /// </param>
+    public void UpdateChannelStats(
+        string node, string variable, double value, AnomalyResult analysis, string? unit = null)
     {
         Dispatcher.Invoke(() =>
         {
@@ -370,6 +393,11 @@ public partial class ControlPanelControl : UserControl
             // line. Only the simulated path checked, which is the wrong way round for a defect to
             // be arranged -- the demo warned and the plant did not.
             RaiseIfAnomalous(node, variable, value, analysis);
+
+            // A different question from the one above, and the one with an action attached:
+            // "unusual lately" is about a distribution, "outside the band somebody agreed" is
+            // about the machine. The profile states the bands and nothing here consulted them.
+            RaiseIfOutsideLimits(node, variable, value, unit);
 
             // The other half of the same question. RaiseIfAnomalous asks whether this reading is
             // unusual; this asks whether readings are still arriving at all, which no verdict

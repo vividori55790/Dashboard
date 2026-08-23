@@ -132,7 +132,8 @@ public partial class MainWindow
                         // 1200 rpm) whenever a temperature packet came in, so the operator saw
                         // invented readings for sensors the device had never reported.
                         ScopeControl.PushChannel(pkt.Variable, pkt.Value);
-                        ControlPanel.UpdateChannelStats(pkt.NodeId, pkt.Variable, pkt.Value, ml);
+                        ControlPanel.UpdateChannelStats(
+                            pkt.NodeId, pkt.Variable, pkt.Value, ml, pkt.Unit);
 
                         if (_csvRecorder.IsRecording) UpdateRecordingStatus();
 

@@ -120,13 +120,25 @@ public partial class MainWindow
         // and reporting that as an outage would raise an alarm for a deliberate act.
         _simulator.Reset();
         ControlPanel.ResetSilenceWatch();
+
+        // The safe bands travel with the rig, so they are adopted here and dropped here. A band
+        // carried over from another profile would either announce a recovery for a limit nobody
+        // is watching any more, or stay silent about a first excursion because the channel was
+        // already outside one that no longer applies.
+        foreach (string warning in ControlPanel.ApplyLimits(profile))
+        {
+            ControlPanel.LogMessage("ERROR", $"[LIMIT] {warning}");
+        }
         ProfileChannels.Clear();
         ProfileScenarios.Clear();
 
         foreach (ProfileChannel channel in profile.Channels)
         {
-            _simulator.SetSetpoint(channel.Id, channel.Nominal);
-            ProfileChannels.Add(new ChannelSetpoint(channel, _simulator.SetSetpoint));
+            // Through the engine that produces the stream, not the plant model behind the legacy
+            // two-MCU tick. These rows were bound to the latter, so every slider on this panel
+            // moved a number nothing published: measured on the running window, dragging PSFB
+            // output voltage from 48.05 to 42 left the channel reporting 47.6 V a minute later.
+            ProfileChannels.Add(new ChannelSetpoint(channel, CommandSetpoint));
         }
 
         foreach (ProfileScenario scenario in profile.Scenarios)
@@ -140,6 +152,9 @@ public partial class MainWindow
         ActiveProfileText.Text = profile.DisplayName;
         ProfileSummaryText.Text = profile.Summary;
         ControlPanel.LogMessage("PROFILE", $"모니터링 프로파일 적용: {profile.DisplayName}");
+        ControlPanel.LogMessage("PROFILE", ControlPanel.WatchedLimitCount > 0
+            ? $"안전 밴드 {ControlPanel.WatchedLimitCount}개를 감시합니다."
+            : "이 프로파일은 안전 밴드를 선언하지 않았습니다 — 한계 경보는 울리지 않습니다.");
     }
 
     /// <summary>
@@ -207,7 +222,7 @@ public partial class MainWindow
     {
         foreach (KeyValuePair<string, double> setpoint in scenario.Setpoints)
         {
-            _simulator.SetSetpoint(setpoint.Key, setpoint.Value);
+            CommandSetpoint(setpoint.Key, setpoint.Value);
 
             ChannelSetpoint? row = ProfileChannels.FirstOrDefault(
                 c => string.Equals(c.Id, setpoint.Key, StringComparison.OrdinalIgnoreCase));
@@ -216,6 +231,30 @@ public partial class MainWindow
 
         ApplyScenarioFault(scenario);
         ControlPanel.LogMessage("SCENARIO", $"시나리오 적용: {scenario.Label}");
+    }
+
+    /// <summary>
+    /// Moves one channel's setpoint on whatever is currently generating the stream.
+    /// </summary>
+    /// <remarks>
+    /// The engine is built when the simulator starts, so that it follows the profile actually
+    /// selected. Before then there is nothing to command, and a slider that reported success
+    /// while writing into an object nobody reads is the defect this replaces -- so it says so
+    /// instead. The engine adopts the profile's nominal values when it is constructed.
+    /// </remarks>
+    private void CommandSetpoint(string channelId, double value)
+    {
+        if (_simulatorEngine is not { } engine)
+        {
+            ControlPanel.LogMessage("SIMULATOR",
+                $"{channelId} 설정점은 가상 MCU 스트림을 시작한 뒤에 적용됩니다.");
+            return;
+        }
+
+        if (double.IsNaN(engine.SetSetpoint(channelId, value)))
+        {
+            ControlPanel.LogMessage("ERROR", $"{channelId}는 이 프로파일이 선언한 채널이 아닙니다.");
+        }
     }
 
     /// <summary>Resolves a scenario's fault name against the simulator's fault model.</summary>
@@ -365,7 +404,8 @@ public partial class MainWindow
                     await Dispatcher.InvokeAsync(() =>
                     {
                         ScopeControl.PushChannel(packet.Variable, packet.Value);
-                        ControlPanel.UpdateChannelStats(packet.NodeId, packet.Variable, packet.Value, analysis);
+                        ControlPanel.UpdateChannelStats(
+                            packet.NodeId, packet.Variable, packet.Value, analysis, packet.Unit);
                     });
 
                     _streamingServer.BroadcastTelemetry(new
@@ -377,7 +417,12 @@ public partial class MainWindow
                         value = packet.Value,
                         unit = packet.Unit,
                         anomalyScore = analysis.ZScore,
-                        isAnomaly = analysis.IsAnomaly
+                        isAnomaly = analysis.IsAnomaly,
+                        // Carried so a browser watching this shell sees what one watching the host
+                        // sees. Without it the same page drew limit breaches from one and not the
+                        // other, which reads as a rig behaving differently rather than as two
+                        // publishers disagreeing.
+                        limitBreach = ControlPanel.AnyLimitBreached
                     });
                 }
             }

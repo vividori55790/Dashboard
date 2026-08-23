@@ -26,33 +26,19 @@ public static class LimitSetup
     /// <param name="Warnings">Declarations that did not parse, each with the reason.</param>
     public readonly record struct Result(LimitMonitor? Monitor, IReadOnlyList<string> Warnings);
 
+    /// <summary>Combines the profile's declared bands with any given on the command line.</summary>
+    /// <remarks>
+    /// The parsing itself is <see cref="Core.Analytics.LimitDeclarations"/>, in Core, because the
+    /// desktop shell needs the same answer from the same text — and had no way to reach this.
+    /// </remarks>
     public static Result Resolve(HostOptions options, MonitoringProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var warnings = new List<string>();
-        var byDeclaration = new List<ChannelLimit>();
+        Core.Analytics.LimitDeclarations.Resolution resolved = Core.Analytics.LimitDeclarations.Resolve(
+            (profile?.Limits ?? Array.Empty<string>()).Concat(options.Limits));
 
-        foreach (string declaration in (profile?.Limits ?? Array.Empty<string>()).Concat(options.Limits))
-        {
-            try
-            {
-                byDeclaration.Add(ChannelLimit.Parse(declaration));
-            }
-            catch (FormatException ex)
-            {
-                warnings.Add($"limit '{declaration}' was skipped: {ex.Message}");
-            }
-        }
-
-        // Later wins on an identical declaration, so repeating one on the command line is not two
-        // rules watching the same band and reporting every excursion twice.
-        List<ChannelLimit> rules = byDeclaration
-            .GroupBy(r => r.Declaration, StringComparer.Ordinal)
-            .Select(g => g.Last())
-            .ToList();
-
-        return new Result(rules.Count == 0 ? null : new LimitMonitor(rules), warnings);
+        return new Result(resolved.Monitor, resolved.Warnings);
     }
 
     /// <summary>Attaches the monitor to the running server and prints what is in force.</summary>
