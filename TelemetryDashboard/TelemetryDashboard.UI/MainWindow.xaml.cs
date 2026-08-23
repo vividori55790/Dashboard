@@ -26,7 +26,17 @@ namespace TelemetryDashboard.UI;
 
 public partial class MainWindow : Window
 {
-    private readonly ThemeService _themeService = new();
+    /// <summary>
+    /// One settings object for the whole window, and one file behind it.
+    /// </summary>
+    /// <remarks>
+    /// Shared rather than loaded per service, because <see cref="UiSettings"/> is written whole:
+    /// two instances would each save the fields they knew about over the fields they did not, so
+    /// choosing a rules file and then switching the theme would erase the rules file.
+    /// </remarks>
+    private readonly UiSettings _uiSettings = UiSettings.Load();
+
+    private readonly ThemeService _themeService;
     private readonly LayoutManager _layoutManager = new();
     private readonly CommandPaletteService _commandPaletteService = new();
     private readonly DragDropHandler _dragDropHandler = new();
@@ -67,6 +77,8 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        _themeService = new ThemeService(_uiSettings);
+
         InitializeComponent();
         DataContext = this;
 
@@ -110,6 +122,12 @@ public partial class MainWindow : Window
         // This call was missing entirely, which is why the profile picker opened empty and the
         // subtitle kept its placeholder: the collection behind the picker was never filled.
         InitializeProfiles();
+
+        // After the profile, not before it. The rules file replaces the built-in framing, and the
+        // audit that says which declared channels it misses can only run once there is a profile
+        // to miss them from -- loading earlier meant the audit was silent at exactly the moment
+        // somebody was looking at the log.
+        ApplyStoredWireRules();
 
         // Start continuous 20Hz telemetry stream so HTML gets live data immediately
         _simTimer?.Start();

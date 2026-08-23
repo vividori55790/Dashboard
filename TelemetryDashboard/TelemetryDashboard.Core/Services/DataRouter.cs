@@ -9,7 +9,13 @@ using TelemetryDashboard.Core.Plugins;
 public sealed class DataRouter : IDataRouter
 {
     private readonly ConcurrentDictionary<string, SensorNode> _nodes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, RoutingRule> _rules = new();
+    // Copy on write, behind a lock for the writers and a single volatile read for the router.
+    // Replacing a rule set has to be one step: the desktop loads a file while frames are already
+    // arriving, and a clear-then-add would drop every line in the gap onto the positional parser,
+    // which names them Field_1 and charts them.
+    private readonly object _ruleGate = new();
+    private volatile IReadOnlyDictionary<string, RoutingRule> _rules =
+        new Dictionary<string, RoutingRule>(StringComparer.Ordinal);
     private readonly List<IPlugin> _activePlugins = new();
     private readonly FormulaEvaluator _formulaEvaluator = new();
 
@@ -40,14 +46,53 @@ public sealed class DataRouter : IDataRouter
 
     public bool RegisterRule(RoutingRule rule)
     {
-        _rules[rule.Id] = rule;
+        ArgumentNullException.ThrowIfNull(rule);
+
+        lock (_ruleGate)
+        {
+            var next = new Dictionary<string, RoutingRule>(_rules, StringComparer.Ordinal)
+            {
+                [rule.Id] = rule
+            };
+            _rules = next;
+        }
+
         return true;
     }
 
     public bool UnregisterRule(string ruleId)
     {
-        return _rules.TryRemove(ruleId, out _);
+        lock (_ruleGate)
+        {
+            if (!_rules.ContainsKey(ruleId)) return false;
+
+            var next = new Dictionary<string, RoutingRule>(_rules, StringComparer.Ordinal);
+            next.Remove(ruleId);
+            _rules = next;
+            return true;
+        }
     }
+
+    /// <summary>
+    /// Swaps the whole rule set in one step.
+    /// </summary>
+    /// <remarks>
+    /// A file describing the device on the bench replaces the built-ins rather than joining them,
+    /// which is the same decision the headless host makes: two rules claiming one frame is not two
+    /// configurations, it is one ambiguity, and which of them won would differ between runs.
+    /// </remarks>
+    public void ReplaceRules(IEnumerable<RoutingRule> rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var next = new Dictionary<string, RoutingRule>(StringComparer.Ordinal);
+        foreach (RoutingRule rule in rules) next[rule.Id] = rule;
+
+        lock (_ruleGate) _rules = next;
+    }
+
+    /// <summary>The rules currently in force, for anything that has to report them.</summary>
+    public IReadOnlyCollection<RoutingRule> Rules => (IReadOnlyCollection<RoutingRule>)_rules.Values;
 
     public void RegisterPlugin(IPlugin plugin)
     {
@@ -78,7 +123,7 @@ public sealed class DataRouter : IDataRouter
         }
 
         // 2. Built-in High-Speed Engine Pass
-        foreach (var rule in _rules.Values)
+        foreach (RoutingRule rule in _rules.Values)
         {
             if (rule.Port != "*" && !string.Equals(rule.Port, rawPacket.PortName, StringComparison.OrdinalIgnoreCase))
             {

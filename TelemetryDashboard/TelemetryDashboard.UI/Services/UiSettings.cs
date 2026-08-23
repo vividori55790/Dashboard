@@ -29,6 +29,16 @@ public sealed class UiSettings
     /// <summary>UI culture, e.g. <c>ko-KR</c>.</summary>
     public string Language { get; set; } = "ko-KR";
 
+    /// <summary>
+    /// Rules file describing the device on this bench, or empty for the built-in framing.
+    /// </summary>
+    /// <remarks>
+    /// Remembered for the same reason the theme is. An operator whose MCU calls its rail Vout picks
+    /// that file once; asking again at every launch would make the mapping feel like a workaround
+    /// rather than the installation's configuration, which is what it is.
+    /// </remarks>
+    public string WireRulesPath { get; set; } = string.Empty;
+
     /// <summary>Where these came from, and where <see cref="Save"/> writes them back to.</summary>
     /// <remarks>
     /// Carried on the object rather than assumed, because the alternative is a service that cannot

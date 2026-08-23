@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -173,6 +173,12 @@ public partial class MainWindow
     private List<TelemetryPacket> ResolvePackets(RawPacket rawPacket)
     {
         var packets = _dataRouter.Route(rawPacket).ToList();
+
+        // Watched here rather than further down, and deliberately before the fallback: a line no
+        // rule claimed is the fact the draft most needs to report, and the positional parser would
+        // turn it into Field_1 and hide it.
+        _wireSurvey?.Observe(rawPacket, packets);
+
         return packets.Count > 0 ? packets : AutoParseRawPayload(rawPacket);
     }
 

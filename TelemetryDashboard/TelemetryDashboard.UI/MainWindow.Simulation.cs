@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -131,6 +131,11 @@ public partial class MainWindow
         }
 
         PublishLimitsToConsole();
+
+        // The same mapping is complete for one rig and empty for another, so the rules in force
+        // are re-judged against the profile that has just become current.
+        AuditWireRulesForNewProfile();
+
         ProfileChannels.Clear();
         ProfileScenarios.Clear();
 

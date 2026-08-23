@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -118,5 +118,51 @@ public partial class ArchitectureRuleTests
         }
 
         problems.Should().BeEmpty(string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// A ribbon button with an icon and a caption still has to have a name.
+    /// </summary>
+    /// <remarks>
+    /// WPF derives a control's automation name from string content, and the content of these
+    /// buttons is a StackPanel holding a glyph and a TextBlock. Nine of them were therefore
+    /// nameless: a screen reader announced "button" and nothing else, and no automation could
+    /// address them the way a person names them. It was found by trying to press one from outside
+    /// the process and getting the caption TextBlock instead, which is not a button and does not
+    /// support being invoked.
+    /// <para>
+    /// The fix is one attribute, and this rule is what keeps the next button from missing it. A
+    /// button whose caption changes at run time binds to the TextBlock instead of the resource, so
+    /// both spellings are accepted.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void EveryRibbonButtonWithAnIconAndACaptionCarriesAnAutomationName()
+    {
+        string markup = File.ReadAllText(
+            Path.Combine(SolutionRoot, "TelemetryDashboard.UI", "MainWindow.xaml"));
+
+        var offenders = new List<string>();
+
+        foreach (System.Text.RegularExpressions.Match button in Regex.Matches(
+                     markup, @"<Button(?<attributes>[^>]*)>\s*<StackPanel[^>]*>\s*(?<body>.*?)</StackPanel>",
+                     RegexOptions.Singleline))
+        {
+            string body = button.Groups["body"].Value;
+            if (!body.Contains("CommandLabel", StringComparison.Ordinal)) continue;
+            if (button.Groups["attributes"].Value.Contains("AutomationProperties.Name", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            System.Text.RegularExpressions.Match name = Regex.Match(
+                button.Groups["attributes"].Value, @"x:Name=""([A-Za-z0-9]+)""");
+            offenders.Add(name.Success ? name.Groups[1].Value : "an unnamed button");
+        }
+
+        offenders.Should().BeEmpty(
+            "a button whose content is a panel has no automation name of its own, so it is "
+            + "announced as nothing and cannot be addressed by what it says");
     }
 }
