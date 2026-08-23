@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -9,10 +9,10 @@ using TelemetryDashboard.Core.Interfaces;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Simulator;
 
-namespace TelemetryDashboard.Host.Ingest;
+namespace TelemetryDashboard.Infrastructure.Serial;
 
 /// <summary>
-/// A serial manager whose ports are in memory, so the write path can be exercised without a device.
+/// A serial manager whose ports are in memory, so the serial path can be exercised without a device.
 /// </summary>
 /// <remarks>
 /// This exists for one thing that could not otherwise be checked. The emergency interlock is the

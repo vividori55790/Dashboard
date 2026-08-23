@@ -59,7 +59,19 @@ public partial class MainWindow : Window
     private readonly TelemetryCsvRecorder _csvRecorder = new();
 
     // Real Hardware Ingestion Pipeline
-    private readonly MultiPortSerialManager _serialManager = new();
+    /// <summary>The real serial stack, kept whether or not the in-memory port is in use.</summary>
+    private readonly MultiPortSerialManager _hardwareSerial = new();
+
+    /// <summary>
+    /// Whichever port stack this session is reading: the machine's, or the in-memory one.
+    /// </summary>
+    /// <remarks>
+    /// A property rather than two fields consulted at each call site, because every path that
+    /// touches a port -- connect, transmit, the reader loop, the reconnect watchdog -- has to agree
+    /// about which one it means, and a session that read one and wrote the other would be very hard
+    /// to see.
+    /// </remarks>
+    private ISerialManager Serial { get; set; }
     private readonly DataRouter _dataRouter = new();
     private CancellationTokenSource? _serialReadCts;
     private CancellationTokenSource? _simulatorReadCts;
@@ -77,6 +89,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        Serial = _hardwareSerial;
         _themeService = new ThemeService(_uiSettings);
 
         InitializeComponent();
@@ -115,10 +128,14 @@ public partial class MainWindow : Window
         // Watching the clock as well as the values. Until now the shell could not see a channel
         // that had simply stopped: the scope holds the last point, the statistics hold the last
         // mean, and the z-score sits at zero because the distribution stopped moving too.
-        ControlPanel.StartSilenceWatch();
-
-        // Its sibling: the silence watch asks whether a channel stopped reporting, this asks
-        // whether anything is judging what does report.
+        ControlPanel.StartSilenceWatch();
+
+
+
+        // Its sibling: the silence watch asks whether a channel stopped reporting, this asks
+
+        // whether anything is judging what does report.
+
         ControlPanel.StartArmingWatch();
         SetupSimulatorTimer();
 
@@ -276,11 +293,12 @@ public partial class MainWindow : Window
             CboPort.Items.Add(p);
         }
 
-        CboPort.IsEnabled = ports.Length > 0;
-        if (ports.Length == 0)
-        {
-            CboPort.Items.Add("사용 가능한 직렬 포트 없음");
-        }
+        // Always offered, and last so it never displaces a real port at the top of the list. It is
+        // how the serial path -- reconnect, anomaly edges, wire rules, the transmit path -- can be
+        // exercised on a desk with no MCU on it, which is where most of this software is first run.
+        CboPort.Items.Add(LoopbackPort);
+
+        CboPort.IsEnabled = true;
 
         CboPort.SelectedIndex = 0;
 

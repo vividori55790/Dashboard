@@ -423,7 +423,7 @@ public partial class MainWindow
             return;
         }
 
-        string port = _serialManager.ActivePorts.Keys.FirstOrDefault() ?? string.Empty;
+        string port = Serial.ActivePorts.Keys.FirstOrDefault() ?? string.Empty;
         if (string.IsNullOrEmpty(port))
         {
             ControlPanel.LogMessage("WARN", $"'{command}' not sent: no active port.");
@@ -432,7 +432,7 @@ public partial class MainWindow
 
         try
         {
-            await _serialManager.WriteLineAsync(port, command);
+            await Serial.WriteLineAsync(port, command);
             ControlPanel.LogMessage("TX", $"'{command}' transmitted on {port}.");
         }
         catch (Exception ex)

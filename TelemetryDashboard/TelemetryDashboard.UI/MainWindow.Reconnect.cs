@@ -34,7 +34,7 @@ public partial class MainWindow
 
         if (_reconnect is null)
         {
-            _reconnect = new AutoReconnectEngine(_serialManager, TimeSpan.FromSeconds(2));
+            _reconnect = new AutoReconnectEngine(Serial, TimeSpan.FromSeconds(2));
             _reconnect.Reconnected += OnPortOpened;
             _reconnect.ReconnectFailed += OnPortRefused;
         }

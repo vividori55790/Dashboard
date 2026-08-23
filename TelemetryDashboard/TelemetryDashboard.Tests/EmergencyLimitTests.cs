@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -10,6 +10,7 @@ using TelemetryDashboard.Host.Configuration;
 using TelemetryDashboard.Host.Ingest;
 using TelemetryDashboard.Host.Outbound;
 using Xunit;
+using TelemetryDashboard.Infrastructure.Serial;
 
 namespace TelemetryDashboard.Tests;
 

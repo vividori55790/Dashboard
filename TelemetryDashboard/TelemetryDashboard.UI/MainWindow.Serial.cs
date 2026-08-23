@@ -70,12 +70,15 @@ public partial class MainWindow
 
             try
             {
-                bool ok = await _serialManager.ConnectPortAsync(portName, baudRate);
+                // The in-memory port has to exist before anything tries to open it, and it brings
+                // its own frames: the profile's simulator feeds the port rather than the router.
+                if (IsLoopback(portName)) StartLoopback();
 
-                // Watched either way. A port that opened can still be pulled out, and a port that
-                // did not open is very often one the operator is about to plug in -- both are the
-                // same instruction: keep this link up.
-                WatchPort(portName, baudRate);
+                bool ok = await Serial.ConnectPortAsync(portName, baudRate);
+
+                // Watched either way -- except the in-memory one, which cannot come or go, and
+                // whose name a watchdog scanning the machine's ports would never find.
+                if (!IsLoopback(portName)) WatchPort(portName, baudRate);
 
                 if (ok)
                 {
@@ -84,7 +87,11 @@ public partial class MainWindow
                     // Explicit rather than assumed. The two sources share one router, and a stale
                     // simulated flag would stamp real measurements as synthetic — the mirror image
                     // of the defect this marking exists to prevent, and just as misleading.
-                    _dataRouter.SourceIsSimulated = false;
+                    //
+                    // The in-memory port is the exception and declares itself: its frames are
+                    // generated, and travelling the real serial path is precisely why they have to
+                    // keep saying so.
+                    _dataRouter.SourceIsSimulated = IsLoopback(portName);
 
                     ShowConnected(portName, baudRate);
                     ControlPanel.LogMessage("SYSTEM", $"하드웨어 포트 {portName} @ {baudRate} baud 연결됨.");
@@ -109,7 +116,8 @@ public partial class MainWindow
             // present and not connected and immediately undo what the operator just asked for.
             await StopWatchingPortAsync();
             StopLinkReader();
-            await _serialManager.DisconnectAllAsync();
+            await Serial.DisconnectAllAsync();
+            StopLoopback();
 
             ShowDisconnected();
             ControlPanel.LogMessage("SYSTEM", "시리얼 포트 연결을 해제했습니다.");
@@ -120,7 +128,7 @@ public partial class MainWindow
     {
         try
         {
-            await foreach (var rawPacket in _serialManager.PacketReader.ReadAllAsync(token))
+            await foreach (var rawPacket in Serial.PacketReader.ReadAllAsync(token))
             {
                 List<TelemetryPacket> packets = ResolvePackets(rawPacket);
 
@@ -137,7 +145,14 @@ public partial class MainWindow
                     // nothing for every deployment that had actual hardware attached.
                     PersistSample(pkt, ml);
 
-                    Dispatcher.Invoke(() =>
+                    // Awaited rather than blocked on, which is what the simulated stream has always
+                    // done. Dispatcher.Invoke holds the reader thread until the UI thread is free,
+                    // so at any rate above a slow device the ingest loop spends its life waiting on
+                    // the chart -- and the UI, being handed one work item per sample with a caller
+                    // blocked behind each, stops answering anything else. Measured the first time a
+                    // port carried more than a trickle: the window went unresponsive to automation
+                    // within seconds of connecting.
+                    await Dispatcher.InvokeAsync(() =>
                     {
                         // Plot only the channel that actually arrived. The previous code padded the
                         // scope and the statistics with literals (50.0 humidity, 0.1 vibration,
