@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -197,8 +197,15 @@ public static class TelemetryHttpRoutes
         TelemetryStreamingServer server,
         System.Collections.Specialized.NameValueCollection query)
     {
-        string[] channels = (query["channels"] ?? string.Empty)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // Refused rather than answered. SeriesRequest carries the account of why, and of how it
+        // was found: a query for a channel that had 292 samples at that instant came back empty
+        // and looked like a host holding nothing.
+        if (!SeriesRequest.TryChannels(query["channels"], out string[] channels, out string? refusal))
+        {
+            await WriteJsonAsync(response, new { type = "series", status = "Error", reason = refusal })
+                .ConfigureAwait(false);
+            return;
+        }
 
         var options = new SubscriptionOptions(
             channels,

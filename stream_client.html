@@ -183,6 +183,28 @@
             <div id="lim-list" style="margin-top:6px"></div>
         </div>
 
+        <!--
+            The quantities nothing measures. Efficiency is the number a converter is judged by and
+            no converter reports it; neither side's power is reported either, because each is a
+            voltage and a current from separate MCUs arriving at separate instants.
+
+            The host computes them and publishes the results into the stream, so the channel cards
+            above show them when they exist. That is precisely the gap: when an input goes quiet
+            the computed channel simply stops arriving, and a card that is not there looks like a
+            channel nobody declared rather than an efficiency nobody can work out. This panel is
+            the declaration list, so a missing answer is visible as a missing answer -- with the
+            host naming the input that was not there.
+        -->
+        <div class="panel">
+            <h2>파생값 · /api/computed</h2>
+            <div class="row">
+                <span class="chip mono" id="cmp-summary">읽는 중…</span>
+                <button id="cmp-go">지금 새로고침</button>
+            </div>
+            <div class="stat" id="cmp-stat"></div>
+            <div id="cmp-list" style="margin-top:6px"></div>
+        </div>
+
         <div class="panel">
             <h2>주파수 스펙트럼 · /api/spectrum</h2>
             <div class="row">
@@ -725,6 +747,78 @@
     });
 
     loadControl();
+
+    // ---- computed channels -----------------------------------------------
+    //
+    // On a clock for the same reason as the bands below: this is the current state of a derived
+    // quantity, not a query about a moment somebody chose, and a stale answer reads as a working
+    // calculation.
+    var COMPUTED_REFRESH_MS = 5000;
+
+    function computedInputFault(row) {
+        // The endpoint names the input that failed. Repeating its sentence is better than
+        // inventing one: it distinguishes an input that resolved to nothing (a name that does not
+        // exist) from one that resolved and had no sample near the instant (a sensor that stopped).
+        var bad = (row.Inputs || []).filter(function (i) { return !i.AnswersTheInstant; });
+        if (bad.length === 0) { return row.Reason || ''; }
+
+        return bad.map(function (i) {
+            return i.Declared + ': ' + (i.Resolved ? (i.Reason || '이 순간에 값이 없습니다') : '해석되는 채널이 없습니다');
+        }).join(' · ');
+    }
+
+    function renderComputed(d) {
+        var summary = document.getElementById('cmp-summary');
+        var stat = document.getElementById('cmp-stat');
+        var list = document.getElementById('cmp-list');
+
+        if (d.Status !== 'Success') {
+            summary.textContent = '파생값 없음';
+            stat.textContent = d.Reason || '알 수 없는 이유';
+            list.innerHTML = '';
+            return;
+        }
+
+        var rows = d.Channels || [];
+        summary.textContent = '선언 ' + d.Declared + ' · 지금 값 있음 ' + d.Available;
+
+        stat.textContent = d.Available < d.Declared
+            ? (d.Declared - d.Available) + '개는 지금 값을 낼 수 없습니다. 입력 중 하나가 이 순간을 ' +
+              '답하지 못하면 값을 내지 않습니다 — 마지막으로 들은 값을 붙들고 있는 것보다, 모른다고 ' +
+              '말하는 쪽이 맞기 때문입니다.'
+            : '선언된 파생값이 모두 계산되고 있습니다.';
+
+        list.innerHTML = rows.map(function (row) {
+            var ok = row.Status === 'Computed';
+            var detail = ok
+                ? fmt(row.Value) + ' ' + (row.Unit || '')
+                : computedInputFault(row);
+
+            return '<div class="lim">' +
+                   // The identity first: an expression alone says how a number is made and not
+                   // what it is, and "efficiency" is the word an operator is looking for.
+                   '<span class="what mono">' + esc(row.Id + (row.Unit ? '[' + row.Unit + ']' : '') +
+                       (row.Expression ? ' = ' + row.Expression : '')) + '</span>' +
+                   '<span class="tag ' + (ok ? 'ok' : 'warn') + '">' +
+                   (ok ? '계산됨' : '값 없음') + '</span>' +
+                   '<span class="stat mono">' + esc(detail) + '</span>' +
+                   '</div>';
+        }).join('');
+    }
+
+    function loadComputed() {
+        fetch('/api/computed')
+            .then(function (r) { return r.json(); })
+            .then(renderComputed)
+            .catch(function (e) {
+                document.getElementById('cmp-summary').textContent = '읽기 실패';
+                document.getElementById('cmp-stat').textContent = e.message;
+            });
+    }
+
+    document.getElementById('cmp-go').addEventListener('click', loadComputed);
+    loadComputed();
+    setInterval(loadComputed, COMPUTED_REFRESH_MS);
 
     // ---- limits ----------------------------------------------------------
     //
