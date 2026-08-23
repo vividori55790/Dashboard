@@ -1,0 +1,210 @@
+# ---------------------------------------------------------------------------
+# What this exists for.
+#
+# The repository already contains the checks: 1,633 tests and fourteen executable
+# architecture rules — reachability, portability, theme, XAML, wire contract. Their
+# documentation says things like "this class of defect fails a build instead of
+# waiting for an audit", and until now there was no build for it to fail. Every one
+# of them ran only when somebody remembered to run it, on one Windows machine.
+#
+# So this adds no new check. It makes the existing ones binding.
+#
+# The second job is the one that finds new things. PROJECT.md and ARCHITECTURE.md
+# both record, honestly, that the Linux and macOS binaries have correct executable
+# headers and have never been run — the cross-platform claim rests on static checks
+# plus one Alpine container. A hosted runner is a real glibc Linux and a real macOS,
+# so the portable suite executes there and the published host is actually started
+# and asked what it is serving.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  # Restore once per job into a path the cache key can name.
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  # -------------------------------------------------------------------------
+  # The whole product, on the only platform that can build all of it.
+  # TelemetryDashboard.UI and TelemetryDashboard.Tests.Desktop target
+  # net8.0-windows with UseWPF, so this job is the only one that sees them.
+  # -------------------------------------------------------------------------
+  windows:
+    name: Windows · full solution (portable + desktop)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          # Both, deliberately. The projects target net8.0 and the development
+          # machine builds them with the 10.x SDK under RollForward=LatestMajor,
+          # so installing only 8.0.x would have CI compiling with a toolchain
+          # nobody develops against — and the two disagreeing is worse than
+          # either being wrong on its own.
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore TelemetryDashboard/TelemetryDashboard.sln
+
+      # Directory.Build.props sets TreatWarningsAsErrors, so a warning stops here.
+      - name: Build (Release, warnings are errors)
+        run: dotnet build TelemetryDashboard/TelemetryDashboard.sln -c Release --no-restore
+
+      # Benchmarks excluded: the million-row tiered-storage one alone runs about
+      # seven minutes, and it measures this machine rather than this commit.
+      # The 'benchmarks' job below runs them on request.
+      - name: Test
+        run: >
+          dotnet test TelemetryDashboard/TelemetryDashboard.sln -c Release --no-build
+          --filter "Category!=Benchmark"
+          --logger "trx;LogFileName=windows.trx"
+          --results-directory ${{ github.workspace }}/testresults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testresults-windows
+          path: testresults/
+          if-no-files-found: warn
+
+  # -------------------------------------------------------------------------
+  # The backbone, on the platforms it claims to run on and has never run on.
+  #
+  # The solution is not built here: two of its seven projects are WPF. That is
+  # not a limitation being worked around — it is the product's shape. The hub is
+  # portable, the desktop shell is one Windows client of it, and the split is
+  # enforced by ArchitectureRuleTests.Portability.
+  # -------------------------------------------------------------------------
+  portable:
+    name: ${{ matrix.label }} · backbone suite, then run the host
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      # Independent facts. A macOS failure must not hide the Linux answer.
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64,  label: Linux }
+          - { os: macos-latest,  rid: osx-arm64,  label: macOS }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # The portable test project references Core, Infrastructure, Plugins and the
+      # headless Host — every project that is not WPF. Building it builds them.
+      - name: Build the portable suite (Release, warnings are errors)
+        run: >
+          dotnet build TelemetryDashboard/TelemetryDashboard.Tests/TelemetryDashboard.Tests.csproj
+          -c Release
+
+      - name: Test
+        run: >
+          dotnet test TelemetryDashboard/TelemetryDashboard.Tests/TelemetryDashboard.Tests.csproj
+          -c Release --no-build
+          --filter "Category!=Benchmark"
+          --logger "trx;LogFileName=${{ matrix.rid }}.trx"
+          --results-directory ${{ github.workspace }}/testresults
+
+      # Self-contained and single-file, the same shape build_standalone.ps1 ships,
+      # so what gets started below is the artefact an operator would receive rather
+      # than a framework-dependent build that happens to work on a machine with the
+      # SDK installed.
+      - name: Publish the host (${{ matrix.rid }}, self-contained single file)
+        run: >
+          dotnet publish TelemetryDashboard/TelemetryDashboard.Host/TelemetryDashboard.Host.csproj
+          -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishTrimmed=false
+          -o ${{ github.workspace }}/dist/host
+
+      # The point of this whole job.
+      - name: Start it and check what it serves
+        run: bash .github/scripts/smoke-host.sh "${{ github.workspace }}/dist/host" 8099
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testresults-${{ matrix.rid }}
+          path: testresults/
+          if-no-files-found: warn
+
+      - name: Upload the host log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-log-${{ matrix.rid }}
+          path: ${{ github.workspace }}/dist/host/smoke-host.log
+          if-no-files-found: warn
+
+  # -------------------------------------------------------------------------
+  # The four [Trait("Category", "Benchmark")] tests, which no other job runs.
+  #
+  # On request only. They take minutes, they measure the runner's disk and CPU as
+  # much as the commit, and a red build caused by a noisy neighbour teaches people
+  # to ignore red builds. To run them on a timer, uncomment the schedule above --
+  #   schedule: [{ cron: '0 18 * * 0' }]   # 03:00 KST Monday
+  # -------------------------------------------------------------------------
+  benchmarks:
+    name: Benchmarks (on request)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Run the benchmark tests
+        run: >
+          dotnet test TelemetryDashboard/TelemetryDashboard.Tests/TelemetryDashboard.Tests.csproj
+          -c Release
+          --filter "Category=Benchmark"
