@@ -86,6 +86,14 @@ jobs:
           --logger "trx;LogFileName=windows.trx"
           --results-directory ${{ github.workspace }}/testresults
 
+      # Renders the failing test names into the run's own summary page, which anyone
+      # who can see the repository can read. The log endpoint and the artifacts both
+      # need a token, so without this a failed run says that something broke and
+      # nothing about what -- which is how the first run went.
+      - name: Report failures
+        if: always()
+        run: python .github/scripts/trx-summary.py testresults "Windows"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -164,6 +172,10 @@ jobs:
       - name: Start it and check what it serves
         run: bash .github/scripts/smoke-host.sh "${{ github.workspace }}/dist/host" 8099
 
+      - name: Report failures
+        if: always()
+        run: python3 .github/scripts/trx-summary.py testresults "${{ matrix.label }}"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -172,13 +184,15 @@ jobs:
           path: testresults/
           if-no-files-found: warn
 
+      # ignore, not warn: when the suite fails the smoke step never runs, so there is
+      # no host log to find and saying so is noise on top of the real failure.
       - name: Upload the host log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: host-log-${{ matrix.rid }}
           path: ${{ github.workspace }}/dist/host/smoke-host.log
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
   # -------------------------------------------------------------------------
   # The four [Trait("Category", "Benchmark")] tests, which no other job runs.
