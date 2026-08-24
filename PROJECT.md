@@ -23,7 +23,13 @@ The WPF shell is Windows-only and always will be. "Runs on every computer" is de
 
 Android and iOS are **clients, not hosts**. The backbone opens serial ports, writes files and holds a listening socket open indefinitely — none of which a mobile OS grants a background app. Running it there would mean a worse hub reachable from fewer places.
 
-Verified: `dotnet publish -r linux-x64` and `-r osx-arm64` both succeed and emit zero Windows-only assemblies. Not yet verified: `HttpListener`'s WebSocket path executing on a real Linux or macOS machine. `telemetry-client.js` falls back to SSE when the WebSocket handshake fails, so the console degrades rather than breaks if it turns out to be limited there.
+**`HttpListener`'s WebSocket path works on Linux and macOS.** This was the longest-standing unknown in this document, and it is now measured rather than hedged. On `ubuntu-latest` and `macos-latest`, the published self-contained host completes the RFC 6455 handshake — 101, and the accept token the RFC's own example key demands — and delivers a text frame that parses as JSON carrying `analyzerId`, `anomalyScore`, `isAnomaly`, `nodeId`, `port`, `simulated`, `source` and `timestamp`.
+
+The check had to be written to exclude the fallback before it could answer anything: `telemetry-client.js` drops to SSE precisely when the WebSocket handshake fails, so a console that works proves nothing about `/ws`, and the fallback is what would have hidden a failure for as long as anyone cared to look. Asserting on SSE would have produced a green result and no information.
+
+The prediction going in was that it would fail — the managed `HttpListener` not supporting the upgrade off Windows is a well-known limitation, and the guess was wrong. Recorded because a guess that shaped what got built is worth keeping beside the measurement that overruled it.
+
+Verified alongside: `dotnet publish -r linux-x64` and `-r osx-arm64` both succeed and emit zero Windows-only assemblies, and both published binaries now start on their own platform and answer.
 
 Two portability details that were silently broken and are now explicit:
 
@@ -131,8 +137,8 @@ single-file builds that need no .NET installed:
 | Package | Size | Verified |
 |---|---|---|
 | `host-win-x64` | 114 MB | Runs. Reports its own bundled runtime (.NET 8.0.28, not the machine's .NET 10), loads the sample plugin, serves `/stream` and `/api/status`. |
-| `host-linux-x64` | 110 MB | Valid ELF64 x86-64. **Not executed** — see below. |
-| `host-osx-arm64` | 120 MB | Valid Mach-O ARM64. **Not executed.** |
+| `host-linux-x64` | 110 MB | **Executed on `ubuntu-latest`.** Serves, ingests, streams; WebSocket and SSE both answer. |
+| `host-osx-arm64` | 120 MB | **Executed on `macos-latest`.** Same. |
 | `desktop-win-x64` | 220 MB | WPF console, Windows only by construction. |
 
 Trimming is deliberately off. Jint, IronPython and the collectible `AssemblyLoadContext` that loads
@@ -141,9 +147,16 @@ smaller, publish cleanly, and fail the first time an operator loaded a plugin. T
 Windows host printing `[plugin:sample.plugin] SampleTelemetryPlugin initialized.` is the check that
 this path survives single-file packaging.
 
-**Linux and macOS execution is unverified.** The binaries have correct executable headers and the
-backbone projects pass `PortableBackboneProjectsTargetNoSpecificPlatform`, but both are static
-checks. Nothing in this repository has been observed running on either platform.
+**Linux and macOS execution is no longer unverified.** It was, for as long as this section existed:
+the binaries had correct executable headers, the backbone passed
+`PortableBackboneProjectsTargetNoSpecificPlatform`, and both were static checks that nobody had ever
+followed with a run. `.github/workflows/ci.yml` publishes each package on its own hosted runner and
+then starts it, and `smoke-host.sh` asks it twenty-three questions.
+
+Twenty-two are answered on both platforms. The twenty-third — that the host stops on a signal rather
+than having to be killed — is the one open item, and it is being separated from its own harness
+before it is believed: a non-interactive shell starts a background child with SIGINT ignored, so the
+first result may say more about the test than the host.
 
 ### M7 — wiring, and what it exposed
 

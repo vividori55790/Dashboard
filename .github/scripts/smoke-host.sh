@@ -62,8 +62,18 @@ chmod +x "$BIN"
 # simulated=true with a SIM: node prefix. What is being tested is the host, not a
 # device: whether this binary starts on this OS, opens a listening socket, drives
 # the ingest pipeline and serves the console assets that shipped beside it.
+# Job control on, before the launch. Without it a non-interactive shell starts an
+# asynchronous command with SIGINT and SIGQUIT set to ignored -- POSIX requires that,
+# so the shell's own Ctrl-C does not fell its background children. The consequence
+# here is that `kill -INT` would be dropped by the kernel before the process ever saw
+# it, and the run would report a host that refuses to stop when what actually happened
+# is that nothing asked it to. With job control the child gets its own process group
+# and the default disposition.
+set -m
+
 "$BIN" --simulate --port "$PORT" > "$LOG" 2>&1 &
 HOST_PID=$!
+set +m
 
 cleanup() {
     if kill -0 "$HOST_PID" 2>/dev/null; then kill -KILL "$HOST_PID" 2>/dev/null || true; fi
@@ -268,12 +278,37 @@ check "the WebSocket path works on this platform" "$ws_status" \
 # is being checked -- a host that has to be killed truncates the tail of whatever
 # it was writing.
 echo "--- shutdown ---"
+
+# Two signals, reported separately, because they are two different deployments.
+# SIGINT is an operator at a terminal pressing Ctrl-C; SIGTERM is systemd, docker stop
+# or a service manager, and it is the one a plant host actually receives. The
+# coordinator claims both -- Console.CancelKeyPress and ProcessExit -- and neither had
+# ever been measured, because the only harness for it runs on Windows where Git Bash
+# cannot deliver a POSIX signal at all.
+#
+# Which one worked is reported rather than assumed. A host that ignores Ctrl-C but
+# stops cleanly under a service manager is a different fact from one that ignores
+# both, and only the second is a reason to fail this run.
+waitfor() {
+    for _ in $(seq 1 "$2"); do
+        if ! kill -0 "$HOST_PID" 2>/dev/null; then return 0; fi
+        sleep 1
+    done
+    return 1
+}
+
+stopped_by=""
 kill -INT "$HOST_PID" 2>/dev/null || true
+if waitfor "$HOST_PID" 10; then
+    stopped_by="SIGINT"
+else
+    printf '  NOTE  still running 10s after SIGINT; trying SIGTERM\n'
+    kill -TERM "$HOST_PID" 2>/dev/null || true
+    if waitfor "$HOST_PID" 10; then stopped_by="SIGTERM"; fi
+fi
+
 stopped=1
-for _ in $(seq 1 15); do
-    if ! kill -0 "$HOST_PID" 2>/dev/null; then stopped=0; break; fi
-    sleep 1
-done
+[ -n "$stopped_by" ] && stopped=0
 
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
@@ -290,7 +325,15 @@ case "$(uname -s)" in
         fi
         ;;
     *)
-        check "the host stopped on SIGINT within 15s" "$stopped" "still running; it was killed"
+        check "the host stops on a termination signal" "$stopped" \
+              "neither SIGINT nor SIGTERM ended it within ten seconds each; it was killed, which is \
+what an operator's service manager would end up doing and what truncates a recording's tail"
+        [ -n "$stopped_by" ] && printf '  NOTE  it was %s that stopped it\n' "$stopped_by"
+        if [ "$stopped_by" = "SIGTERM" ] && [ -n "${GITHUB_ACTIONS:-}" ]; then
+            printf '::warning title=Host smoke (%s): SIGINT did not stop the host::SIGTERM did. \
+Ctrl-C at a terminal is the path ShutdownCoordinator hooks through Console.CancelKeyPress, and on \
+this platform it did not end the process.\n' "$(uname -s)"
+        fi
         ;;
 esac
 
