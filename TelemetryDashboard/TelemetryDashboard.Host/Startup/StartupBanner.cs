@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -112,8 +112,21 @@ public static class StartupBanner
         if (identity.WasCreated)
         {
             Console.WriteLine("                First run for this installation, or the identity file could not");
-            Console.WriteLine("                be written. If it recurs every launch, this directory is read-only");
+            Console.WriteLine("                be written. If it recurs every launch, the store below is read-only");
             Console.WriteLine("                and each restart will look like a different machine.");
+            Console.WriteLine($"                {NodeIdentityStore.PathFor(AppContext.BaseDirectory)}");
+            Console.WriteLine("                It is keyed on this install's path, so moving or renaming the");
+            Console.WriteLine($"                directory reads as a new installation. Pin it with {HostNode.AssignedIdVariable}.");
+        }
+        else if (NodeIdentityStore.HasLegacyFile(AppContext.BaseDirectory))
+        {
+            // Said once, to the operator who has the file an update would delete. The value has
+            // already been copied out; what is left behind is now a stale duplicate, and telling
+            // them is cheaper than letting them find two files disagreeing after a hand edit.
+            Console.WriteLine($"                Migrated out of {NodeIdentity.FileName} beside the executable, which an");
+            Console.WriteLine("                update would have replaced. The identity is unchanged and now lives at");
+            Console.WriteLine($"                {NodeIdentityStore.PathFor(AppContext.BaseDirectory)}");
+            Console.WriteLine("                The old file is no longer read and can be deleted.");
         }
     }
 

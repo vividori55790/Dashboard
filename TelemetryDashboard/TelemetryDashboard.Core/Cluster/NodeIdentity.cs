@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -107,6 +107,27 @@ public sealed class NodeIdentity
 
     /// <summary>Qualifies a channel with this node, so the same device name on two hosts stays distinct.</summary>
     public string Qualify(string channel) => $"{Id}/{channel}";
+
+    /// <summary>Whether a value is usable as a node id at all.</summary>
+    /// <remarks>
+    /// Public because <see cref="NodeIdentityStore"/> has to answer "is what I just read still an
+    /// id" before deciding whether to trust a stored file or replace it, and a second copy of that
+    /// rule would be free to disagree with this one.
+    /// </remarks>
+    public static bool IsValidId(string? candidate) => IsWellFormed(candidate);
+
+    /// <summary>Wraps an id that was read back from a store, which is not a new identity.</summary>
+    public static NodeIdentity FromStoredId(string id) =>
+        new(id.Trim(), Environment.MachineName, wasCreated: false);
+
+    /// <summary>Wraps an id this run invented, which the caller has to be able to say out loud.</summary>
+    /// <remarks>
+    /// Separate from <see cref="FromStoredId"/> only so that <see cref="WasCreated"/> cannot be got
+    /// wrong at a call site. An installation that reports a new identity every launch has an
+    /// unwritable store, and the symptom is history silently restarting rather than any error.
+    /// </remarks>
+    public static NodeIdentity FromGeneratedId(string id) =>
+        new(id.Trim(), Environment.MachineName, wasCreated: true);
 
     private static bool IsWellFormed(string? candidate) =>
         candidate is not null && Regex.IsMatch(candidate.Trim(), "^[A-Za-z0-9_-]{4,64}$");

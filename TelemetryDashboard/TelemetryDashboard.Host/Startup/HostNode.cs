@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TelemetryDashboard.Core.Cluster;
 
 namespace TelemetryDashboard.Host.Startup;
@@ -15,6 +15,13 @@ namespace TelemetryDashboard.Host.Startup;
 /// The environment variable exists for managed fleets that assign their own names. An assigned name
 /// that is malformed stops the start rather than being sanitised, because sanitising can quietly
 /// map two different inputs onto the same identity.
+/// <para>
+/// The identity is resolved through <see cref="NodeIdentityStore"/>, which keeps it outside the
+/// install directory. It used to be written beside the executable -- the one directory an update
+/// replaces -- so the first in-place update would have changed the thing this class exists to keep
+/// stable, silently. The store keys on the install path, so two hosts run from two directories on
+/// one machine remain two nodes.
+/// </para>
 /// </remarks>
 public static class HostNode
 {
@@ -31,7 +38,7 @@ public static class HostNode
         string? assigned = Environment.GetEnvironmentVariable(AssignedIdVariable);
 
         return string.IsNullOrWhiteSpace(assigned)
-            ? NodeIdentity.LoadOrCreate(AppContext.BaseDirectory)
+            ? NodeIdentityStore.LoadOrCreate(AppContext.BaseDirectory)
             : NodeIdentity.FromAssignedId(assigned);
     }
 }
