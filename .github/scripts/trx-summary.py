@@ -36,6 +36,7 @@ if not files:
     print(f"no .trx under {directory!r} -- the test step produced no results file")
     sys.exit(0)
 
+annotations = []
 lines = [f"## Test results — {label}".rstrip(), ""]
 total_failed = 0
 
@@ -79,6 +80,15 @@ for path in files:
         lines.append("</details>")
         lines.append("")
 
+        # Also as an annotation. GITHUB_STEP_SUMMARY turned out not to render for a
+        # reader who is not signed in, which defeats the purpose for a public
+        # repository -- annotations do, and they were the only part of the first two
+        # failed runs that could be read from outside. Newlines have to be encoded or
+        # the command is truncated at the first one.
+        detail = (message.strip() + (("\n" + frame) if frame else ""))[:800]
+        detail = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        annotations.append(f"::error title=Test failed: {name}::{detail}")
+
 if total_failed == 0:
     lines.append("No failures recorded in the results files.")
 
@@ -89,3 +99,14 @@ summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if summary:
     with open(summary, "a", encoding="utf-8") as handle:
         handle.write(report + "\n")
+
+# Annotations last, so they are not buried in the report above. GitHub keeps only
+# the first ten error annotations per step, so the cap is stated rather than
+# discovered: a truncated list that does not say it is truncated reads as the whole
+# answer, which is the failure mode this repository names most often.
+LIMIT = 10
+for annotation in annotations[:LIMIT]:
+    print(annotation)
+if len(annotations) > LIMIT:
+    print(f"::notice::{len(annotations) - LIMIT} further failure(s) not annotated; "
+          f"the full list is in this step's log and in the testresults artifact")
