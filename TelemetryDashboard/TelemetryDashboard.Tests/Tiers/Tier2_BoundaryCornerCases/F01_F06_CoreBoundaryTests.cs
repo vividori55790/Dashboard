@@ -46,7 +46,12 @@ public class F01_F06_CoreBoundaryTests
     [Trait("Category", "Tier2")]
     public void F01_Boundary_CorruptedAssemblyPath_FailsGracefully()
     {
-        string invalidPath = @"C:\NonExistentDir_XYZ\InvalidAssembly.dll";
+        // Composed, not spelled with a drive letter: this test's premise is that the file is
+        // absent, and a Windows-shaped literal states that in a form only Windows evaluates the
+        // way it reads. It happened to hold elsewhere -- the string is simply a relative name that
+        // also does not exist -- and holding by accident is not the same as holding.
+        string invalidPath = Path.Combine(
+            Path.GetTempPath(), "NonExistentDir_" + Guid.NewGuid().ToString("N"), "InvalidAssembly.dll");
         File.Exists(invalidPath).Should().BeFalse();
         Action act = () => System.Reflection.Assembly.LoadFrom(invalidPath);
         act.Should().Throw<FileNotFoundException>();

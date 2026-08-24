@@ -190,8 +190,14 @@ public class DetectorConfigurationTests
         string? previous = Environment.GetEnvironmentVariable(AnalyticsSetup.PathVariable);
         try
         {
-            Environment.SetEnvironmentVariable(AnalyticsSetup.PathVariable, @"D:\plant\detectors-line3.json");
-            AnalyticsSetup.ResolvePath().Should().Be(@"D:\plant\detectors-line3.json");
+            // Built rather than spelled. What this asserts is that the variable is used verbatim,
+            // and a drive letter says that in a way only Windows can read -- the assertion still
+            // held off Windows, by luck rather than design, because the string was opaque to both
+            // sides. The next one like it will not be opaque, which is what F27 turned out to be.
+            string moved = Path.Combine(Path.GetTempPath(), "plant", "detectors-line3.json");
+
+            Environment.SetEnvironmentVariable(AnalyticsSetup.PathVariable, moved);
+            AnalyticsSetup.ResolvePath().Should().Be(moved);
 
             Environment.SetEnvironmentVariable(AnalyticsSetup.PathVariable, null);
             AnalyticsSetup.ResolvePath().Should()

@@ -366,6 +366,23 @@ public class Challenger1EmpiricalStressTests
         public void Dispose() { }
     }
 
+    /// <summary>Polls until <paramref name="condition"/> holds, or the timeout expires.</summary>
+    /// <remarks>
+    /// Returns a bool rather than throwing so the caller states what the wait was for; a bare
+    /// timeout exception names the helper and not the thing that failed to happen.
+    /// </remarks>
+    private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.Elapsed < timeout)
+        {
+            if (condition()) return true;
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+
+        return condition();
+    }
+
     [Fact]
     public async Task StressTest_AutoReconnectEngine_ReconnectAndResyncTimeline()
     {
@@ -379,8 +396,18 @@ public class Challenger1EmpiricalStressTests
         // Fire USB Device Arrival event for COM3
         serialMock.FireDeviceChanged(new DeviceChangeEventArgs(DeviceChangeType.Arrival, "COM3"));
 
-        // Wait for auto-reconnect execution and 100ms command delay
-        await Task.Delay(250);
+        // Wait for the work to happen, rather than for a number of milliseconds.
+        //
+        // This was Task.Delay(250) against a 50 ms retry interval and a 100 ms command delay --
+        // comfortable on a developer's machine and not on a shared CI runner, where all three
+        // platforms failed it with ConnectAttempts still empty. A fixed sleep asserts something
+        // about the machine it runs on; what this test is about is that the arrival event leads to
+        // a connect and a resync, which is a question about the engine.
+        //
+        // The timeout is deliberately far longer than the work needs. It is there to end a hang,
+        // not to time the operation, so a slow runner passes and a broken engine still fails.
+        (await WaitForAsync(() => !serialMock.WrittenCommands.IsEmpty, TimeSpan.FromSeconds(10)))
+            .Should().BeTrue("the arrival of COM3 has to lead to a resync command being written");
 
         serialMock.ConnectAttempts.Should().Contain("COM3");
         serialMock.ActivePorts["COM3"].Should().Be(PortConnectionStatus.Connected);

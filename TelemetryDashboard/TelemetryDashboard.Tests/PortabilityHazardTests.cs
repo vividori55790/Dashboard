@@ -232,4 +232,87 @@ public class PortabilityHazardTests
         offenders.Should().BeEmpty(
             "a case-mismatched reference builds on Windows and fails on Linux:\n" + string.Join("\n", offenders));
     }
+
+    /// <summary>
+    /// No portable source spells an absolute path with a drive letter.
+    /// </summary>
+    /// <remarks>
+    /// Added after the first CI run on Linux and macOS failed
+    /// <c>F27_Boundary_InvalidExportPath_FailsGracefullyWithMessage</c>. It asked
+    /// <c>MatFileWriter</c> to write to <c>Z:\NonExistentDrive\output.mat</c> and expected a throw.
+    /// Off Windows a backslash is an ordinary filename character, so that whole string is one
+    /// relative file name in a directory that does exist, the writer wrote the file it was asked
+    /// for, and the test failed for the only reason a test must never fail: the code worked.
+    /// <para>
+    /// Two more were found beside it, in <c>DetectorConfigurationTests</c> and
+    /// <c>F01_F06_CoreBoundaryTests</c>. Both passed off Windows -- by luck, because their strings
+    /// were opaque to the assertion either way. Passing by accident is not passing, and the
+    /// difference is invisible until the day it is not.
+    /// </para>
+    /// <para>
+    /// This scans the portable <em>test</em> project as well, which is one of the two gaps that let
+    /// F27 through: every existing rule here looked at Core, Infrastructure, Plugins and Host, and
+    /// the suite that runs on Linux was not among them.
+    /// </para>
+    /// <para>
+    /// The second gap is in the matching, and <see cref="NoPathIsBuiltByGluingStringsWithABackslash"/>
+    /// still has it. That rule's pattern requires <em>two</em> consecutive backslashes, which is
+    /// what a path looks like inside an ordinary string literal -- and nothing like what it looks
+    /// like inside a verbatim one. <c>@"Z:\NonExistentDrive\output.mat"</c> carries single
+    /// backslashes, so the rule written to catch exactly this could never have seen it. The pattern
+    /// here accepts one or two, and that difference was measured rather than assumed: the first
+    /// version of this rule was written with the two-backslash form, a deliberate
+    /// <c>@"E:\probe\..."</c> was dropped into the project, and the rule passed.
+    /// </para>
+    /// <para>
+    /// Narrow on purpose -- a drive letter, a colon, a separator. The broader backslash pattern
+    /// matches regex literals, of which this project has many, and a check that cries wolf gets
+    /// switched off; the rule above this one records learning that the hard way.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [Trait("Category", "Portability")]
+    public void NoPortableSourceSpellsAWindowsDriveLetterPath()
+    {
+        var drivePath = new Regex(@"""[^""\n]*\b[A-Za-z]:\\{1,2}[^""\n]*""");
+        var lineComment = new Regex(@"//[^\n]*");
+
+        var offenders = new List<string>();
+
+        foreach (string file in PortableSources().Concat(PortableTestSources()))
+        {
+            // Comments are stripped rather than matched: an explanation of this defect naturally
+            // quotes the path that caused it, and a rule that fails on its own documentation
+            // teaches people to stop writing the documentation.
+            string text = lineComment.Replace(File.ReadAllText(file), string.Empty);
+
+            foreach (System.Text.RegularExpressions.Match match in drivePath.Matches(text))
+            {
+                offenders.Add($"{Relative(file)}: {match.Value}");
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "a drive-letter path is meaningless off Windows, and the assertion around it then "
+            + "holds or fails for reasons that have nothing to do with what is being tested:\n"
+            + string.Join("\n", offenders));
+    }
+
+    /// <summary>
+    /// The portable test project's own sources.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="PortableSources"/> because the two are asked different questions.
+    /// The production rules here are about what ships; this one is about what runs on the Linux and
+    /// macOS agents, and TelemetryDashboard.Tests is exactly that and was covered by nothing.
+    /// </remarks>
+    private static IEnumerable<string> PortableTestSources()
+    {
+        string directory = Path.Combine(SolutionRoot(), "TelemetryDashboard.Tests");
+        if (!Directory.Exists(directory)) return Enumerable.Empty<string>();
+
+        return Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
+            .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"));
+    }
 }

@@ -217,10 +217,27 @@ public class F25_F34_ExtensionStorageBoundaryTests
     public void F27_Boundary_InvalidExportPath_FailsGracefullyWithMessage()
     {
         var writer = new MatFileWriter();
-        string invalidPath = @"Z:\NonExistentDrive\output.mat";
+
+        // A directory that does not exist, named rather than spelled.
+        //
+        // This was @"Z:\NonExistentDrive\output.mat", which is unusable only on Windows. On Linux
+        // and macOS a backslash is an ordinary filename character, so the whole string is one
+        // relative file name, Path.GetDirectoryName answers with the working directory, that
+        // directory exists -- and MatFileWriter correctly wrote the file it was asked for. The
+        // test then failed for the one reason it should never fail: the code did its job.
+        //
+        // Found by the first CI run on Linux and macOS. It is the class of defect the portable
+        // suite was split out to expose, and it had been invisible for as long as the suite only
+        // ever ran on Windows.
+        string missingDirectory = Path.Combine(Path.GetTempPath(), "td-export-" + Guid.NewGuid().ToString("N"));
+        string invalidPath = Path.Combine(missingDirectory, "output.mat");
+
+        Directory.Exists(missingDirectory).Should().BeFalse("the premise of this test is that it is absent");
 
         Action act = () => writer.WritePackets(invalidPath, new List<TelemetryPacket>());
-        act.Should().Throw<Exception>();
+        act.Should().Throw<DirectoryNotFoundException>()
+            .WithMessage("*" + missingDirectory + "*",
+                "an operator who mistyped a path needs to be told which one");
     }
 
     #endregion
@@ -426,7 +443,13 @@ public class F25_F34_ExtensionStorageBoundaryTests
     public void F32_Boundary_NonExistentRecordingFile_ThrowsFileNotFoundException()
     {
         var replay = new SessionReplayPlayer();
-        Action act = () => replay.LoadSession(@"C:\NonExistentRecording.csv");
+
+        // Composed rather than spelled: a drive letter names nothing off Windows, so the file is
+        // absent there for a different reason than the one this test is about.
+        string missing = Path.Combine(
+            Path.GetTempPath(), "NoSuchRecording-" + Guid.NewGuid().ToString("N") + ".csv");
+
+        Action act = () => replay.LoadSession(missing);
         act.Should().Throw<FileNotFoundException>();
     }
 
@@ -541,7 +564,13 @@ public class F25_F34_ExtensionStorageBoundaryTests
     public void F33_Boundary_PatcherScriptMissing_FailsUpdateCleanly()
     {
         var updater = new GitHubUpdater();
-        bool launched = updater.LaunchExternalPatcher(@"C:\NonExistentPatcher.ps1");
+
+        // As above: what matters is that the script is not there, not that the path looks like
+        // Windows. A .ps1 that does not exist is refused the same way everywhere.
+        string missing = Path.Combine(
+            Path.GetTempPath(), "NoSuchPatcher-" + Guid.NewGuid().ToString("N") + ".ps1");
+
+        bool launched = updater.LaunchExternalPatcher(missing);
 
         launched.Should().BeFalse();
     }
