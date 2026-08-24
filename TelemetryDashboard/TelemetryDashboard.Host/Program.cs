@@ -20,7 +20,7 @@ namespace TelemetryDashboard.Host;
 /// runs wherever .NET 8 runs and an operator reaches it from a phone, a Mac or a Linux box through
 /// the browser console it already ships.
 /// </remarks>
-public static class Program
+public static partial class Program
 {
     /// <summary>Exit code for a command line that could not be understood.</summary>
     public const int ExitUsage = 64;
@@ -34,24 +34,9 @@ public static class Program
     /// <summary>Starts the host and blocks until a shutdown signal arrives.</summary>
     public static async Task<int> Main(string[] args)
     {
-        // Before anything binds a socket. Every subcommand ends rather than serving, and Subcommands
-        // carries the account of why that ordering matters.
-        if (Subcommands.Run(args) is { } subcommandExit) return subcommandExit;
-
-        HostOptions options = CommandLineParser.Parse(args, EnvironmentVariables.Read());
-
-        if (options.ShowHelp)
-        {
-            Console.Out.Write(UsageText.Render());
-            return 0;
-        }
-
-        if (options.Error is not null)
-        {
-            Console.Error.WriteLine($"telemetry-host: {options.Error}");
-            Console.Error.WriteLine("Run with --help for the accepted arguments.");
-            return ExitUsage;
-        }
+        // Subcommands, the command line, and the output encoding -- everything that decides whether
+        // there is a run at all. See Program.Startup.cs.
+        if (PreFlight(args, out HostOptions options) is { } preFlightExit) return preFlightExit;
 
         using var shutdown = new ShutdownCoordinator();
 
