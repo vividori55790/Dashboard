@@ -389,7 +389,19 @@ public class Challenger1EmpiricalStressTests
         var serialMock = new TestSerialManagerMock();
         serialMock.SetPortStatus("COM3", PortConnectionStatus.Disconnected);
 
-        using var engine = new AutoReconnectEngine(serialMock, TimeSpan.FromMilliseconds(50));
+        // The port list is stated, not borrowed from whatever is plugged into this machine.
+        //
+        // Without the third argument the engine falls back to SerialPort.GetPortNames, and its
+        // whole decision is "the port is back and we are not on it" -- so this test passed here
+        // only because the developer's machine happens to have a COM3, and failed on all three CI
+        // agents, which have no serial ports at all. Ten seconds of waiting did not help, because
+        // nothing was ever going to be written: the engine was right and the test was borrowing
+        // its premise from the hardware in the room.
+        //
+        // AutoReconnectEngine's own constructor documents this parameter as existing for exactly
+        // this reason, and LinkWatchdogTests already uses it. This is the one that did not.
+        using var engine = new AutoReconnectEngine(
+            serialMock, TimeSpan.FromMilliseconds(50), () => new[] { "COM3" });
         DateTime initialTime = new DateTime(2026, 8, 9, 15, 0, 0, 123, DateTimeKind.Utc);
         engine.RegisterTargetPort("COM3", 115200, initialTime);
 
