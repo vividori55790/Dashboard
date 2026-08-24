@@ -26,6 +26,10 @@ public static class SniffUsageText
           --for <duration>   How long to listen. 15s by default; 20, 30s and 2m all read.
           --out <file>       Where to write the draft. rules.json by default.
           --force            Replace an existing output file instead of refusing.
+          --verify           Check the rules already in force instead of drafting new ones.
+                             Writes nothing, and exits non-zero while any declared channel is
+                             still receiving no readings — so a commissioning step can be gated
+                             on it rather than read by whoever is watching.
 
         Every other flag is the serving host's, and means what it means there:
 
@@ -35,11 +39,14 @@ public static class SniffUsageText
           --replay <file>    A recording, which is how this is exercised without hardware.
           --profile <id>     The profile to judge the readings against. Without one the draft
                              lists what arrived and has nothing to map it onto.
-          --rules <file>     Rules to listen through. Use it to check a file you have already
-                             written: what is still commented out is what is still unmapped.
+          --rules <file>     Rules to listen through. Pair it with --verify to check a file you
+                             have already written, against the device rather than against itself.
 
-        Then start the host with the file you edited:
+        The loop this closes:
 
+          telemetry-host sniff --serial COM3 --profile dab-psfb-ups        # draft
+          # fill in what it left commented out, then ask the device whether you got it right
+          telemetry-host sniff --serial COM3 --profile dab-psfb-ups --rules rules.json --verify
           telemetry-host --serial COM3 --profile dab-psfb-ups --rules rules.json
 
         """;

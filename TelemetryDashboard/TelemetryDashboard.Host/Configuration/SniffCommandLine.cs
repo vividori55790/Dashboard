@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -25,7 +25,7 @@ namespace TelemetryDashboard.Host.Configuration;
 /// slightly differently would draft a file for a stream nobody is going to have.
 /// </para>
 /// </remarks>
-public sealed class SniffCommandLine
+public sealed partial class SniffCommandLine
 {
     /// <summary>The word that selects this subcommand.</summary>
     public const string Verb = "sniff";
@@ -34,13 +34,14 @@ public sealed class SniffCommandLine
     public static readonly TimeSpan DefaultDuration = TimeSpan.FromSeconds(15);
 
     private SniffCommandLine(
-        HostOptions source, TimeSpan duration, string output, bool force, bool showHelp,
+        HostOptions source, TimeSpan duration, string output, bool force, bool verify, bool showHelp,
         string? error, string invocation)
     {
         Source = source;
         Duration = duration;
         OutputPath = output;
         Force = force;
+        Verify = verify;
         ShowHelp = showHelp;
         Error = error;
         Invocation = invocation;
@@ -57,6 +58,16 @@ public sealed class SniffCommandLine
     /// <summary>Whether an existing output file may be replaced.</summary>
     public bool Force { get; }
 
+    /// <summary>
+    /// Check the rules in force instead of drafting new ones. Writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// The command's help already suggested --rules for exactly this, and following that advice
+    /// produced a rules.json nobody asked for -- or a refusal, when one was already there. A check
+    /// with a side effect is one people stop running.
+    /// </remarks>
+    public bool Verify { get; }
+
     public bool ShowHelp { get; }
 
     /// <summary>Why the command line was rejected, or null.</summary>
@@ -69,14 +80,14 @@ public sealed class SniffCommandLine
     public static bool Matches(string[] args) =>
         args.Length > 0 && string.Equals(args[0], Verb, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Parses <c>sniff [source flags] [--for 15s] [--out rules.json] [--force]</c>.</summary>
+    /// <summary>Parses <c>sniff [source flags] [--for 15s] [--out rules.json] [--force] [--verify]</c>.</summary>
     public static SniffCommandLine Parse(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
         TimeSpan duration = DefaultDuration;
         string output = "rules.json";
-        bool force = false, help = false;
+        bool force = false, verify = false, help = false;
         var rest = new List<string>();
 
         for (int i = 1; i < args.Length; i++)
@@ -103,6 +114,10 @@ public sealed class SniffCommandLine
                     force = true;
                     break;
 
+                case "--verify":
+                    verify = true;
+                    break;
+
                 case "--help" or "-h" or "-?" or "/?":
                     help = true;
                     break;
@@ -117,32 +132,14 @@ public sealed class SniffCommandLine
         HostOptions source = CommandLineParser.Parse([.. rest], EnvironmentVariables.Read());
 
         return new SniffCommandLine(
-            source, duration, output, force, help, source.Error, Verb + " " + string.Join(' ', args[1..]));
+            source, duration, output, force, verify, help, source.Error,
+            Verb + " " + string.Join(' ', args[1..]));
     }
 
     private const string DurationHelp =
         "a duration is a number and an optional unit, e.g. 20, 30s or 2m.";
 
-    /// <summary>Reads <c>15s</c>, <c>2m</c> or a bare number of seconds.</summary>
-    public static bool TryDuration(string? text, out TimeSpan duration)
-    {
-        duration = DefaultDuration;
-        if (string.IsNullOrWhiteSpace(text)) return false;
-
-        string trimmed = text.Trim();
-        double scale = 1.0;
-
-        if (trimmed.EndsWith('s')) trimmed = trimmed[..^1];
-        else if (trimmed.EndsWith('m')) { trimmed = trimmed[..^1]; scale = 60.0; }
-
-        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)) return false;
-        if (value <= 0) return false;
-
-        duration = TimeSpan.FromSeconds(value * scale);
-        return true;
-    }
-
     private static SniffCommandLine Fail(string message, string[] args) =>
-        new(new HostOptions(), DefaultDuration, "rules.json", force: false, showHelp: false,
-            message, Verb + " " + string.Join(' ', args[1..]));
+        new(new HostOptions(), DefaultDuration, "rules.json", force: false, verify: false,
+            showHelp: false, message, Verb + " " + string.Join(' ', args[1..]));
 }

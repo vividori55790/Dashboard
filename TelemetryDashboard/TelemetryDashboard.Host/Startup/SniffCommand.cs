@@ -52,7 +52,7 @@ internal static class SniffCommand
         // Before opening anything. Refusing after fifteen seconds of listening would waste the one
         // thing this command costs, and refusing at all is the point: a rules file somebody has
         // edited is work, and overwriting it silently is the worst outcome here.
-        if (File.Exists(command.OutputPath) && !command.Force)
+        if (!command.Verify && File.Exists(command.OutputPath) && !command.Force)
         {
             Console.Error.WriteLine(
                 $"telemetry-host sniff: '{command.OutputPath}' already exists. Write somewhere else "
@@ -102,7 +102,9 @@ internal static class SniffCommand
 
         Console.WriteLine(
             $"Listening to {source.Origin} for {command.Duration.TotalSeconds:0.#}s. "
-            + "Nothing is published and nothing is recorded.");
+            + (command.Verify
+                ? "Nothing is published, recorded or written."
+                : "Nothing is published and nothing is recorded."));
 
         var survey = new WireSurvey();
         await SniffListener.ListenAsync(source, router, survey, command.Duration, stop.Token).ConfigureAwait(false);
@@ -110,6 +112,16 @@ internal static class SniffCommand
         if (source is IAsyncDisposable disposable) await disposable.DisposeAsync().ConfigureAwait(false);
 
         SniffReport.Print(survey, profile);
+
+        if (command.Verify)
+        {
+            foreach (string line in SniffVerification.Render(survey, profile, routing.Rules.Count))
+            {
+                Console.WriteLine(line);
+            }
+
+            return SniffVerification.ExitCode(survey, profile);
+        }
 
         string draft = RuleDraft.Render(survey, profile, "TelemetryDashboard.Host " + command.Invocation);
         return Write(command.OutputPath, draft, survey);
