@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -53,6 +53,22 @@ public sealed class WebConsoleHost : IAsyncDisposable
     public static WebConsoleHost Start(HostOptions options)
     {
         var server = new TelemetryStreamingServer(options.Port, maxStreamClients: options.MaxStreamClients);
+
+        // Attached before Start, so there is no window in which the port is open and the gate is
+        // not. A credential configured but applied a moment late is a credential that was not
+        // applied, and the moment is exactly when a listener is most interesting.
+        if (options.CredentialPath is { } path)
+        {
+            // The parser already proved this loads. If it does not now, the file changed underneath
+            // the run, and the one thing that must not happen is serving openly because the lock
+            // went missing quietly.
+            Core.Security.PasswordCredential credential = Core.Security.CredentialFile.Load(path)
+                ?? throw new InvalidOperationException(
+                    $"the credential file '{path}' could not be read at start-up, and serving "
+                    + "without the credential that was asked for is not an option this host takes.");
+
+            server.Access = new Core.Streaming.ConsoleAccessGate(credential);
+        }
 
         IReadOnlyList<string> roots = ResolveRoots(options);
         foreach (string root in roots)

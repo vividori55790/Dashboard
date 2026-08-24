@@ -1,4 +1,4 @@
-using TelemetryDashboard.Host.Outbound;
+﻿using TelemetryDashboard.Host.Outbound;
 using TelemetryDashboard.Host.Startup;
 
 using TelemetryDashboard.Host.Ingest;
@@ -74,6 +74,15 @@ public static class UsageText
                                 out to all of them, so the cost of one more is paid by the ones
                                 already being served. A tab left reloading degrades the operator
                                 watching the plant, silently. The count refused is on /api/status.
+              --credential <f>  Demand this credential before serving anything -- the console page,
+                                every endpoint, the SSE stream and the WebSocket upgrade. The file
+                                is the one the desktop shell's screen lock enrols; it holds a salted
+                                PBKDF2 derivation and no password. Sent as HTTP Basic, which is
+                                base64 rather than encryption, so on a cleartext link it is readable
+                                by anything on the path: this is for a console already behind TLS,
+                                or for scripts on the machine itself. Without it the console serves
+                                its own machine openly, which is today's behaviour and the default.
+
               --rules <file>    What the device on this bench actually sends. The built-in rules
                                 read $TELE,node,channel,value,unit, which is the framing this
                                 product's own generated firmware emits -- and the framing a real

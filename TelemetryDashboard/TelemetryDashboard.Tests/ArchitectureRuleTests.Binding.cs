@@ -25,6 +25,18 @@ namespace TelemetryDashboard.Tests;
 /// would publish a plant to whatever shares the subnet. The refusal to wire it was deliberate, and
 /// this keeps it deliberate rather than forgotten.
 /// </para>
+/// <para>
+/// Half of that decision has since been made. <c>--credential</c> puts a
+/// <see cref="TelemetryDashboard.Core.Streaming.ConsoleAccessGate"/> in front of every path, and it
+/// was verified against a running host: the console page, the JSON endpoints, the SSE stream and
+/// the WebSocket upgrade all answer 401 without it and serve with it. The lock exists and works.
+/// </para>
+/// <para>
+/// What remains is the half the lock cannot supply. Basic over a cleartext link puts the password
+/// on the wire, so binding wide still needs TLS in front or a deliberate decision to accept that on
+/// an isolated segment — and whoever makes it must tie the two flags together rather than leaving
+/// them independent, so that wide binding cannot be asked for without a credential.
+/// </para>
 /// </remarks>
 public partial class ArchitectureRuleTests
 {

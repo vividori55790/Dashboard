@@ -96,6 +96,17 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     public Analytics.LimitMonitor? Limits { get; set; }
 
     /// <summary>
+    /// The credential every request must carry, or null while the console is open to its machine.
+    /// </summary>
+    /// <remarks>
+    /// Null is today's behaviour and stays the default: a loopback console is reachable only by
+    /// somebody already on the machine, and demanding a password from them would be ceremony. It
+    /// becomes non-null the moment an operator asks for one, and it is what any future decision to
+    /// bind beyond loopback has to depend on.
+    /// </remarks>
+    public ConsoleAccessGate? Access { get; set; }
+
+    /// <summary>
     /// What each port is delivering, when the host is keeping an inventory of it.
     /// </summary>
     /// <remarks>
@@ -302,11 +313,50 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
         }
     }
 
+    /// <summary>Answers 401 with the challenge a client needs in order to try again.</summary>
+    /// <remarks>
+    /// The realm is offered so that curl's -u and a browser's own prompt both work without the
+    /// caller having to know how this endpoint authenticates. The body says which flag turned the
+    /// credential on, because the person most likely to meet this refusal is the operator who just
+    /// configured it and forgot to pass the password to whatever they are testing with.
+    /// </remarks>
+    private static void Challenge(HttpListenerContext context)
+    {
+        HttpListenerResponse response = context.Response;
+        response.StatusCode = 401;
+        response.AddHeader("WWW-Authenticate", $"Basic realm=\"{ConsoleAccessGate.Realm}\", charset=\"UTF-8\"");
+        response.ContentType = "text/plain; charset=utf-8";
+
+        byte[] body = System.Text.Encoding.UTF8.GetBytes(
+            "This console requires the credential the host was started with (--credential)." + Environment.NewLine);
+        response.ContentLength64 = body.Length;
+
+        try
+        {
+            response.OutputStream.Write(body, 0, body.Length);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or ObjectDisposedException)
+        {
+            // A client that hung up before reading its refusal is not this server's problem.
+        }
+
+        response.Close();
+    }
+
     private async Task DispatchAsync(HttpListenerContext context, CancellationToken token)
     {
         try
         {
             string path = context.Request.Url?.AbsolutePath ?? "/";
+
+            // Before the path is even looked at. Every surface this server has -- the console page, the
+            // JSON endpoints, the SSE stream and the WebSocket upgrade -- arrives here, so one check
+            // covers all of them and none can be added later that quietly misses it.
+            if (Access is { } gate && !gate.Allows(context.Request.Headers["Authorization"]))
+            {
+                Challenge(context);
+                return;
+            }
 
             if (context.Request.IsWebSocketRequest)
             {

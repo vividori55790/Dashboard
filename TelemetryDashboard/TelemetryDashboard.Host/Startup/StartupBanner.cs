@@ -50,6 +50,7 @@ public static class StartupBanner
         Console.WriteLine();
         Console.WriteLine("  Reachability: the streaming server binds localhost and 127.0.0.1 only.");
         Console.WriteLine("  A browser on another machine needs a tunnel or a reverse proxy in front of it.");
+        PrintAccess(console);
         Console.WriteLine();
     }
 
@@ -128,6 +129,27 @@ public static class StartupBanner
             Console.WriteLine($"                {NodeIdentityStore.PathFor(AppContext.BaseDirectory)}");
             Console.WriteLine("                The old file is no longer read and can be deleted.");
         }
+    }
+
+    /// <summary>Says whether anything has to prove itself before this console answers.</summary>
+    /// <remarks>
+    /// Both states are worth printing. "Open" is what an operator on a shared machine needs to
+    /// know before they walk away from it; "locked" is what the operator who just configured it
+    /// needs to see, because the failure mode of a credential is a console that answers 401 to the
+    /// tool they forgot to give the password to, and a silent banner leaves them guessing.
+    /// </remarks>
+    private static void PrintAccess(WebConsoleHost console)
+    {
+        if (console.Server.Access is null)
+        {
+            Console.WriteLine("  access        open to this machine -- anything running here can read and command.");
+            return;
+        }
+
+        Console.WriteLine("  access        a credential is required (HTTP Basic) on every path, including /ws.");
+        Console.WriteLine("                Basic is base64, not encryption. On a cleartext link the password is");
+        Console.WriteLine("                readable by anything on the path; put TLS in front before it leaves");
+        Console.WriteLine("                this machine.");
     }
 
     private static void PrintIngest(ITelemetrySource? source)

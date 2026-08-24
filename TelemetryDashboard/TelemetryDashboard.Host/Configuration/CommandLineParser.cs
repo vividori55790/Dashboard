@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -258,6 +258,29 @@ public static class CommandLineParser
                         return ArgumentCursor.Fail($"--retire needs at least one node id, not '{rawRetire}'.");
                     }
                     draft.RetiredNodes = retired;
+                    break;
+
+                case "--credential":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawCredential)) return ArgumentCursor.MissingValue(argument);
+                    if (!File.Exists(rawCredential))
+                    {
+                        // Refused at parse time, like --rules. An operator who mistyped the path
+                        // must not get a console that serves openly because its lock was missing.
+                        return ArgumentCursor.Fail(
+                            $"credential file '{rawCredential}' does not exist. Serving without the "
+                            + "credential that was asked for would be the opposite of what was asked.");
+                    }
+                    if (Core.Security.CredentialFile.Load(rawCredential) is null)
+                    {
+                        // Load answers null for an unreadable or malformed file, which is the right
+                        // answer for the screen lock -- it lets an operator enroll a new password
+                        // instead of being locked out. Here the same answer would mean serving with
+                        // no credential at all, so it is refused rather than defaulted.
+                        return ArgumentCursor.Fail(
+                            $"credential file '{rawCredential}' could not be read as one. It holds a "
+                            + "salted PBKDF2 derivation written by the screen-lock enrollment.");
+                    }
+                    draft.CredentialPath = Path.GetFullPath(rawCredential);
                     break;
 
                 case "--rules":

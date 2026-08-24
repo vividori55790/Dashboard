@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace TelemetryDashboard.Host.Configuration;
@@ -305,6 +305,18 @@ public sealed class HostOptions
     /// nothing judging them.
     /// </remarks>
     public string? RulesPath { get; init; }
+
+    /// <summary>
+    /// File holding the credential the console will demand, or null to serve its machine openly.
+    /// </summary>
+    /// <remarks>
+    /// Null is the default and is today's behaviour: a console bound to loopback is reachable only
+    /// by somebody already sitting at the machine, and asking them for a password is ceremony. The
+    /// flag exists because the argument for ever binding this endpoint wider has always stopped at
+    /// the same sentence -- it has no authentication -- and the lock has to work before there is
+    /// any question of opening the door.
+    /// </remarks>
+    public string? CredentialPath { get; init; }
 
     /// <summary>File the learned node set is remembered in, or null to forget on every restart.</summary>
     /// <remarks>

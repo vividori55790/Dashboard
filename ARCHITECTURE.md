@@ -163,7 +163,7 @@ is the same kind of claim this document argues against.
 | Clock offset across nodes | Built | `Core/Services/TimeSyncJitterBuffer.GetClockOffset`, behind `/api/aligned` |
 | **Uncertainty on that offset** | Not started | nothing reports an error bar, so §3's actual requirement is unmet |
 | Peer exchange, sequencing, deduplication, backfill marking | Not started | no `LateArriving` / `Backfill` anywhere in the tree |
-| Authentication between instances | Not started | `TelemetryStreamingServer` has none. Loopback-only is not a default here but the only behaviour: nothing in the product can bind wider, and `ArchitectureRuleTests.TheConsoleBindsLoopbackOnlyInEveryProductionConstruction` fails if that changes without the question being answered |
+| Authentication between instances | Half built | `--credential` gates every path -- page, endpoints, SSE and the WebSocket upgrade -- against a salted PBKDF2 credential, and `telemetry-host credential` enrols one without a desktop. What is missing is confidentiality: Basic over cleartext puts the password on the wire. Loopback-only is not a default here but the only behaviour: nothing in the product can bind wider, and `ArchitectureRuleTests.TheConsoleBindsLoopbackOnlyInEveryProductionConstruction` fails if that changes without the question being answered |
 
 The right-hand columns are maintained by hand and are expected to be embarrassing. That is
 preferable to a roadmap that reads as an inventory.

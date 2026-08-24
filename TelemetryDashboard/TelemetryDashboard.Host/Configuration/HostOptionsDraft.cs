@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace TelemetryDashboard.Host.Configuration;
 
@@ -12,7 +12,7 @@ namespace TelemetryDashboard.Host.Configuration;
 /// ends up half-wired. <see cref="HostOptions"/> stays immutable; this is the mutable staging area
 /// that produces it.
 /// </remarks>
-internal sealed class HostOptionsDraft
+internal sealed partial class HostOptionsDraft
 {
     public HostOptionsDraft(HostOptions defaults)
     {
@@ -101,49 +101,5 @@ internal sealed class HostOptionsDraft
     public IReadOnlyList<string> RetiredNodes = [];
     public string? CoverageStatePath;
     public string? RulesPath;
-
-    public HostOptions Build() => new()
-    {
-        Port = Port,
-        BaudRate = BaudRate,
-        ContentRoots = ContentRoots,
-        ClientFile = ClientFile,
-        SerialPort = SerialPort,
-        RecordingDirectory = RecordingDirectory,
-        Simulate = Simulate,
-        WatchIntervals = WatchIntervals,
-        MaxStreamClients = MaxStreamClients,
-        DriftWindowSeconds = DriftWindowSeconds,
-        IncidentDirectory = IncidentDirectory,
-        RetentionSpec = RetentionSpec,
-        PluginDirectory = PluginDirectory,
-        ExtensionDirectory = ExtensionDirectory,
-        ExtensionCatalogue = ExtensionCatalogue,
-        SlackWebhook = SlackWebhook,
-        MqttBrokerHost = MqttBrokerHost,
-        MqttBrokerPort = MqttBrokerPort,
-        MqttTopicPrefix = MqttTopicPrefix,
-        UpdateRepository = UpdateRepository,
-        SseEndpoint = SseEndpoint,
-        ChannelMapPath = ChannelMapPath,
-        ProfileId = ProfileId,
-        DashboardExportPath = DashboardExportPath,
-        ArchivePath = ArchivePath,
-        Computed = Computed,
-        Limits = Limits,
-        EmergencyLimits = EmergencyLimits,
-        Signals = Signals,
-        ReplayPath = ReplayPath,
-        ReplaySpeed = ReplaySpeed,
-        EmergencyStop = EmergencyStop,
-        EmergencySigma = EmergencySigma,
-        EmergencyCommand = EmergencyCommand,
-        EmergencyCooldownSec = EmergencyCooldownSec,
-        PollEndpoint = PollEndpoint,
-        PollInterval = PollInterval,
-        ExpectedNodes = ExpectedNodes,
-        RetiredNodes = RetiredNodes,
-        CoverageStatePath = CoverageStatePath,
-        RulesPath = RulesPath
-    };
+    public string? CredentialPath;
 }

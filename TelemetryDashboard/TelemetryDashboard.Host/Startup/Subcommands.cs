@@ -34,8 +34,10 @@ internal static class Subcommands
     {
         if (ExtensionCommandLine.Matches(args)) return ExtensionCommand.Run(args);
         if (BacktestCommandLine.Matches(args)) return BacktestCommand.Run(args);
-        if (ExportCommandLine.Matches(args)) return ExportCommand.Run(args);
+        if (ExportCommandLine.Matches(args)) return ExportCommand.Run(args);
+
         if (SniffCommandLine.Matches(args)) return SniffCommand.Run(args);
+        if (CredentialCommand.Matches(args)) return CredentialCommand.Run(args);
 
         return null;
     }
