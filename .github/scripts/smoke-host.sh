@@ -23,6 +23,13 @@ PORT=${2:-8099}
 BIN="$HOST_DIR/TelemetryDashboard.Host"
 [ -f "$BIN" ] || BIN="$HOST_DIR/TelemetryDashboard.Host.exe"
 LOG="$HOST_DIR/smoke-host.log"
+# Scratch files live beside the host rather than in /tmp: this script is bash and the
+# blocks inside it are python, and on a Windows checkout those two do not agree on what
+# /tmp resolves to. The first version relied on them agreeing, and the endpoint loop
+# below silently iterated an empty list and passed.
+STATUS="$HOST_DIR/status.json"
+ENDPOINTS="$HOST_DIR/endpoints.txt"
+STREAM="$HOST_DIR/stream.txt"
 BASE="http://127.0.0.1:$PORT"
 
 failures=0
@@ -91,7 +98,7 @@ for _ in $(seq 1 60); do
         sed 's/^/        /' "$LOG"
         exit 1
     fi
-    if curl -fsS --max-time 2 "$BASE/api/status" -o /tmp/status.json 2>/dev/null; then ready=0; break; fi
+    if curl -fsS --max-time 2 "$BASE/api/status" -o "$STATUS" 2>/dev/null; then ready=0; break; fi
     sleep 1
 done
 check "the host answers /api/status" "$ready" "sixty seconds elapsed with no reply; see the log artifact"
@@ -100,9 +107,9 @@ check "the host answers /api/status" "$ready" "sixty seconds elapsed with no rep
 # Give the simulator a moment to actually produce samples. Serving is one claim;
 # carrying data is the one worth making.
 sleep 5
-curl -fsS --max-time 5 "$BASE/api/status" -o /tmp/status.json
+curl -fsS --max-time 5 "$BASE/api/status" -o "$STATUS"
 
-python3 - /tmp/status.json <<'PY'
+python3 - "$STATUS" "$ENDPOINTS" <<'PY'
 import json, sys
 
 status = json.load(open(sys.argv[1]))
@@ -122,8 +129,14 @@ want("the ingest pipeline produced channels", channels > 0,
      f"seriesChannels={channels} -- the host is serving, and has nothing to serve")
 want("samples were accepted, not merely offered", accepted > 0,
      f"seriesSamplesAccepted={accepted}")
-want("every advertised endpoint is declared", len(endpoints) == 13,
+want("the endpoint list is advertised at all", len(endpoints) >= 13,
      f"status advertises {len(endpoints)}: {endpoints}")
+
+# Written out so the endpoint loop below asks the product what it serves instead of
+# carrying a second copy of the list. The first version hardcoded 13, and adding
+# /api/inputs broke it -- correctly, but for the wrong reason: nothing was wrong with
+# the host, only with the harness's memory of it.
+open(sys.argv[2], "w").write("\n".join(endpoints))
 
 # Refused samples are a real number rather than an absent key: this project's rule
 # is that a count nobody kept is not the same fact as a count that came out zero.
@@ -135,10 +148,17 @@ sys.exit(1 if bad else 0)
 PY
 check "the status payload is what a console can read" "$?"
 
-# Each advertised GET endpoint actually answers. /ws and /stream are long-lived
-# and are checked separately below; /api/control is a POST.
-echo "--- endpoints ---"
-for path in /api/series /api/spectrum /api/aligned /api/computed /api/limits /api/history /api/incident; do
+# /ws and /stream are long-lived and are checked on their own below; /api/control is a
+# POST. Everything else the host advertises has to answer, and the list comes from the
+# host rather than from here.
+queryable=$(grep -vE '^(/ws|/stream|/api/status|/api/control)$' "$ENDPOINTS" 2>/dev/null || true)
+# A loop over an empty list passes without checking anything, which is the one outcome
+# a check must never have. This is the guard that makes the loop below mean something.
+check "the advertised endpoint list was captured" \
+      "$([ -n "$queryable" ] && echo 0 || echo 1)" \
+      "no endpoints to query -- the status payload was not captured, so nothing below ran"
+
+for path in $queryable; do
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE$path")
     # 400 is a legitimate answer to a query with no parameters; 404 and 500 are not.
     case "$code" in
@@ -161,15 +181,15 @@ done
 # SSE. curl is stopped by --max-time, which is an error exit by design, so the
 # check is on what arrived rather than on curl's status.
 echo "--- live stream ---"
-curl -sN --max-time 8 "$BASE/stream" -o /tmp/stream.txt 2>/dev/null || true
-frames=$(grep -c '^data:' /tmp/stream.txt 2>/dev/null || echo 0)
+curl -sN --max-time 8 "$BASE/stream" -o "$STREAM" 2>/dev/null || true
+frames=$(grep -c '^data:' "$STREAM" 2>/dev/null || echo 0)
 check "the SSE stream delivered frames ($frames)" "$([ "$frames" -gt 0 ] && echo 0 || echo 1)" \
       "no data: lines in eight seconds"
 if [ "$frames" -gt 0 ]; then
     # --simulate must mark what it produces. A synthetic reading that reaches a
     # chart unlabelled is the failure this product's provenance rules exist for.
     check "simulated frames say they are simulated" \
-          "$(grep -q '"simulated":true' /tmp/stream.txt && echo 0 || echo 1)" \
+          "$(grep -q '"simulated":true' "$STREAM" && echo 0 || echo 1)" \
           "frames carry no simulated=true marker"
 fi
 

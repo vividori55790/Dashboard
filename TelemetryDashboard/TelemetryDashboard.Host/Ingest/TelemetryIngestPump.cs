@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -91,6 +91,13 @@ public sealed class TelemetryIngestPump
         _records = new IngestRecordPath(
             _publisher.PublishAsync, source.IsSimulated, watchIntervals, driftWindowSeconds);
 
+        // Published here rather than by the caller. The pump is the only thing that sees a raw
+        // frame and the readings it produced at the same moment -- the port comes from one, the
+        // channel from the other -- so it owns the pairing, and an owner that hands itself over is
+        // one nobody can forget to wire. That is not hypothetical here: the reachability audit
+        // this project keeps re-running is a list of things somebody forgot to construct.
+        server.Inputs = Inputs;
+
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
         // chart that no alert could fire on and no query could find afterwards.
@@ -164,6 +171,13 @@ public sealed class TelemetryIngestPump
 
                 foreach (TelemetryPacket packet in packets)
                 {
+                    // Recorded before the offer rather than after it. The record path can refuse a
+                    // sample -- the rate guard drops one, the archive is full -- and an operator
+                    // asking "is this port sending me anything" is asking about the wire, not about
+                    // what survived the pipeline. A view fed from the far end would show a channel
+                    // as silent when the cable is fine and the guard is working.
+                    Inputs.Observe(raw, packet);
+
                     await _records.OfferPacketAsync(packet, raw.PortName, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -216,6 +230,17 @@ public sealed class TelemetryIngestPump
 
     /// <summary>The channel map this run is projecting JSON documents through, if any.</summary>
     public JsonChannelMap? JsonMap => _jsonMap;
+
+    /// <summary>
+    /// What each port is delivering, as it arrives.
+    /// </summary>
+    /// <remarks>
+    /// The question an operator asks before any chart is useful: what is this thing sending me?
+    /// Every other view here is organised by channel, which answers it only for somebody who
+    /// already knows which channels to expect -- and a rig being commissioned is precisely the case
+    /// where nobody does.
+    /// </remarks>
+    public Core.Ingest.InputInventory Inputs { get; } = new();
 
     /// <summary>
     /// Configured rules first, then the channel map, and positional parsing only as a last resort.

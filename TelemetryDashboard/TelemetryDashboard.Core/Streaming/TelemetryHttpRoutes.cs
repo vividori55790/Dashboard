@@ -101,6 +101,11 @@ public static class TelemetryHttpRoutes
                 await WriteJsonAsync(response, LimitsEndpoint.Query(server.Limits)).ConfigureAwait(false);
                 return;
 
+            case "/api/inputs":
+                await WriteJsonAsync(response, InputsEndpoint.Query(
+                    server.Inputs, DateTimeOffset.UtcNow)).ConfigureAwait(false);
+                return;
+
             case "/api/spectrum":
                 await WriteJsonAsync(response, SpectrumEndpoint.Compute(
                     server.Series,
@@ -181,7 +186,7 @@ public static class TelemetryHttpRoutes
                 }).ToArray()
             }
             : null,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/control", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
+        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/inputs", "/api/control", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
     };
 
     /// <summary>

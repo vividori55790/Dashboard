@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -94,6 +94,16 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// a quiet alarm list and mean opposite things about whether the machine is protected.
     /// </remarks>
     public Analytics.LimitMonitor? Limits { get; set; }
+
+    /// <summary>
+    /// What each port is delivering, when the host is keeping an inventory of it.
+    /// </summary>
+    /// <remarks>
+    /// Nullable rather than an empty inventory, so /api/inputs can say "nobody is tracking this"
+    /// instead of "there is nothing on your rig". They are different facts and only one of them is
+    /// a reason to go and check the cable.
+    /// </remarks>
+    public Ingest.InputInventory? Inputs { get; set; }
 
     /// <summary>The pump publishing those channels, when one is running.</summary>
     /// <remarks>
