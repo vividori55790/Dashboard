@@ -19,7 +19,15 @@ The WPF shell is Windows-only and always will be. "Runs on every computer" is de
 
 | Runs the hub | Reaches the hub |
 |---|---|
-| Windows, macOS, Linux (x64 / arm64) via `TelemetryDashboard.Host` | Any browser: desktop, tablet, Android, iOS |
+| Windows, macOS, Linux (x64 / arm64) via `TelemetryDashboard.Host` | Any browser **on the same machine**, or anything a tunnel or reverse proxy is put in front of |
+
+That right-hand column used to read "Any browser: desktop, tablet, Android, iOS", and it was the largest untrue claim in this file. **The console binds loopback only, in every configuration this product ships, and no operator can change that.** `TelemetryStreamingServer` takes an `acceptRemoteConnections` argument and documents at length why it defaults off — and nothing passes it. Not the headless host, not the desktop shell, not one test. There is no flag and no environment variable.
+
+The start-up banner has always said so ("the streaming server binds localhost and 127.0.0.1 only. A browser on another machine needs a tunnel or a reverse proxy in front of it"). The table did not, so the cross-platform argument — *the operator reaches the hub through a browser* — rested on a capability that is not wired. A tablet is never on the same machine as the host.
+
+The absence is deliberate rather than forgotten, and that is the part worth keeping: this endpoint streams live plant telemetry and **accepts commands over its WebSocket**, with no authentication of any kind. Wiring the flag without answering that first would publish a plant to whatever shares the subnet. `ArchitectureRuleTests.TheConsoleBindsLoopbackOnlyInEveryProductionConstruction` now fails the moment anything enables it, so the decision has to be made rather than slipped in — and the rule was verified to catch it, by enabling it in `WebConsoleHost` and watching the rule name the file.
+
+**What is still owed.** Reaching the hub from a phone needs two things, and only the second is a design question: a way for the operator to ask for it, and an answer to how it authenticates. The second is a product decision — a shared token, client certificates, or a documented "put a reverse proxy in front of it and never bind wide" — with different consequences on a plant network, and it is recorded here rather than guessed at.
 
 Android and iOS are **clients, not hosts**. The backbone opens serial ports, writes files and holds a listening socket open indefinitely — none of which a mobile OS grants a background app. Running it there would mean a worse hub reachable from fewer places.
 
@@ -33,7 +41,7 @@ Verified alongside: `dotnet publish -r linux-x64` and `-r osx-arm64` both succee
 
 Two portability details that were silently broken and are now explicit:
 
-- **Binding.** `TelemetryStreamingServer` binds loopback only by default; `acceptRemoteConnections` opens every interface. Loopback stays the default because the endpoint has no authentication and accepts commands over the WebSocket — exposing it is an operator's deliberate choice, not a default's.
+- **Binding.** `TelemetryStreamingServer` binds loopback only; `acceptRemoteConnections` would open every interface, and nothing passes it. This used to say "exposing it is an operator's deliberate choice, not a default's", which reads as though an operator has the choice. They do not — see the table above.
 - **Hot-plug.** `Win32HotPlugHook` only fires when a Win32 message pump forwards `WM_DEVICECHANGE`, so device arrival and removal went undetected off Windows and in any headless host. `PortPresencePoller` polls the port list instead, and `MultiPortSerialManager.HotPlugDetectionActive` reports whether detection is genuinely running.
 
 ## Feature Inventory
