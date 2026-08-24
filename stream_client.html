@@ -205,6 +205,30 @@
             <div id="cmp-list" style="margin-top:6px"></div>
         </div>
 
+        <!--
+            What each port is sending, and which of it belongs on the home grid.
+
+            Every other panel is organised by channel, which only somebody who already knows the
+            channel names can read. A rig being commissioned is exactly the case where nobody does:
+            the operator has a cable, a device and a suspicion. So this is grouped by the thing that
+            can be unplugged.
+
+            The checkboxes hide and show cards. They do not stop the data -- the stream still
+            carries the channel, the archive still records it, and a band still judges it. Hiding a
+            reading and not taking it are different acts, and a control that quietly did the second
+            would be the "silence looks like health" failure this product is organised against.
+        -->
+        <div class="panel">
+            <h2>입력 · /api/inputs</h2>
+            <div class="row">
+                <span class="chip mono" id="in-summary">읽는 중…</span>
+                <button id="in-go">지금 새로고침</button>
+                <button id="in-all">전체 표시</button>
+            </div>
+            <div class="stat" id="in-stat"></div>
+            <div id="in-list" style="margin-top:6px"></div>
+        </div>
+
         <div class="panel">
             <h2>주파수 스펙트럼 · /api/spectrum</h2>
             <div class="row">
@@ -341,6 +365,11 @@
         hopt.dataset.node = ch.node;
         hopt.dataset.variable = ch.variable;
         document.getElementById('hist-ch').appendChild(hopt);
+
+        // A channel discovered after the panel was drawn has to arrive already hidden if that is
+        // what the operator chose. Without this it appears for one refresh interval and then
+        // vanishes, which reads as a glitch rather than as a setting.
+        if (hiddenSet().has(k)) el.style.display = 'none';
     }
 
     function esc(s) {
@@ -819,6 +848,131 @@
     document.getElementById('cmp-go').addEventListener('click', loadComputed);
     loadComputed();
     setInterval(loadComputed, COMPUTED_REFRESH_MS);
+
+    // ---- inputs, per port ------------------------------------------------
+    //
+    // Hidden rather than shown is what is remembered. An operator who has never opened this panel
+    // must see everything their rig sends; storing the hidden set means a channel added to the rig
+    // tomorrow appears, instead of being silently absent because it was not in a list written today.
+    var HIDDEN_KEY = 'td.hiddenChannels';
+
+    function hiddenSet() {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+        } catch (e) {
+            return new Set();
+        }
+    }
+
+    function saveHidden(set) {
+        try {
+            localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(set)));
+        } catch (e) {
+            // A browser refusing storage costs the operator their selection on reload and nothing
+            // else. Refusing to apply it as well would cost them the selection they just made.
+        }
+    }
+
+    function applyVisibility() {
+        var hidden = hiddenSet();
+        order.forEach(function (k) {
+            var el = document.getElementById(domId(k));
+            if (el) el.style.display = hidden.has(k) ? 'none' : '';
+        });
+    }
+
+    function silenceLabel(seconds) {
+        if (seconds < 2) return '지금';
+        if (seconds < 60) return Math.round(seconds) + '초 전';
+        return Math.round(seconds / 60) + '분 전';
+    }
+
+    function renderInputs(d) {
+        var summary = document.getElementById('in-summary');
+        var stat = document.getElementById('in-stat');
+        var list = document.getElementById('in-list');
+
+        if (!d.tracking) {
+            // "Nothing is arriving" and "nobody is counting" are different facts, and an empty
+            // table drawn for both tells an operator their rig is silent when nothing ever asked.
+            summary.textContent = '집계 안 함';
+            stat.textContent = d.reason || '이 호스트는 입력 목록을 유지하지 않습니다.';
+            list.innerHTML = '';
+            return;
+        }
+
+        var ports = d.ports || [];
+        var hidden = hiddenSet();
+        summary.textContent = '포트 ' + ports.length + ' · 입력 ' + d.distinctInputs;
+
+        // Counted here rather than taken from the inventory: a derived channel has no port and is
+        // not an input, so it is deliberately absent from /api/inputs -- and an operator looking at
+        // a card with no checkbox beside it deserves to be told why rather than left to guess.
+        var derivedCards = document.querySelectorAll('.card .derived').length;
+        var derivedNote = derivedCards > 0
+            ? ' 계산값 ' + derivedCards + '개는 포트가 없어 입력이 아니며, 위 파생값 패널에 있습니다.'
+            : '';
+
+        stat.textContent = d.evicted > 0
+            ? d.evicted + '개 입력이 상한에 걸려 빠졌습니다 — 이 목록은 이 장비가 보내는 전부가 ' +
+              '아닙니다. 채널 이름을 매 프레임 새로 만드는 펌웨어가 대표적인 원인입니다.'
+            : '체크를 풀면 홈 화면 카드에서만 숨겨집니다. 수신·기록·판정은 그대로입니다.' + derivedNote;
+
+        list.innerHTML = ports.map(function (port) {
+            var rows = (port.channels || []).map(function (c) {
+                var k = key(c.node, c.channel);
+                var quiet = c.silenceSec >= 10;
+                var rate = c.meanIntervalSec
+                    ? (1 / c.meanIntervalSec).toFixed(1) + ' Hz'
+                    : '—';   // one sighting says nothing about cadence, so it claims nothing
+
+                return '<div class="lim" style="' + (quiet ? 'opacity:.55' : '') + '">' +
+                       '<label class="what mono" style="cursor:pointer">' +
+                       '<input type="checkbox" data-key="' + esc(k) + '"' +
+                       (hidden.has(k) ? '' : ' checked') + '> ' +
+                       esc(c.channel + (c.unit ? '[' + c.unit + ']' : '')) + '</label>' +
+                       '<span class="tag ' + (quiet ? 'warn' : 'ok') + '">' +
+                       esc(silenceLabel(c.silenceSec)) + '</span>' +
+                       '<span class="stat mono">' + esc(fmt(c.lastValue) + ' · ' + rate +
+                           ' · ' + c.samples + '개') + '</span>' +
+                       '</div>';
+            }).join('');
+
+            return '<div style="margin-bottom:8px">' +
+                   '<div class="mono" style="font-size:11px;color:var(--text-2);margin-bottom:3px">' +
+                   esc(port.port) + ' · ' + (port.channels || []).length + '개' +
+                   '</div>' + rows + '</div>';
+        }).join('');
+
+        list.querySelectorAll('input[type=checkbox]').forEach(function (box) {
+            box.addEventListener('change', function () {
+                var set = hiddenSet();
+                if (box.checked) set.delete(box.dataset.key); else set.add(box.dataset.key);
+                saveHidden(set);
+                applyVisibility();
+            });
+        });
+
+        applyVisibility();
+    }
+
+    function loadInputs() {
+        fetch('/api/inputs')
+            .then(function (r) { return r.json(); })
+            .then(renderInputs)
+            .catch(function (e) {
+                document.getElementById('in-summary').textContent = '읽기 실패';
+                document.getElementById('in-stat').textContent = e.message;
+            });
+    }
+
+    document.getElementById('in-go').addEventListener('click', loadInputs);
+    document.getElementById('in-all').addEventListener('click', function () {
+        saveHidden(new Set());
+        loadInputs();
+    });
+    loadInputs();
+    setInterval(loadInputs, COMPUTED_REFRESH_MS);
 
     // ---- limits ----------------------------------------------------------
     //
