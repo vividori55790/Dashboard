@@ -27,7 +27,23 @@ BASE="http://127.0.0.1:$PORT"
 
 failures=0
 pass() { printf '  PASS  %s\n' "$1"; }
-fail() { printf '  FAIL  %s\n' "$1"; [ $# -gt 1 ] && printf '        %s\n' "$2"; failures=$((failures + 1)); }
+
+# A failure is also emitted as a workflow annotation, because the step log needs a
+# token to read and the annotations do not. The first three failed runs of this
+# workflow could only say "Process completed with exit code 1" to anyone outside
+# them, which for a public repository means the check reports to nobody.
+annotate() {
+    [ -n "${GITHUB_ACTIONS:-}" ] || return 0
+    printf '::error title=Host smoke (%s): %s::%s\n' "$(uname -s)" "$1" \
+        "$(printf '%s' "${2:-no detail}" | sed 's/%/%25/g' | tr '\r\n' '  ')"
+}
+
+fail() {
+    printf '  FAIL  %s\n' "$1"
+    [ $# -gt 1 ] && printf '        %s\n' "$2"
+    annotate "$1" "${2:-}"
+    failures=$((failures + 1))
+}
 
 check() {  # check <name> <condition-exit-code> [detail]
     if [ "$2" -eq 0 ]; then pass "$1"; else fail "$1" "${3:-}"; fi
@@ -157,7 +173,7 @@ fi
 # no such library and a smoke test should not need one installed to answer a
 # question about the product.
 echo "--- websocket ---"
-python3 - "$PORT" <<'PY'
+ws_report=$(python3 - "$PORT" <<'PY' 2>&1
 import json, socket, sys
 
 port = int(sys.argv[1])
@@ -241,8 +257,11 @@ except Exception as error:
 print(f"  PASS  a text frame arrived and parses as JSON ({length} bytes)")
 print(f"        keys: {sorted(frame)[:8] if isinstance(frame, dict) else type(frame).__name__}")
 PY
-check "the WebSocket path works on this platform" "$?" \
-      "documented as unverified on Linux and macOS -- this is the check that answers it"
+)
+ws_status=$?
+printf '%s\n' "$ws_report"
+check "the WebSocket path works on this platform" "$ws_status" \
+      "documented as unverified on Linux and macOS -- this is the check that answers it. $(printf '%s' "$ws_report" | grep -E '^\s*(FAIL|Traceback|[A-Za-z]*Error)' | head -2 | tr '\n' ' ')"
 
 # Shutdown. ShutdownCoordinator turns SIGINT into one cancellation token and holds
 # the process open until the recorder has drained, so a clean stop is part of what
@@ -292,5 +311,7 @@ if [ "$failures" -eq 0 ]; then
     echo "=== host smoke test passed on $(uname -s) $(uname -m) ==="
     exit 0
 fi
+annotate "$failures check(s) failed" \
+    "last lines of the host's own output: $(tail -6 "$LOG" 2>/dev/null | tr '\r\n' '  ')"
 echo "=== host smoke test: $failures check(s) failed on $(uname -s) $(uname -m) ==="
 exit 1
