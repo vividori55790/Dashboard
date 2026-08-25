@@ -45,6 +45,16 @@ annotate() {
         "$(printf '%s' "${2:-no detail}" | sed 's/%/%25/g' | tr '\r\n' '  ')"
 }
 
+# Annotations are the only part of a run readable without signing in -- GitHub now
+# gates Actions logs behind an account even on a public repository. So an outcome
+# that matters and does not fail is announced here rather than buried in a log
+# nobody outside the repo can open.
+notice() {
+    [ -n "${GITHUB_ACTIONS:-}" ] || return 0
+    printf '::notice title=Host smoke (%s): %s::%s\n' "$(uname -s)" "$1" \
+        "$(printf '%s' "${2:-}" | sed 's/%/%25/g' | tr '\r\n' '  ')"
+}
+
 fail() {
     printf '  FAIL  %s\n' "$1"
     [ $# -gt 1 ] && printf '        %s\n' "$2"
@@ -482,15 +492,19 @@ PY
     if [ -n "$lan" ]; then
         off=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$lan:$NET_PORT/api/status")
         on=$(curl -s -u "ignored:$SECRET" -o /dev/null -w '%{http_code}' --max-time 5 "http://$lan:$NET_PORT/api/status")
-        check "it answers on $lan, an address off this machine's loopback" \
-              "$([ "$off" = "401" ] && [ "$on" = "200" ] && echo 0 || echo 1)" \
-              "anonymous=$off authenticated=$on (wanted 401 then 200)"
+        if [ "$off" = "401" ] && [ "$on" = "200" ]; then
+            pass "it answers on $lan, an address off this machine's loopback"
+            notice "wide binding reached off-loopback"                    "http://$lan:$NET_PORT answered 401 anonymously and 200 with the credential"
+        else
+            fail "it answers on $lan, an address off this machine's loopback"                  "anonymous=$off authenticated=$on (wanted 401 then 200)"
+        fi
     else
         # Said rather than skipped silently: the wildcard prefix above is evidence, and
         # this would have been proof. A harness that quietly drops its strongest check
         # reports the same green as one that ran it.
         echo '  NOTE  no non-loopback address found on this runner; the wildcard prefix is'
         echo '        the evidence of wide binding here, not a connection from off-box'
+        notice "wide binding not reached off-loopback"                "no non-loopback IPv4 on this runner, so the wildcard prefix is the only evidence"
     fi
 fi
 

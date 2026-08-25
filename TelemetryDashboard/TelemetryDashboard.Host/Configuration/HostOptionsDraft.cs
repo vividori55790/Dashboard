@@ -53,6 +53,14 @@ internal sealed partial class HostOptionsDraft
         EmergencyCooldownSec = defaults.EmergencyCooldownSec;
         PollEndpoint = defaults.PollEndpoint;
         PollInterval = defaults.PollInterval;
+
+        // ListenOnAllInterfaces and CredentialPath are deliberately absent, along with the other
+        // command-line-only options. For those two the omission is load-bearing rather than
+        // incidental: an environment variable is inherited by child processes, outlives the shell
+        // that set it and lives in a profile nobody reads twice, which makes it the exact mechanism
+        // by which somebody opens a console and forgets. Requiring the flag means every launch that
+        // exposes this hub says so in its own argv -- visible in ps, in a service unit, in a
+        // container's command. Pinned by ListenScopeTests.NoInheritedDefaultCanOpenTheConsole.
     }
 
     public int Port;

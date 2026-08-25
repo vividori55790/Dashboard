@@ -98,6 +98,32 @@ public class ListenScopeTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "Tier1")]
+    public void NoInheritedDefaultCanOpenTheConsole()
+    {
+        // The defaults handed to the parser are where environment variables land. Neither half of
+        // this feature is read from there, and that is deliberate: an environment variable is
+        // inherited by children, outlives the shell that set it and lives in a profile nobody reads
+        // twice, so it is the mechanism by which a console gets opened and forgotten. Requiring the
+        // flag means every launch that exposes the hub says so in its own argv.
+        HostOptions inherited = CommandLineParser.Parse(
+            [],
+            new HostOptions { ListenOnAllInterfaces = true, CredentialPath = ACredential() });
+
+        // Both halves, and the second is the one that makes this test mean anything. Written with
+        // only the first assertion it passed against a build that *did* inherit the flag: the
+        // credential is command-line-only too, so inheriting one without the other tripped the
+        // "--listen network needs --credential" refusal, and a refused parse reports false here
+        // as well. The test was green for the opposite of its own reason.
+        inherited.Error.Should().BeNull(
+            "an empty command line has asked for nothing and cannot be refused; if this is a "
+            + "refusal, the flag was inherited and only the credential check hid it");
+        inherited.ListenOnAllInterfaces.Should().BeFalse(
+            "a console must not become network-reachable because of something set in an "
+            + "environment the operator did not write on this command line");
+    }
+
+    [Fact]
     [Trait("Category", "Tier2")]
     public void ACredentialOnItsOwnDoesNotOpenAnything()
     {
