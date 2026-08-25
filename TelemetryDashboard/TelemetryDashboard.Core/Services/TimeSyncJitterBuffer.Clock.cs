@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TelemetryDashboard.Core.Models;
 
@@ -52,6 +52,27 @@ public partial class TimeSyncJitterBuffer
 
             nodeBuf.Offset = Estimate(nodeBuf.ClockObservations);
         }
+    }
+
+    /// <summary>Every node this host has been able to compare clocks with.</summary>
+    /// <remarks>
+    /// Only nodes with at least one observation. A node that is reporting but whose samples carry
+    /// no clock of their own is absent rather than present with an unmeasured offset -- the caller
+    /// asking "whose clocks do I know" is asking about the observations, and every other node in
+    /// the fleet would answer Unmeasured, which is a longer way of saying nothing.
+    /// </remarks>
+    public IReadOnlyList<NodeClock> ObservedClocks()
+    {
+        var known = new List<NodeClock>();
+
+        foreach (var pair in _buffers)
+        {
+            ClockOffsetEstimate estimate = Read(pair.Value);
+            if (estimate.HasOffset) known.Add(new NodeClock(pair.Key, estimate));
+        }
+
+        known.Sort((left, right) => string.CompareOrdinal(left.NodeId, right.NodeId));
+        return known;
     }
 
     /// <inheritdoc />

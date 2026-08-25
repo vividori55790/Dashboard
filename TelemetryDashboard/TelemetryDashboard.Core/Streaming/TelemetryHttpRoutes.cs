@@ -204,6 +204,31 @@ public static class TelemetryHttpRoutes
             // cannot see this field would have to assume the better of the two.
             encrypted = server.IsLinkEncrypted
         },
+
+        // Null when nobody is comparing clocks, empty when somebody is and no sample has carried
+        // one. ARCHITECTURE §3's whole argument is that an offset without an error bar is a point
+        // estimate read as a guarantee, so spreadSec travels with every offset and is null rather
+        // than zero when a single observation cannot supply one.
+        clocks = server.Clocks?.Invoke() is { } observed
+            ? new
+            {
+                nodes = observed.Count,
+                perNode = observed.Select(clock => new
+                {
+                    node = clock.NodeId,
+                    offsetSec = clock.Offset.OffsetSec,
+                    spreadSec = clock.Offset.SpreadSec,
+                    samples = clock.Offset.Samples,
+
+                    // The spread measures how much transit varied; one-way messages never separate
+                    // transit from the offset itself, so this is a floor under the uncertainty and
+                    // a consumer that reads spreadSec as the whole of it will order events it
+                    // cannot order.
+                    uncertaintyIsALowerBound = true,
+                    summary = clock.Offset.Describe()
+                }).ToArray()
+            }
+            : null,
         endpoints = TelemetryStreamingServer.AdvertisedEndpoints
     };
 

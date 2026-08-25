@@ -51,6 +51,9 @@ public sealed class TelemetryIngestPump
     /// <summary>Which reporting nodes were heard from, and which fell silent during the run.</summary>
     public Core.Cluster.CoverageLedger Coverage => _publisher.Coverage;
 
+    /// <summary>Clock offsets for nodes whose samples arrived carrying their own clock.</summary>
+    public Core.Services.TimeSyncJitterBuffer Clocks => _publisher.Clocks;
+
     /// <summary>The record layer: per-stage tallies and the lines nothing could parse.</summary>
     public IngestRecordPath Records => _records;
 
@@ -99,6 +102,10 @@ public sealed class TelemetryIngestPump
         // one nobody can forget to wire. That is not hypothetical here: the reachability audit
         // this project keeps re-running is a list of things somebody forgot to construct.
         server.Inputs = Inputs;
+
+        // Same reasoning: the pump is where a clock observation is made, so it is where the
+        // ledger belongs and where it hands itself to whatever reports it.
+        server.Clocks = Clocks.ObservedClocks;
 
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a

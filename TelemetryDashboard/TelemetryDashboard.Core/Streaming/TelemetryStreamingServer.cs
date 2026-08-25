@@ -135,6 +135,18 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// </remarks>
     public Func<Cluster.CoverageSnapshot>? Coverage { get; set; }
 
+    /// <summary>Clock offsets per node, or null when nothing is comparing clocks.</summary>
+    /// <remarks>
+    /// A function for the same reason <see cref="Coverage"/> is one: a snapshot taken at start-up
+    /// would answer every later request with the state of the fleet before anything had been heard.
+    /// <para>
+    /// Null means no ledger is attached; an empty list means one is attached and no sample has
+    /// arrived carrying a clock of its own. Those are different facts, and only the second says
+    /// anything about the fleet.
+    /// </para>
+    /// </remarks>
+    public Func<IReadOnlyList<Models.NodeClock>>? Clocks { get; set; }
+
     public IComputedChannelCounters? ComputedCounters { get; set; }
 
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>

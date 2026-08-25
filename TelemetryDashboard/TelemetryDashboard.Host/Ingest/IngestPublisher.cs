@@ -117,6 +117,10 @@ public sealed class IngestPublisher
     /// </remarks>
     public DetectorPanel Detectors => _detectors;
 
+    /// <summary>Seconds since the Unix epoch, the unit the jitter buffer speaks.</summary>
+    private static double UnixSeconds(DateTime instant) =>
+        (DateTime.SpecifyKind(instant, DateTimeKind.Utc) - DateTime.UnixEpoch).TotalSeconds;
+
     /// <summary>
     /// Which reporting nodes have been heard from, and which have gone quiet.
     /// </summary>
@@ -128,6 +132,19 @@ public sealed class IngestPublisher
     /// instances exchange data with each other.
     /// </remarks>
     public CoverageLedger Coverage { get; } = new();
+
+    /// <summary>How far each reporting node's clock is from this host's, where that is knowable.</summary>
+    /// <remarks>
+    /// Beside the coverage ledger because they are the same kind of fact about the same fleet:
+    /// that one is who was heard from, this one is whether what they said can be put in order
+    /// against what anyone else said.
+    /// <para>
+    /// Only samples that crossed a network populate it. A device on this machine's own port has no
+    /// clock of its own to compare -- <c>ObservedAt</c> is null there and nothing is recorded,
+    /// which is why this stays empty on an ordinary bench host rather than filling with zeros.
+    /// </para>
+    /// </remarks>
+    public TimeSyncJitterBuffer Clocks { get; } = new();
 
     /// <summary>
     /// Raised for every sample that reaches the wire, carrying the verdict as it was actually
@@ -166,6 +183,15 @@ public sealed class IngestPublisher
         if (!Guard.Allow(channel)) return ValueTask.CompletedTask;
 
         Coverage.RecordSample(node);
+
+        // The pair is the observation: what the sending node's clock read, and what ours read when
+        // it arrived. Only a sample that crossed a network has both, and this is the first place
+        // in the product where SyncNodeClock has ever been called -- the estimator was reachable
+        // and unexercised, so every offset it could have reported was zero.
+        if (packet.ObservedAt is { } observed)
+        {
+            Clocks.SyncNodeClock(node, UnixSeconds(packet.Timestamp), UnixSeconds(observed));
+        }
 
         // Before the analytics, and independent of them. An engineering limit is a fact about the
         // reading; a z-score is a judgement about the channel's recent history, and a bus that
