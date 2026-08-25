@@ -193,6 +193,16 @@ public sealed class IngestPublisher
             Clocks.SyncNodeClock(node, UnixSeconds(packet.Timestamp), UnixSeconds(observed));
         }
 
+        // After the sync, so this sample's own observation counts toward the estimate it is then
+        // judged against. That is safe only because the estimate is built from the minimum and
+        // from the observations nearest it: a sample held through a partition is a large
+        // observation, so it moves neither, and cannot widen the error bar it would have to hide
+        // behind. It was not safe against the max-min spread this used to compute.
+        ArrivalAge age = ArrivalAge.Determine(
+            packet.ObservedAt, packet.Timestamp, Clocks.GetClockOffset(node));
+
+        if (age.IsLate) packet.Flags |= PacketFlags.LateArriving;
+
         // Before the analytics, and independent of them. An engineering limit is a fact about the
         // reading; a z-score is a judgement about the channel's recent history, and a bus that
         // settles at 460 V and stays there becomes normal to the second within a minute. Merging
@@ -219,7 +229,7 @@ public sealed class IngestPublisher
         _detectors.Evaluate(channel, packet.Value, packet.Timestamp);
 
         _server.BroadcastTelemetry(
-            TelemetryFrame.Create(packet, analysis, _origin, synthetic, portName));
+            TelemetryFrame.Create(packet, analysis, _origin, synthetic, portName, age));
 
         // The CSV schema has no column for "no verdict yet", so the status column carries it. A
         // warm-up sample would otherwise be stored as a confident 0.00 sigma alongside real ones.

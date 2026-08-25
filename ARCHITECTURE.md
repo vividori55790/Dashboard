@@ -80,17 +80,15 @@ late and one that arrived instantly were stamped identically, for the same reaso
 
 Measured on a pair of hosts on one machine — one on `--simulate`, the second reading its `/stream` —
 where the true offset is known to be exactly zero because both read the same clock. The estimate
-came back **+0.57 ms with a spread of 6.8 ms over 64 observations**. Both halves are what the
-physics requires: the offset is *above* the truth, because every observation is `offset + transit`
-and loopback transit cannot be negative; and the error bar covers the truth with room to spare.
-A host with nothing crossing a network into it reports `nodes: 0` rather than an offset of zero.
-**What is now built.** The uncertainty. `GetClockOffset` returns a `ClockOffsetEstimate` rather than a
-bare double, and it separates three things that used to be one answer: never measured, measured
-once with no error bar, and measured with a spread. The point estimate is the *minimum* of the
-observations rather than an average, because each is `offset + transit` for a transit that cannot
-be negative, so the smallest is the least overstated and an average is worse by the mean transit.
-`CanOrder(separation)` is the question this section exists to make askable, and it answers false
-for an unmeasured or single-sample offset rather than defaulting to true.
+came back **+0.65 ms with a spread of 0.81 ms over 64 observations**. The offset sitting *above*
+the truth is a guarantee: each observation is `offset + transit` and loopback transit cannot be
+negative. The error bar covering the truth is not a guarantee and happened to hold here — the
+fastest transit is unobservable without a round trip, which is why the spread is published as a
+lower bound. A host with nothing crossing a network into it reports `nodes: 0`, not an offset of
+zero, and a node reporting without a clock of its own is absent rather than listed as unmeasured.
+
+The spread is taken over the observations nearest the minimum rather than across the whole window,
+and that correction came from §4 rather than from here. See below.
 
 The spread is honest about being a floor rather than the whole answer: one-way messages never
 separate the offset from the transit, so even the fastest message overstates by an amount nothing
@@ -110,6 +108,31 @@ threshold crossed four hours ago that only surfaces now must not be presented as
 Exchange must also be idempotent. A reconnect that replays a buffer must not double-count, so
 samples carry a per-node sequence and the receiver deduplicates. Otherwise a flaky link inflates
 every total, and the totals are what the operator trusts.
+
+**The marking is built; the buffering and the sequencing are not.** A receiver can now say how old
+a sample was when it arrived — `ArrivalAge` works it out as
+`(arrival − the sender's clock) − offset` and publishes it as `lateBySec` on the wire, with
+`PacketFlags.LateArriving` set on the packet. What no node does yet is buffer locally through a
+partition and replay afterwards, so nothing in this product *produces* a backfill; the marking was
+driven against a peer written to emit one.
+
+Two things about the marking are worth stating because they are not obvious.
+
+It rests entirely on §3. Age is only as good as the offset it subtracts, so with an unbounded
+offset a peer running three hours slow and a sample held for three hours are the same arithmetic.
+That case reports `ageUndetermined` rather than either answer — and it needs a field of its own,
+because the absence of `lateBySec` would otherwise read as "fresh" when it can equally mean
+"nobody knows".
+
+And it found a defect in §3's estimator. An observation is `offset + transit`, and a sample held
+through a partition arrives with the whole holding time inside its transit: four hours of it.
+Against a `max - min` spread, one such sample puts the error bar at fourteen thousand seconds and
+nothing can ever be called late again — the backfill hides itself, in the one statistic meant to
+reveal it. The minimum was never vulnerable to that because a held sample is large; the spread now
+covers only the observations nearest the minimum, which are the transit-dominated ones. On a link
+that genuinely is mostly backfill the quartile fills with held samples and the uncertainty rises,
+which is the truth rather than a failure. It also tightened the live measurement above by a factor
+of eight.
 
 ## 5. Aggregation happens where the data is
 
@@ -224,7 +247,8 @@ is the same kind of claim this document argues against.
 | Bounded per-channel state with reported cardinality | Built | `Core/Resilience/BoundedChannelRegistry` — `Capacity`, `Count`, `Evictions`, and an eviction record |
 | Clock offset across nodes | Built | `TimeSyncJitterBuffer.SyncNodeClock`, fed by `IngestPublisher` from the sending node's own clock, reported per node on `/api/status` under `clocks`. Empty rather than zero on a host nothing reaches over a network |
 | **Uncertainty on that offset** | Built | `Core/Models/ClockOffsetEstimate` — never-measured, measured-once-with-no-error-bar and measured-with-a-spread are three different answers, and `CanOrder` refuses on the first two. The spread is published as a floor: one-way messages never separate transit from the offset, so `uncertaintyIsALowerBound` travels beside it |
-| Peer exchange, sequencing, deduplication, backfill marking | Not started | no `LateArriving` / `Backfill` anywhere in the tree |
+| Backfill marking | Built | `Core/Models/ArrivalAge`, `PacketFlags.LateArriving`, `lateBySec` and `ageUndetermined` on the wire. Driven against a peer emitting a four-hour-old sample: flagged at `lateBySec = 14400.0` with none of the 104 prompt samples around it touched |
+| Peer exchange, local buffering, sequencing, deduplication | Not started | nothing buffers through a partition, so this product never produces a backfill — only recognises one. No per-node sequence exists, so a reconnect that replayed a buffer would double-count |
 | Authentication between instances | Half built | `--credential` gates every path -- page, endpoints, SSE and the WebSocket upgrade -- against a salted PBKDF2 credential, and `telemetry-host credential` enrols one without a desktop. `--listen network` binds every interface and cannot be asked for without it: `CommandLineParser` refuses the pair before anything binds and `TelemetryStreamingServer.Start` refuses it again at the socket, so the open-and-unlocked state has no construction path. What is missing is confidentiality -- Basic over cleartext puts the password on the wire, which makes this a bench-LAN answer and not a plant-network one. That is said at every launch by the banner and reported as `reachability.encrypted: false` on `/api/status`, rather than left to be inferred from `authenticated: true` |
 
 The right-hand columns are maintained by hand and are expected to be embarrassing. That is

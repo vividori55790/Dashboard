@@ -96,10 +96,21 @@ public partial class TimeSyncJitterBuffer
     /// to compute — is worse by exactly the average transit. NTP filters on the minimum for this
     /// reason and the reasoning does not depend on having a round trip.
     /// <para>
-    /// The spread is <c>max - min</c>: how much transit varied across the window. It is a floor
-    /// under the real uncertainty rather than the whole of it, because the fastest message still
-    /// took some unmeasured time, and <see cref="ClockOffsetEstimate"/> says so where a caller
-    /// will read it.
+    /// The spread is taken over the <b>lowest quarter</b> of the window rather than all of it, and
+    /// that is not a refinement — <c>max - min</c> was wrong. An observation is
+    /// <c>offset + transit</c>, and a sample that sat in a buffer through a network partition
+    /// arrives with that whole holding time inside its transit: four hours of it. One such sample
+    /// puts <c>max</c> at fourteen thousand seconds and the error bar swallows everything, so
+    /// nothing can ever be called late again — the backfill hides itself, and it hides it in the
+    /// one statistic that was supposed to reveal it.
+    /// </para>
+    /// <para>
+    /// The minimum was never vulnerable to that, because a held sample is large. Restricting the
+    /// spread to the observations nearest the minimum applies the same reasoning to it: those are
+    /// the transit-dominated ones, and they are what the link's own timing variability looks like.
+    /// It degrades honestly, too. If most of a window really is backfill, the quartile is made of
+    /// held samples and the uncertainty goes up — which on a link that is mostly backfill is the
+    /// truth rather than a failure.
     /// </para>
     /// <para>
     /// Below two observations there is no spread, and it is reported as absent rather than as
@@ -112,16 +123,14 @@ public partial class TimeSyncJitterBuffer
     {
         int count = observations.Count;
         if (count == 0) return ClockOffsetEstimate.Unmeasured;
+        if (count == 1) return new ClockOffsetEstimate(observations.Peek(), null, 1);
 
-        double min = double.PositiveInfinity;
-        double max = double.NegativeInfinity;
+        double[] sorted = observations.ToArray();
+        Array.Sort(sorted);
 
-        foreach (double observed in observations)
-        {
-            if (observed < min) min = observed;
-            if (observed > max) max = observed;
-        }
-
-        return new ClockOffsetEstimate(min, count >= 2 ? max - min : null, count);
+        // At least two, so a spread exists at all; a quarter of the window once there is enough of
+        // one for the choice to matter.
+        int nearest = Math.Max(2, count / 4);
+        return new ClockOffsetEstimate(sorted[0], sorted[nearest - 1] - sorted[0], count);
     }
 }

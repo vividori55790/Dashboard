@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.Json.Serialization;
 using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.Core.Models;
@@ -122,6 +122,31 @@ public sealed class TelemetryFrame
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? LimitBreach { get; init; }
 
+    /// <summary>
+    /// How much older than the instant it describes this sample was when it arrived. Absent unless
+    /// it crossed a network and the clock offset was bounded enough to say.
+    /// </summary>
+    /// <remarks>
+    /// ARCHITECTURE §4: an alert threshold crossed four hours ago that only surfaces now must not
+    /// be presented as current. A consumer that cannot see this will present it as current.
+    /// </remarks>
+    [JsonPropertyName("lateBySec")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? LateBySec { get; init; }
+
+    /// <summary>
+    /// Present and true when the sample crossed a network and its age could not be established.
+    /// </summary>
+    /// <remarks>
+    /// The field exists because the absence of <see cref="LateBySec"/> would otherwise read as
+    /// "fresh", and here it can equally mean "nobody knows". Without a bounded offset between the
+    /// clocks, a peer running three hours slow and a sample held for three hours are the same
+    /// arithmetic. Same shape as <see cref="ForecastLeavesRange"/>: no number is given, but the
+    /// fact is.
+    /// </remarks>
+    [JsonPropertyName("ageUndetermined")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AgeUndetermined { get; init; }
     /// <summary>Analyzer and settings behind the verdict, so a stored frame can be re-scored.</summary>
     [JsonPropertyName("analyzerId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -133,7 +158,8 @@ public sealed class TelemetryFrame
         AnomalyResult analysis,
         string origin,
         bool simulated,
-        string portName)
+        string portName,
+        ArrivalAge age = default)
     {
         bool judged = analysis.HasVerdict;
 
@@ -157,7 +183,9 @@ public sealed class TelemetryFrame
             Predicted60s = analysis.HasForecast ? analysis.PredictedValueIn60s : null,
             PredictedHorizonSec = analysis.HasForecast ? analysis.ForecastHorizonSec : null,
             ForecastLeavesRange = analysis.ForecastLeavesObservedRange ? true : null,
-            AnalyzerId = analysis.AnalyzerId
+            AnalyzerId = analysis.AnalyzerId,
+            LateBySec = age.IsDetermined ? age.LateBySec : null,
+            AgeUndetermined = age.Kind == ArrivalKind.Undetermined ? true : null
         };
     }
 

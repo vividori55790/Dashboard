@@ -8,7 +8,19 @@ public enum PacketFlags
     IsDerived = 1 << 1,
     ChecksumFailed = 1 << 2,
     AlarmExceeded = 1 << 3,
-    Simulated = 1 << 4
+    Simulated = 1 << 4,
+
+    /// <summary>
+    /// This host established that the sample describes an instant meaningfully before it arrived.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="IsHistorical"/>, which is a device saying so about its own data.
+    /// This is a determination, made against a measured clock offset and its error bar, and it is
+    /// absent both when the sample was prompt and when nothing could be established -- so its
+    /// absence is not the claim that a sample is current. <see cref="ArrivalAge"/> keeps those two
+    /// apart for anything that needs to know which.
+    /// </remarks>
+    LateArriving = 1 << 5
 }
 
 public sealed class TelemetryPacket

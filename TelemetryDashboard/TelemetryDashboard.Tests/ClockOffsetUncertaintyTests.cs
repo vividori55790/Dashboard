@@ -68,7 +68,11 @@ public class ClockOffsetUncertaintyTests
             "the least-delayed observation is the least overstated; the mean the EMA used to "
             + "compute would be worse by exactly the average transit");
         estimate.SpreadSec.Should().NotBeNull();
-        estimate.SpreadSec!.Value.Should().BeApproximately(0.30, 1e-9);
+        estimate.SpreadSec!.Value.Should().BeApproximately(0.15, 1e-9,
+            "the spread covers the observations nearest the minimum -- the lowest two of these "
+            + "three -- rather than the whole window. Against max-min, one sample held through a "
+            + "partition arrives with four hours inside its transit and becomes the error bar for "
+            + "the entire link, hiding every backfill including itself");
     }
 
     [Fact]
