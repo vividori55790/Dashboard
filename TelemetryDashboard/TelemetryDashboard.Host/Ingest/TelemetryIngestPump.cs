@@ -87,9 +87,11 @@ public sealed class TelemetryIngestPump
         _source = source;
         _publisher = new IngestPublisher(
             server, source.Origin, source.IsSimulated, recorder,
-            new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive);
+            new IngestRateGuard(maxChannelRatePerSecond), detectors: null, archive: archive,
+            samplesCarryTheirOwnOrigin: source.SamplesCarryTheirOwnOrigin);
         _records = new IngestRecordPath(
-            _publisher.PublishAsync, source.IsSimulated, watchIntervals, driftWindowSeconds);
+            _publisher.PublishAsync, source.IsSimulated, watchIntervals, driftWindowSeconds,
+            samplesCarryTheirOwnOrigin: source.SamplesCarryTheirOwnOrigin);
 
         // Published here rather than by the caller. The pump is the only thing that sees a raw
         // frame and the readings it produced at the same moment -- the port comes from one, the

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TelemetryDashboard.Core.Models;
 
 namespace TelemetryDashboard.Core.Records;
@@ -30,6 +30,7 @@ public static class TelemetryPacketProjection
 
         PacketFlags flags = PacketFlags.None;
         if (record.IsDerived) flags |= PacketFlags.IsDerived;
+        if (record.Synthetic) flags |= PacketFlags.Simulated;
 
         packet = new TelemetryPacket
         {
@@ -38,6 +39,7 @@ public static class TelemetryPacketProjection
             Variable = record.Key.Key,
             Value = numeric.Value,
             Unit = numeric.Unit,
+            ObservedAt = record.ObservedAt?.UtcDateTime,
             RawData = record.RawSource ?? string.Empty,
             Flags = flags
         };
@@ -68,6 +70,10 @@ public static class TelemetryPacketProjection
             Value = new DataValue.Numeric(packet.Value, packet.Unit ?? string.Empty),
             Source = packet.NodeId ?? string.Empty,
             DerivedFrom = producer,
+            Synthetic = packet.Flags.HasFlag(PacketFlags.Simulated),
+            ObservedAt = packet.ObservedAt is { } observed
+                ? new DateTimeOffset(ToUtc(observed))
+                : null,
             RawSource = string.IsNullOrEmpty(packet.RawData) ? null : packet.RawData
         };
     }

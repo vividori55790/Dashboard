@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
@@ -31,9 +31,25 @@ public static class RawPayloadParser
         // numbers out of it anyway would publish damaged data as a measurement.
         if (payload.Contains('*') && !XorChecksum.ValidateSpan(payload.AsSpan(), out _)) return packets;
 
-        if (payload.StartsWith('{') && payload.EndsWith('}') && TryParseJson(raw, payload, packets))
+        if (payload.StartsWith('{') && payload.EndsWith('}'))
         {
-            return packets;
+            // Asked first, because this parser's contract -- one channel per numeric property --
+            // is exactly wrong for a frame that names its channel in one field and its reading in
+            // another. Falling through to it collapsed every channel of a peer into a single
+            // series called 'value' and turned that peer's verdicts into measurements.
+            if (PeerFrameParser.Parse(raw, payload) is { } peerSample)
+            {
+                packets.Add(peerSample);
+                return packets;
+            }
+
+            // A peer frame that is not a reading. Returned empty rather than fallen through: the
+            // stream's opening {"event":"connected","port":N} otherwise became a channel called
+            // 'port' holding a TCP port number, which is what this parser is supposed to do with an
+            // object it does not recognise and is not what anybody wants done with this one.
+            if (PeerFrameParser.IsHousekeeping(payload)) return packets;
+
+            if (TryParseJson(raw, payload, packets)) return packets;
         }
 
         ParseDelimited(raw, payload, packets);

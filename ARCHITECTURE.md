@@ -139,6 +139,35 @@ the record type — `Source`, `DerivedFrom`, `RawSource` — and this is the rea
 whose origin cannot be recovered cannot be disputed, and on a plant floor the disputed number is
 the one that matters.
 
+**This section was written before anything was measured against it, and what it describes was not
+happening.** Two hosts were run as a pair — one on `--simulate`, the second started with
+`--sse http://127.0.0.1:PORT/stream` — and the receiving host was asked what it had learned. It had:
+
+- one channel called `value`, holding every channel the sender had, its points alternating between
+  vibration in g and a figure near 1000 rpm. That is §2's interleaving, and §2 is right that nothing
+  in the numbers reveals it;
+- `anomalyScore` with 1,292 samples and `predicted` with 783 — the sender's *verdicts*, ingested as
+  measurements and then scored again, so the receiver published an anomaly score of an anomaly score;
+- every unit dropped: `°C`, `%` and `g` all arrived empty;
+- a channel named `port` holding 8074, read out of the stream's opening connection event;
+- and `simulated: false` on everything it republished, while the sender had marked every frame
+  `true`. Synthetic data laundered into measured data in one hop.
+
+The cause was that nothing recognised this product's own frames, so they reached the last-resort
+parser, whose contract is one channel per numeric property of an object nobody has a rule for —
+exactly wrong for a frame that names its channel in one field and its reading in another.
+`PeerFrameParser` now reads them by deserialising into the same `TelemetryFrame` the outbound path
+builds, so the reader and the writer cannot drift; the origin mark and the sending node's clock
+travel on `DataRecord` rather than dying at the projection; and a source may now say that its
+samples decide their own origin, which is the honest answer for a transport that does not know what
+it is carrying.
+
+What is still owed here is the part this section asks for by name. The peer's verdicts are dropped
+rather than kept attributed to it — dropped because a score is a claim about a baseline that did not
+travel and limits this host was never configured with, and adopting either would let a peer's
+configuration decide what this host considers alarming. Keeping them *as the peer's* is the thing
+§7 actually wants, and it is not built.
+
 ## A worked example of the rule catching the system out
 
 The engine published a 60-second forecast for every channel it had scored. A live feed made the
@@ -180,7 +209,7 @@ is the same kind of claim this document argues against.
 | Provenance on every record (`Source`, `DerivedFrom`, `RawSource`) | Built | `Core/Records` |
 | Unparsed input counted and reported rather than dropped | Built | `Host/Startup/IngestReport.cs` |
 | Warm-up carried as "no verdict" rather than zero | Built | `Core/Analytics` |
-| Synthetic data marked everywhere it travels | Built | `simulated=true`, `SIM:` node prefix |
+| Synthetic data marked everywhere it travels | Built | `simulated=true`, `SIM:` node prefix, `DataRecord.Synthetic`. This read Built while being false across a network hop: a host relaying a peer's simulator output republished it as measured, because the mark had nowhere to sit on the record and the receiving source answered for its peer. Measured on a live pair, then fixed |
 | Per-channel rate guard with counted, announced drops | Built | `Core/Resilience` |
 | Coverage ledger — who was expected, who was heard | Built | `Core/Cluster/CoverageLedger*`, `Host/Startup/CoverageSetup.cs`, `--expect`, `coverage` on `/api/status` |
 | Stable per-installation node identity | Built | `Core/Cluster/NodeIdentity.cs`, `Host/Startup/HostNode.cs`; persisted, and the banner says when it could not be |

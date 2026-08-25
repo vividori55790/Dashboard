@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace TelemetryDashboard.Core.Records;
 
@@ -52,6 +52,28 @@ public sealed record DataRecord
     /// </remarks>
     public string? RawSource { get; init; }
 
+    /// <summary>True when the value was generated rather than measured.</summary>
+    /// <remarks>
+    /// The same kind of assertion as <see cref="DerivedFrom"/> being null, and for the same
+    /// reason: a synthetic reading and a measured one look identical once they are both numbers on
+    /// a chart. It lives here rather than only on the packet because this is the boundary the mark
+    /// used to die at -- <c>TelemetryPacket</c> carried it in and the projection had nowhere to put
+    /// it, so a host relaying a peer's simulator output republished it as measured data.
+    /// <para>
+    /// False is a claim, not a default nobody thought about. Every source with a cable or a
+    /// generator behind it knows which of the two it is.
+    /// </para>
+    /// </remarks>
+    public bool Synthetic { get; init; }
+
+    /// <summary>What the observing node's own clock read, when it crossed a network to get here.</summary>
+    /// <remarks>
+    /// Null for anything observed on this machine, where <see cref="Timestamp"/> is already that
+    /// clock. Non-null only for a sample that arrived from elsewhere carrying a usable reading of
+    /// its own -- the pair is what makes the offset between two clocks measurable at all, and
+    /// ARCHITECTURE §3 is about what cannot be said until it is.
+    /// </remarks>
+    public DateTimeOffset? ObservedAt { get; init; }
     /// <summary>True when a projection produced this rather than an instrument.</summary>
     public bool IsDerived => DerivedFrom is not null;
 

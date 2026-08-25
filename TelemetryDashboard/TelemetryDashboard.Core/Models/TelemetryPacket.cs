@@ -1,4 +1,4 @@
-namespace TelemetryDashboard.Core.Models;
+﻿namespace TelemetryDashboard.Core.Models;
 
 [Flags]
 public enum PacketFlags
@@ -14,6 +14,21 @@ public enum PacketFlags
 public sealed class TelemetryPacket
 {
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    /// <summary>What the observing node's own clock read, when it sent one and it was usable.</summary>
+    /// <remarks>
+    /// Null for a device on this machine's own port: there is one clock there and
+    /// <see cref="Timestamp"/> already is it. It is meaningful only for a sample that crossed a
+    /// network, where two clocks exist and ARCHITECTURE §3 begins.
+    /// <para>
+    /// Beside <see cref="Timestamp"/> rather than replacing it, deliberately. Placing a remote
+    /// sample on this host's timeline requires the offset between the two clocks to be known and
+    /// bounded; until it is, a peer three hours out would scatter its data across the chart with
+    /// nothing on the chart saying why. Keeping both is what lets the offset be measured at all --
+    /// the pair is the observation.
+    /// </para>
+    /// </remarks>
+    public DateTime? ObservedAt { get; set; }
     public string NodeId { get; set; } = string.Empty;
     public string Variable { get; set; } = string.Empty;
     public double Value { get; set; }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +34,7 @@ public sealed partial class IngestRecordPath
     private readonly UnrecognisedLineStage _unrecognised = new();
     private readonly NumericPacketStage _numeric;
     private readonly bool _isSimulated;
+    private readonly bool _samplesDecideOrigin;
 
     /// <param name="publish">Receives every numeric record as a packet plus the port it arrived on.</param>
     /// <param name="isSimulated">Whether the source is synthetic; stamped onto each packet here.</param>
@@ -50,11 +51,13 @@ public sealed partial class IngestRecordPath
         Func<TelemetryPacket, string, CancellationToken, ValueTask> publish,
         bool isSimulated,
         bool watchIntervals = false,
-        int driftWindowSeconds = 0)
+        int driftWindowSeconds = 0,
+        bool samplesCarryTheirOwnOrigin = false)
     {
         ArgumentNullException.ThrowIfNull(publish);
 
         _isSimulated = isSimulated;
+        _samplesDecideOrigin = samplesCarryTheirOwnOrigin;
         _numeric = new NumericPacketStage("telemetry", (packet, record, token) =>
         {
             if (_isSimulated) packet.Flags |= PacketFlags.Simulated;
@@ -91,54 +94,4 @@ public sealed partial class IngestRecordPath
 
     /// <summary>Numeric records whose reading was absent or non-finite, and so not forwarded.</summary>
     public long UnreadableSamples => _numeric.UnreadableCount;
-
-    /// <summary>Offers a parsed sample. Returns how many stages accepted it.</summary>
-    /// <remarks>
-    /// <see cref="DataRecord.Source"/> is overwritten with the port because that is what the field
-    /// means — who reported the observation — and the node id the projection puts there by default
-    /// is already carried losslessly as <see cref="DataKey.Stream"/>. Nothing is lost and the
-    /// transport becomes recoverable downstream.
-    /// </remarks>
-    /// <exception cref="InvalidOperationException">
-    /// The packet already claims to be simulated. The projection cannot carry that flag, so
-    /// accepting it here would strip the one mark that keeps synthetic data identifiable.
-    /// </exception>
-    public ValueTask<int> OfferPacketAsync(
-        TelemetryPacket packet, string portName, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(packet);
-
-        // The router marks packets from a synthetic source as it produces them, so plugins can see
-        // the mark too. That is consistent and expected. What must never happen is a packet
-        // claiming to be synthetic on a run reading real hardware -- that would let fabricated data
-        // enter an archive of measurements wearing the wrong label.
-        if (packet.Flags.HasFlag(PacketFlags.Simulated) && !_isSimulated)
-        {
-            throw new InvalidOperationException(
-                "A packet claims to be simulated on a run whose source is real hardware. Refusing "
-                + "rather than relabelling it: one of the two is wrong, and guessing which would "
-                + "put fabricated data into an archive of measurements.");
-        }
-
-        DataRecord record = TelemetryPacketProjection.ToRecord(packet) with { Source = portName ?? string.Empty };
-        return _pipeline.DispatchAsync(record, cancellationToken);
-    }
-
-    /// <summary>Offers a line nothing could parse, keyed by the port it arrived on.</summary>
-    public ValueTask<int> OfferUnparsedAsync(RawPacket raw, CancellationToken cancellationToken = default)
-    {
-        var record = new DataRecord
-        {
-            Key = new DataKey(
-                string.IsNullOrEmpty(raw.PortName) ? "unknown-port" : raw.PortName,
-                UnparsedKey),
-            // The field is named TimestampUtc and the readers that fill it use DateTime.UtcNow, so
-            // relabelling an unspecified kind is accurate here; converting would shift it.
-            Timestamp = new DateTimeOffset(DateTime.SpecifyKind(raw.TimestampUtc, DateTimeKind.Utc)),
-            Value = new DataValue.Text(raw.RawLine ?? string.Empty),
-            Source = _isSimulated ? "SIMULATION" : "REAL_HARDWARE"
-        };
-
-        return _pipeline.DispatchAsync(record, cancellationToken);
-    }
 }

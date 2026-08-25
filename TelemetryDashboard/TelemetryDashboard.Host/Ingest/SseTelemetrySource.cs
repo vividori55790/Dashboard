@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -63,8 +63,15 @@ public sealed class SseTelemetrySource : ITelemetrySource
     /// <inheritdoc />
     public string Origin => "NETWORK_STREAM";
 
-    /// <summary>Measured data from somewhere else, not synthesised here.</summary>
+    /// <summary>This transport synthesises nothing. It does not follow that what it carries was measured.</summary>
+    /// <remarks>
+    /// Which is why <see cref="SamplesCarryTheirOwnOrigin"/> is true beside it: the frames decide,
+    /// because the peer marked them where it knew the answer and this end does not.
+    /// </remarks>
     public bool IsSimulated => false;
+
+    /// <inheritdoc />
+    public bool SamplesCarryTheirOwnOrigin => true;
 
     /// <inheritdoc />
     public string Description => $"SSE {_endpoint}";

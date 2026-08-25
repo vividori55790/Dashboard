@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +32,7 @@ public sealed class IngestPublisher
     private readonly DetectorPanel _detectors;
     private readonly string _origin;
     private readonly bool _isSimulated;
+    private readonly bool _samplesDecideOrigin;
 
     private long _published;
 
@@ -45,11 +46,13 @@ public sealed class IngestPublisher
         TelemetryCsvRecorder? recorder,
         IngestRateGuard guard,
         DetectorPanel? detectors = null,
-        ArchiveSink? archive = null)
+        ArchiveSink? archive = null,
+        bool samplesCarryTheirOwnOrigin = false)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _origin = origin ?? string.Empty;
         _isSimulated = isSimulated;
+        _samplesDecideOrigin = samplesCarryTheirOwnOrigin;
         _recorder = recorder;
         _detectors = detectors ?? AnalyticsSetup.Shared.Panel;
         Guard = guard ?? throw new ArgumentNullException(nameof(guard));
@@ -151,7 +154,13 @@ public sealed class IngestPublisher
     /// </remarks>
     public ValueTask PublishAsync(TelemetryPacket packet, string portName, CancellationToken cancellationToken)
     {
-        string node = TelemetryFrame.MarkNode(packet.NodeId, _isSimulated);
+        // Per sample, not per source. The node prefix and the wire flag are the two places the
+        // synthetic mark survives into a recording, and a network source that answered for its
+        // peer here republished that peer's simulator output as measured data.
+        bool synthetic = _isSimulated
+                         || (_samplesDecideOrigin && packet.Flags.HasFlag(PacketFlags.Simulated));
+
+        string node = TelemetryFrame.MarkNode(packet.NodeId, synthetic);
         string channel = $"{node}.{packet.Variable}";
 
         if (!Guard.Allow(channel)) return ValueTask.CompletedTask;
@@ -184,7 +193,7 @@ public sealed class IngestPublisher
         _detectors.Evaluate(channel, packet.Value, packet.Timestamp);
 
         _server.BroadcastTelemetry(
-            TelemetryFrame.Create(packet, analysis, _origin, _isSimulated, portName));
+            TelemetryFrame.Create(packet, analysis, _origin, synthetic, portName));
 
         // The CSV schema has no column for "no verdict yet", so the status column carries it. A
         // warm-up sample would otherwise be stored as a confident 0.00 sigma alongside real ones.
@@ -212,7 +221,7 @@ public sealed class IngestPublisher
                 analysis.HasVerdict ? analysis.ZScore : null,
                 analysis.HasVerdict ? analysis.IsAnomaly : null,
                 analysis.AnalyzerId,
-                _isSimulated,
+                synthetic,
                 // Every outcome, recovery included. A relay that only ever hears about breaches
                 // can tell an operator a converter left its band and never that it came back.
                 limits.Count == 0
