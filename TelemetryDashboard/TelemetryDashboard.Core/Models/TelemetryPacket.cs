@@ -41,6 +41,18 @@ public sealed class TelemetryPacket
     /// </para>
     /// </remarks>
     public DateTime? ObservedAt { get; set; }
+
+    /// <summary>The epoch the sender stamped this with, when it sent one.</summary>
+    /// <remarks>
+    /// Read at ingest and not carried further. It exists so the duplicate filter can tell one
+    /// sender's counter from another's and from the same sender's counter before a restart; once
+    /// admitted, this host stamps its own on the way out, because the idempotence being offered is
+    /// per hop.
+    /// </remarks>
+    public string? SourceEpoch { get; set; }
+
+    /// <summary>The sender's per-node counter, when it sent one.</summary>
+    public long? SourceSequence { get; set; }
     public string NodeId { get; set; } = string.Empty;
     public string Variable { get; set; } = string.Empty;
     public double Value { get; set; }

@@ -54,6 +54,9 @@ public sealed class TelemetryIngestPump
     /// <summary>Clock offsets for nodes whose samples arrived carrying their own clock.</summary>
     public Core.Services.TimeSyncJitterBuffer Clocks => _publisher.Clocks;
 
+    /// <summary>What this host has already taken, so a replayed link cannot count twice.</summary>
+    public Core.Cluster.DuplicateFilter Duplicates { get; } = new();
+
     /// <summary>The record layer: per-stage tallies and the lines nothing could parse.</summary>
     public IngestRecordPath Records => _records;
 
@@ -106,6 +109,7 @@ public sealed class TelemetryIngestPump
         // Same reasoning: the pump is where a clock observation is made, so it is where the
         // ledger belongs and where it hands itself to whatever reports it.
         server.Clocks = Clocks.ObservedClocks;
+        server.Duplicates = Duplicates;
 
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
@@ -186,6 +190,15 @@ public sealed class TelemetryIngestPump
                     // what survived the pipeline. A view fed from the far end would show a channel
                     // as silent when the cable is fine and the guard is working.
                     Inputs.Observe(raw, packet);
+
+                    // After Inputs and before the pipeline. The inventory answers "is this port
+                    // sending me anything", and a replayed sample genuinely did arrive on the
+                    // wire; everything downstream counts, scores and archives, and those are the
+                    // totals a duplicate would inflate.
+                    if (!Duplicates.Admit(packet.NodeId, packet.SourceEpoch, packet.SourceSequence))
+                    {
+                        continue;
+                    }
 
                     await _records.OfferPacketAsync(packet, raw.PortName, cancellationToken).ConfigureAwait(false);
                 }

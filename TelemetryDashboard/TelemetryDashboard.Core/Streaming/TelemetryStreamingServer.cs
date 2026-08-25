@@ -147,6 +147,14 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// </remarks>
     public Func<IReadOnlyList<Models.NodeClock>>? Clocks { get; set; }
 
+    /// <summary>What has been refused as already taken, or null when nothing is checking.</summary>
+    /// <remarks>
+    /// Null and "zero duplicates" are not the same claim, and the second is the dangerous one to
+    /// infer: a link whose sender emits no sequence reports zero forever while nothing watches.
+    /// The filter counts that case separately for exactly that reason.
+    /// </remarks>
+    public Cluster.DuplicateFilter? Duplicates { get; set; }
+
     public IComputedChannelCounters? ComputedCounters { get; set; }
 
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>

@@ -146,6 +146,21 @@ public sealed class IngestPublisher
     /// </remarks>
     public TimeSyncJitterBuffer Clocks { get; } = new();
 
+    /// <summary>This process's epoch, stamped on every frame it sends.</summary>
+    /// <remarks>
+    /// Identifies this run rather than this installation, and that is the point: a receiver
+    /// deduplicating on the counter below needs to know when the counter restarted. Without it a
+    /// restarted sender looks like a replay of everything and its whole stream gets discarded.
+    /// </remarks>
+    public string Epoch { get; } = Guid.NewGuid().ToString("N")[..12];
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _sequences =
+        new(StringComparer.Ordinal);
+
+    /// <summary>The next counter for this node, per ARCHITECTURE §4's per-node sequence.</summary>
+    private long NextSequence(string node) =>
+        _sequences.AddOrUpdate(node, 1L, (_, previous) => previous + 1);
+
     /// <summary>
     /// Raised for every sample that reaches the wire, carrying the verdict as it was actually
     /// reached — <c>null</c> during warm-up rather than a confident zero.
@@ -229,7 +244,8 @@ public sealed class IngestPublisher
         _detectors.Evaluate(channel, packet.Value, packet.Timestamp);
 
         _server.BroadcastTelemetry(
-            TelemetryFrame.Create(packet, analysis, _origin, synthetic, portName, age));
+            TelemetryFrame.Create(packet, analysis, _origin, synthetic, portName, age,
+                Epoch, NextSequence(node)));
 
         // The CSV schema has no column for "no verdict yet", so the status column carries it. A
         // warm-up sample would otherwise be stored as a confident 0.00 sigma alongside real ones.

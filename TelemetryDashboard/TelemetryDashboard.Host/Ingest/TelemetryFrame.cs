@@ -147,6 +147,25 @@ public sealed class TelemetryFrame
     [JsonPropertyName("ageUndetermined")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AgeUndetermined { get; init; }
+    /// <summary>The sending process's epoch, so a restart is not mistaken for a replay.</summary>
+    /// <remarks>
+    /// A counter alone is not enough. A sender that restarts begins again at one, which to a
+    /// receiver deduplicating on the counter looks like a replay of everything — and it would
+    /// silently discard a healthy peer's entire stream, which is worse than the double-count it
+    /// was protecting against.
+    /// </remarks>
+    [JsonPropertyName("epoch")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Epoch { get; init; }
+
+    /// <summary>This sender's counter for this node, increasing within the epoch.</summary>
+    /// <remarks>
+    /// Per node rather than per stream, as ARCHITECTURE §4 asks, so a receiver taking two nodes
+    /// from one link deduplicates each on its own history.
+    /// </remarks>
+    [JsonPropertyName("seq")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? Sequence { get; init; }
     /// <summary>Analyzer and settings behind the verdict, so a stored frame can be re-scored.</summary>
     [JsonPropertyName("analyzerId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -159,7 +178,9 @@ public sealed class TelemetryFrame
         string origin,
         bool simulated,
         string portName,
-        ArrivalAge age = default)
+        ArrivalAge age = default,
+        string? epoch = null,
+        long? sequence = null)
     {
         bool judged = analysis.HasVerdict;
 
@@ -185,7 +206,9 @@ public sealed class TelemetryFrame
             ForecastLeavesRange = analysis.ForecastLeavesObservedRange ? true : null,
             AnalyzerId = analysis.AnalyzerId,
             LateBySec = age.IsDetermined ? age.LateBySec : null,
-            AgeUndetermined = age.Kind == ArrivalKind.Undetermined ? true : null
+            AgeUndetermined = age.Kind == ArrivalKind.Undetermined ? true : null,
+            Epoch = epoch,
+            Sequence = sequence
         };
     }
 

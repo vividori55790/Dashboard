@@ -25,9 +25,23 @@ public static class TelemetryFrameRecorder
     private static readonly string[] NodeIdFields = { "nodeId", "device", "port", "topic", "source" };
 
     /// <summary>Fields that describe the frame rather than measure anything.</summary>
+    /// <remarks>
+    /// <c>seq</c> and <c>epoch</c> are transport bookkeeping — who sent this and in what order —
+    /// and were added when exchange became idempotent. <c>seq</c> is numeric, so without this it
+    /// became a DVR channel counting upward forever beside every real one, which an existing test
+    /// caught by finding two frames recorded for one sample. <c>epoch</c> is a string and would be
+    /// skipped anyway; naming it is what makes that deliberate rather than lucky, since the day it
+    /// becomes a number is the day it starts being plotted.
+    /// <para>
+    /// Not listed, and deliberately: <c>lateBySec</c>. How old a reading was when it arrived is a
+    /// property of that reading, exactly as the score and the forecast beside it are, and it is
+    /// worth having in a replay pulled a week later.
+    /// </para>
+    /// </remarks>
     private static readonly string[] NonMeasurementFields =
     {
-        "timestamp", "time", "ts", "type", "scenario", "protocol", "unit", "mode", "status"
+        "timestamp", "time", "ts", "type", "scenario", "protocol", "unit", "mode", "status",
+        "seq", "epoch"
     };
 
     public const double DefaultAnomalyThreshold = 2.5;

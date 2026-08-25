@@ -109,29 +109,44 @@ Exchange must also be idempotent. A reconnect that replays a buffer must not dou
 samples carry a per-node sequence and the receiver deduplicates. Otherwise a flaky link inflates
 every total, and the totals are what the operator trusts.
 
-**The marking is built; the buffering and the sequencing are not.** A receiver can now say how old
-a sample was when it arrived — `ArrivalAge` works it out as
-`(arrival − the sender's clock) − offset` and publishes it as `lateBySec` on the wire, with
-`PacketFlags.LateArriving` set on the packet. What no node does yet is buffer locally through a
-partition and replay afterwards, so nothing in this product *produces* a backfill; the marking was
-driven against a peer written to emit one.
+**The marking and the idempotence are built; the buffering is not.** A receiver can say how old a
+sample was when it arrived — `ArrivalAge` works it out as `(arrival − the sender's clock) − offset`
+and publishes it as `lateBySec`, with `PacketFlags.LateArriving` on the packet. And a replayed link
+can no longer inflate a total: every frame carries the sending process's epoch and a per-node
+counter, and `DuplicateFilter` refuses what this host already took. What no node does yet is
+buffer locally through a partition and replay afterwards, so nothing here *produces* a backfill —
+both were driven against peers written to.
 
-Two things about the marking are worth stating because they are not obvious.
+The duplicate case was observed rather than anticipated. While driving the backfill work the test
+peer's connection ended, `SseTelemetrySource` reconnected because that is what it is for, the peer
+replayed its buffer, and the receiver took the same four-hour-old sample twice and reported it
+twice. Driven properly afterwards — a peer replaying sequences 1..30 under one epoch on every
+connection — six connections gave `admitted: 30, duplicatesRefused: 150`, with the series store
+holding exactly the thirty distinct samples.
 
-It rests entirely on §3. Age is only as good as the offset it subtracts, so with an unbounded
-offset a peer running three hours slow and a sample held for three hours are the same arithmetic.
-That case reports `ageUndetermined` rather than either answer — and it needs a field of its own,
-because the absence of `lateBySec` would otherwise read as "fresh" when it can equally mean
-"nobody knows".
+Three things about it are worth stating.
 
-And it found a defect in §3's estimator. An observation is `offset + transit`, and a sample held
+The epoch is not decoration. A counter alone resets to one when a sender restarts, which to a
+receiver deduplicating on the counter looks like a replay of everything — it would silently discard
+a healthy peer's entire stream, a far worse failure than the one being prevented.
+
+`unsequenced` is counted separately from `duplicatesRefused`, because a link whose sender stamps no
+sequence can never report a duplicate, and a zero there would read as a clean link rather than an
+unwatched one. Same reason §1 exists.
+
+And the guarantee is per hop. The sequence belongs to whoever sent the frame, which is exactly the
+shape of the failure — it is a *link* that reconnects and replays. An end-to-end sequence surviving
+relays, deduplicating against the original observer, is a stronger and different property, and it
+is not this.
+
+It also found a defect in §3's estimator. An observation is `offset + transit`, and a sample held
 through a partition arrives with the whole holding time inside its transit: four hours of it.
 Against a `max - min` spread, one such sample puts the error bar at fourteen thousand seconds and
 nothing can ever be called late again — the backfill hides itself, in the one statistic meant to
 reveal it. The minimum was never vulnerable to that because a held sample is large; the spread now
 covers only the observations nearest the minimum, which are the transit-dominated ones. On a link
 that genuinely is mostly backfill the quartile fills with held samples and the uncertainty rises,
-which is the truth rather than a failure. It also tightened the live measurement above by a factor
+which is the truth rather than a failure. It also tightened the live measurement in §3 by a factor
 of eight.
 
 ## 5. Aggregation happens where the data is
@@ -248,7 +263,8 @@ is the same kind of claim this document argues against.
 | Clock offset across nodes | Built | `TimeSyncJitterBuffer.SyncNodeClock`, fed by `IngestPublisher` from the sending node's own clock, reported per node on `/api/status` under `clocks`. Empty rather than zero on a host nothing reaches over a network |
 | **Uncertainty on that offset** | Built | `Core/Models/ClockOffsetEstimate` — never-measured, measured-once-with-no-error-bar and measured-with-a-spread are three different answers, and `CanOrder` refuses on the first two. The spread is published as a floor: one-way messages never separate transit from the offset, so `uncertaintyIsALowerBound` travels beside it |
 | Backfill marking | Built | `Core/Models/ArrivalAge`, `PacketFlags.LateArriving`, `lateBySec` and `ageUndetermined` on the wire. Driven against a peer emitting a four-hour-old sample: flagged at `lateBySec = 14400.0` with none of the 104 prompt samples around it touched |
-| Peer exchange, local buffering, sequencing, deduplication | Not started | nothing buffers through a partition, so this product never produces a backfill — only recognises one. No per-node sequence exists, so a reconnect that replayed a buffer would double-count |
+| Sequencing and deduplication | Built | `Core/Cluster/DuplicateFilter`, `epoch` and `seq` on the wire, counters under `exchange` on `/api/status`. Driven against a peer replaying 1..30 on every reconnect: 30 admitted, 150 refused over six connections. Per hop, not end to end |
+| Peer exchange and local buffering | Not started | nothing buffers through a partition, so this product recognises a backfill and refuses a replay without ever producing either |
 | Authentication between instances | Half built | `--credential` gates every path -- page, endpoints, SSE and the WebSocket upgrade -- against a salted PBKDF2 credential, and `telemetry-host credential` enrols one without a desktop. `--listen network` binds every interface and cannot be asked for without it: `CommandLineParser` refuses the pair before anything binds and `TelemetryStreamingServer.Start` refuses it again at the socket, so the open-and-unlocked state has no construction path. What is missing is confidentiality -- Basic over cleartext puts the password on the wire, which makes this a bench-LAN answer and not a plant-network one. That is said at every launch by the banner and reported as `reachability.encrypted: false` on `/api/status`, rather than left to be inferred from `authenticated: true` |
 
 The right-hand columns are maintained by hand and are expected to be embarrassing. That is

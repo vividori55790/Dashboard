@@ -229,6 +229,20 @@ public static class TelemetryHttpRoutes
                 }).ToArray()
             }
             : null,
+
+        // unsequenced is the field that keeps duplicates readable. A link whose sender stamps no
+        // sequence can never report a duplicate, and zero there would otherwise read as a clean
+        // link rather than as an unwatched one.
+        exchange = server.Duplicates is { } filter
+            ? new
+            {
+                admitted = filter.Admitted,
+                duplicatesRefused = filter.Duplicates,
+                unsequenced = filter.Unsequenced,
+                trackedSenders = filter.TrackedSenders,
+                senderEvictions = filter.SenderEvictions
+            }
+            : null,
         endpoints = TelemetryStreamingServer.AdvertisedEndpoints
     };
 

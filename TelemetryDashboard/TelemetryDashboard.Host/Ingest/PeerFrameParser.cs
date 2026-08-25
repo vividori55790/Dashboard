@@ -111,6 +111,12 @@ public static partial class PeerFrameParser
             Timestamp = raw.Timestamp,
             ObservedAt = ReadClock(frame.Timestamp, raw.Timestamp),
 
+            // Carried only as far as the duplicate filter. A sender that emits neither is admitted
+            // unchecked and counted as unsequenced, so nobody reads a zero duplicate count off a
+            // link where nothing was ever watching.
+            SourceEpoch = frame.Epoch,
+            SourceSequence = frame.Sequence,
+
             // Provenance, not judgement, and the difference is why these two are the only flags
             // that cross. Synthetic says the value was generated rather than measured; derived says
             // it was computed from other channels. Both are facts about where the number came from
