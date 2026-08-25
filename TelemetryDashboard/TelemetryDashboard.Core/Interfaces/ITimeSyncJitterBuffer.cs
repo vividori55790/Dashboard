@@ -14,6 +14,15 @@ public interface ITimeSyncJitterBuffer
     /// </remarks>
     AlignedSample GetAligned(string nodeId, double masterTimestamp);
     void SyncNodeClock(string nodeId, double masterTime, double nodeTime);
-    double GetClockOffset(string nodeId);
+
+    /// <summary>How far this node's clock is from ours, and how well that is known.</summary>
+    /// <remarks>
+    /// Was a bare double, with the same defect <see cref="GetAligned"/> was already fixed for: it
+    /// answered 0.0 for a node nobody had ever compared clocks with, which is indistinguishable
+    /// from two clocks agreeing perfectly. It also carried no error bar, and ARCHITECTURE §3 is
+    /// entirely about the error bar — an offset places a sample, an uncertainty is what says
+    /// whether two samples can be ordered at all.
+    /// </remarks>
+    ClockOffsetEstimate GetClockOffset(string nodeId);
     void ClearBuffer(string nodeId);
 }

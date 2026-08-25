@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using TelemetryDashboard.Core.Interfaces;
@@ -10,54 +10,38 @@ namespace TelemetryDashboard.Core.Services;
 /// Multi-source time-sync jitter buffer with timestamp-sorted storage per node,
 /// EMA clock drift alignment, linear interpolation between bounding samples, and pruning.
 /// </summary>
-public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
+public partial class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
 {
     private class NodeBuffer
     {
         public readonly object Lock = new();
         public readonly List<(double Timestamp, double Value)> Samples = new();
-        public double ClockOffset; // masterTime - nodeTime
-        public double DriftAlpha = 0.1; // EMA smoothing factor
+
+        /// <summary>Raw (masterTime - nodeTime) observations, oldest first.</summary>
+        /// <remarks>
+        /// Kept rather than smoothed away. The previous field was an EMA of these, which is a
+        /// point estimate and discards the very thing ARCHITECTURE §3 asks for: the spread across
+        /// observations is the only error bar available, and an EMA throws away the residuals it
+        /// is computed from.
+        /// </remarks>
+        public readonly Queue<double> ClockObservations = new();
+
+        public ClockOffsetEstimate Offset = ClockOffsetEstimate.Unmeasured;
     }
 
     private readonly ConcurrentDictionary<string, NodeBuffer> _buffers = new(StringComparer.OrdinalIgnoreCase);
     private readonly double _retentionWindowSec = 10.0;
-
-    public void SyncNodeClock(string nodeId, double masterTime, double nodeTime)
-    {
-        var nodeBuf = _buffers.GetOrAdd(nodeId, _ => new NodeBuffer());
-        lock (nodeBuf.Lock)
-        {
-            double measuredOffset = masterTime - nodeTime;
-            if (nodeBuf.Samples.Count == 0 && nodeBuf.ClockOffset == 0.0)
-            {
-                nodeBuf.ClockOffset = measuredOffset;
-            }
-            else
-            {
-                nodeBuf.ClockOffset += nodeBuf.DriftAlpha * (measuredOffset - nodeBuf.ClockOffset);
-            }
-        }
-    }
-
-    public double GetClockOffset(string nodeId)
-    {
-        if (_buffers.TryGetValue(nodeId, out var nodeBuf))
-        {
-            lock (nodeBuf.Lock)
-            {
-                return nodeBuf.ClockOffset;
-            }
-        }
-        return 0.0;
-    }
 
     public void EnqueueSample(string nodeId, double timestamp, double value)
     {
         var nodeBuf = _buffers.GetOrAdd(nodeId, _ => new NodeBuffer());
         lock (nodeBuf.Lock)
         {
-            double alignedTimestamp = timestamp + nodeBuf.ClockOffset;
+            // An unmeasured offset shifts by nothing, because nothing is known to shift by --
+            // which is not the same as knowing the offset is zero. The estimate keeps those two
+            // apart for anyone who asks; here they happen to produce the same arithmetic.
+            double alignedTimestamp =
+                timestamp + (nodeBuf.Offset.HasOffset ? nodeBuf.Offset.OffsetSec : 0.0);
 
             // Binary search insertion to keep samples sorted by timestamp
             int idx = nodeBuf.Samples.BinarySearch((alignedTimestamp, value), Comparer<(double Timestamp, double Value)>.Create((a, b) => a.Timestamp.CompareTo(b.Timestamp)));
@@ -166,7 +150,8 @@ public class TimeSyncJitterBuffer : ITimeSyncJitterBuffer
             lock (nodeBuf.Lock)
             {
                 nodeBuf.Samples.Clear();
-                nodeBuf.ClockOffset = 0.0;
+                nodeBuf.ClockObservations.Clear();
+                nodeBuf.Offset = ClockOffsetEstimate.Unmeasured;
             }
         }
     }

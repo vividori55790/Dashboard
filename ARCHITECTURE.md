@@ -56,13 +56,40 @@ So a sample carries the observing node's clock, and each node separately reports
 uncertainty against a reference. A merged view either shows data at a resolution coarser than the
 worst uncertainty, or it shows the uncertainty. It never silently interleaves.
 
-This is what the existing `TimeSyncJitterBuffer` is for. It sat in the codebase unreferenced for a
-long time, which meant the problem was understood and then not addressed; `AlignedEndpoint` now
-constructs it and `/api/aligned` answers from it, so the half that estimates a per-node offset runs.
-The half this section is actually about does not: the buffer tracks an offset and reports no
-uncertainty for it, so a merged view can be shifted onto a common timeline but still cannot say how
-precisely two nodes' events can be ordered. An offset without an error bar is a point estimate being
-read as a guarantee.
+This is what the existing `TimeSyncJitterBuffer` is for, and the state of it is worth stating
+carefully, because this document got it wrong once.
+
+**What runs.** `AlignedEndpoint` constructs the buffer and `/api/aligned` answers from it, so several
+channels can be read as they stood at one instant, each answer labelled exact, interpolated or
+held. That is real and it is useful — it is the question behind every efficiency and every phase
+relationship. It is also *intra-host*: those channels come from one series store and share one
+clock, so no offset is involved in it at all.
+
+**What does not run.** The per-node offset estimator is called by nothing. `SyncNodeClock` has no
+caller in the product — only a test — so the offset is zero on every path a running program takes.
+This document used to say that `/api/aligned` answering from the buffer meant "the half that
+estimates a per-node offset runs", which conflated the two: the buffer runs, that half of it does
+not.
+
+The reason it cannot run is one line upstream. A remote sample arrives over SSE and is stamped
+`DateTime.UtcNow` at receipt — `RawPayloadParser` sets `Timestamp = raw.Timestamp`, the receiver's
+clock — while the sending node's own timestamp travels on the wire and is discarded. Nothing
+downstream can estimate an offset between two clocks when only one of them survives ingest. That is
+also §4's unmarked backfill: a sample that took four hours to arrive and one that arrived instantly
+are stamped identically, for the same reason.
+
+**What is now built.** The uncertainty. `GetClockOffset` returns a `ClockOffsetEstimate` rather than a
+bare double, and it separates three things that used to be one answer: never measured, measured
+once with no error bar, and measured with a spread. The point estimate is the *minimum* of the
+observations rather than an average, because each is `offset + transit` for a transit that cannot
+be negative, so the smallest is the least overstated and an average is worse by the mean transit.
+`CanOrder(separation)` is the question this section exists to make askable, and it answers false
+for an unmeasured or single-sample offset rather than defaulting to true.
+
+The spread is honest about being a floor rather than the whole answer: one-way messages never
+separate the offset from the transit, so even the fastest message overstates by an amount nothing
+here can observe without a round trip. Presenting that floor as a ceiling would be this section's
+own error, one level in.
 
 ## 4. A node must survive alone, and say so when it was
 
@@ -160,8 +187,8 @@ is the same kind of claim this document argues against.
 | Display-path reduction that preserves extremes | Built | `/api/series?reduction=minmax`, `reducedFramesSent` / `reducedPointsSent` on `/api/status` |
 | Tiered storage and rollups | Built | `Core/Storage/TieredTelemetryStore`, swept on a clock by `Host/Startup/RetentionSweep.cs`, opt-in via `--retain` |
 | Bounded per-channel state with reported cardinality | Built | `Core/Resilience/BoundedChannelRegistry` — `Capacity`, `Count`, `Evictions`, and an eviction record |
-| Clock offset across nodes | Built | `Core/Services/TimeSyncJitterBuffer.GetClockOffset`, behind `/api/aligned` |
-| **Uncertainty on that offset** | Not started | nothing reports an error bar, so §3's actual requirement is unmet |
+| Clock offset across nodes | **Not wired** | `TimeSyncJitterBuffer.SyncNodeClock` has no caller in the product — only a test. `/api/aligned` constructs the buffer and aligns channels within one host, which share one clock and need no offset. Wiring it needs the sending node's timestamp to survive ingest, and `RawPayloadParser` replaces it with the receiver's |
+| **Uncertainty on that offset** | Built at the estimator | `Core/Models/ClockOffsetEstimate` — never-measured, measured-once-with-no-error-bar and measured-with-a-spread are three different answers, and `CanOrder` refuses on the first two. Unreachable from a running program for the same reason as the row above |
 | Peer exchange, sequencing, deduplication, backfill marking | Not started | no `LateArriving` / `Backfill` anywhere in the tree |
 | Authentication between instances | Half built | `--credential` gates every path -- page, endpoints, SSE and the WebSocket upgrade -- against a salted PBKDF2 credential, and `telemetry-host credential` enrols one without a desktop. `--listen network` binds every interface and cannot be asked for without it: `CommandLineParser` refuses the pair before anything binds and `TelemetryStreamingServer.Start` refuses it again at the socket, so the open-and-unlocked state has no construction path. What is missing is confidentiality -- Basic over cleartext puts the password on the wire, which makes this a bench-LAN answer and not a plant-network one. That is said at every launch by the banner and reported as `reachability.encrypted: false` on `/api/status`, rather than left to be inferred from `authenticated: true` |
 

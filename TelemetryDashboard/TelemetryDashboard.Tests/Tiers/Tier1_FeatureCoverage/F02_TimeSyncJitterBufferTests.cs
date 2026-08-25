@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
 using Xunit;
@@ -45,15 +45,23 @@ public class F02_TimeSyncJitterBufferTests
 
     [Fact]
     [Trait("Category", "Tier1")]
-    public void TimeSyncJitterBuffer_ClockDriftSync_AdjustsOffsetUsingEma()
+    public void TimeSyncJitterBuffer_ClockSync_ShiftsSamplesOntoTheSharedTimeline()
     {
+        // Was "AdjustsOffsetUsingEma". The EMA is gone: every observation is offset + transit for
+        // a transit that cannot be negative, so an average is worse than the minimum by exactly
+        // the mean transit, and smoothing discards the residuals that are the only error bar
+        // available. What this test is actually about -- a sample landing on the shared timeline
+        // once an offset is known -- is unchanged, and with one observation both estimators agree.
         var jitterBuffer = new TimeSyncJitterBuffer();
         string nodeId = "MCU_3";
 
         // masterTime=100, nodeTime=90 -> offset=10
         jitterBuffer.SyncNodeClock(nodeId, 100.0, 90.0);
-        double offset = jitterBuffer.GetClockOffset(nodeId);
-        offset.Should().Be(10.0);
+        ClockOffsetEstimate offset = jitterBuffer.GetClockOffset(nodeId);
+        offset.OffsetSec.Should().Be(10.0);
+        offset.SpreadSec.Should().BeNull(
+            "one observation says nothing about its own precision, and a zero error bar would "
+            + "make a single sample the most confident state in the system");
 
         // Enqueue sample at local timestamp 5.0 -> aligned timestamp should be 15.0
         jitterBuffer.EnqueueSample(nodeId, 5.0, 50.0);
