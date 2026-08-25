@@ -229,6 +229,28 @@
             <div id="in-list" style="margin-top:6px"></div>
         </div>
 
+        <!--
+            The fleet panel. Everything the ingest side learned about other machines was, until
+            now, only in JSON: whether this console is exposed, how far each peer's clock is from
+            this one and how well that is known, and whether a replayed link has been inflating
+            the totals. An operator cannot act on a field nobody renders.
+
+            Every block below draws the same distinction the payload does. "Nobody is measuring"
+            and "measured, and fine" are different facts and must not share a rendering -- that is
+            the rule this whole product is organised around, and a fleet view is exactly where it
+            gets broken, because an empty table reads as a healthy one.
+        -->
+        <div class="panel">
+            <h2>다른 기계 · /api/status</h2>
+            <div class="row">
+                <span class="chip mono" id="fleet-summary">읽는 중…</span>
+                <button id="fleet-go">지금 새로고침</button>
+            </div>
+            <div class="stat" id="fleet-reach"></div>
+            <div id="fleet-clocks" style="margin-top:6px"></div>
+            <div class="stat" id="fleet-exchange" style="margin-top:6px"></div>
+        </div>
+
         <div class="panel">
             <h2>주파수 스펙트럼 · /api/spectrum</h2>
             <div class="row">
@@ -956,6 +978,109 @@
         applyVisibility();
     }
 
+    function secs(v) {
+        if (v === null || v === undefined) return '—';
+        if (Math.abs(v) < 1) return (v * 1000).toFixed(2) + ' ms';
+        if (Math.abs(v) < 120) return v.toFixed(3) + ' s';
+        return Math.round(v / 60) + ' 분';
+    }
+
+    function renderReach(r) {
+        var el = document.getElementById('fleet-reach');
+        if (!r) { el.textContent = ''; return; }
+
+        if (r.scope !== 'network') {
+            el.innerHTML = '<span class="tag ok">루프백</span> 이 콘솔은 이 기계에서만 열립니다. ' +
+                '다른 기기의 브라우저로 보려면 --listen network(자격증명 필요)나 프록시가 필요합니다.';
+            return;
+        }
+
+        // Said at every render, not once at start-up. The credential is guaranteed present here --
+        // nothing can bind wide without one -- so what is left is the part no credential fixes.
+        el.innerHTML = '<span class="tag warn">네트워크 개방</span> 이 콘솔은 이 기계의 모든 ' +
+            '인터페이스에 열려 있습니다. ' +
+            (r.authenticated ? '자격증명이 필요합니다. ' : '자격증명이 없습니다. ') +
+            (r.encrypted ? '링크는 암호화되어 있습니다.'
+                        : '링크는 암호화되어 있지 않습니다 — 이 구간을 볼 수 있는 것은 암호와 ' +
+                          '데이터를 그대로 읽습니다. 통제하는 벤치 LAN에서만 쓰십시오.');
+    }
+
+    function renderClocks(c) {
+        var el = document.getElementById('fleet-clocks');
+
+        // Three states, three renderings. Collapsing the first two into an empty table is the
+        // failure: it tells an operator the fleet's clocks agree when nothing ever compared them.
+        if (!c) {
+            el.innerHTML = '<div class="stat">이 호스트는 시계를 비교하지 않습니다.</div>';
+            return;
+        }
+        if (!c.nodes) {
+            el.innerHTML = '<div class="stat">비교 중이지만 아직 자기 시계를 실어 보낸 샘플이 ' +
+                '없습니다. 오프셋 0이 아니라, 잰 적이 없다는 뜻입니다.</div>';
+            return;
+        }
+
+        el.innerHTML = (c.perNode || []).map(function (n) {
+            var bounded = n.spreadSec !== null && n.spreadSec !== undefined;
+            return '<div class="lim">' +
+                   '<span class="what mono">' + esc(n.node) + '</span>' +
+                   '<span class="tag ' + (bounded ? 'ok' : 'warn') + '">' +
+                   (bounded ? '±' + secs(n.spreadSec) : '오차 막대 없음') + '</span>' +
+                   '<span class="stat mono">' + esc(secs(n.offsetSec) + ' · 관측 ' + n.samples + '개') +
+                   (bounded ? '' : ' · 이 노드는 다른 노드와 순서를 매길 수 없습니다') +
+                   '</span></div>';
+        }).join('') +
+        '<div class="stat">±는 하한입니다. 단방향 메시지는 전송 시간과 오프셋을 분리하지 ' +
+        '못하므로, 실제 불확실성은 이보다 큽니다.</div>';
+    }
+
+    function renderExchange(x) {
+        var el = document.getElementById('fleet-exchange');
+        // Null means this host takes nothing from a network -- there is no link to replay, so
+        // there is nothing to check. Not the same as a link being checked and coming back clean,
+        // and the wording says which.
+        if (!x) { el.textContent = '네트워크에서 받는 샘플이 없어 중복을 검사할 대상이 없습니다.'; return; }
+
+        // The one number that must never be read alone. A link whose sender stamps no sequence
+        // reports zero duplicates forever, and zero there means "nothing was watching", not
+        // "nothing was wrong".
+        if (x.unsequenced > 0 && x.admitted === 0) {
+            el.innerHTML = '<span class="tag warn">검사 안 됨</span> 순번 없는 샘플 ' +
+                x.unsequenced + '개. 이 링크의 송신자는 순번을 찍지 않아 중복을 ' +
+                '판별할 수 없습니다 — 중복 0은 깨끗하다는 뜻이 아닙니다.';
+            return;
+        }
+
+        el.innerHTML = '<span class="tag ' + (x.duplicatesRefused > 0 ? 'warn' : 'ok') + '">중복 ' +
+            x.duplicatesRefused + '개 거부</span> 수용 ' + x.admitted + '개' +
+            (x.unsequenced > 0 ? ' · 순번 없이 통과 ' + x.unsequenced + '개' : '') +
+            (x.senderEvictions > 0 ? ' · 추적 상한으로 밀려난 송신자 ' + x.senderEvictions + '개' : '') +
+            (x.duplicatesRefused > 0
+                ? ' — 재연결한 링크가 버퍼를 다시 보냈고, 합계에 두 번 들어가지 않았습니다.'
+                : '');
+    }
+
+    function loadFleet() {
+        fetch('/api/status')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var reach = d.reachability || {};
+                document.getElementById('fleet-summary').textContent =
+                    (reach.scope === 'network' ? '네트워크 개방' : '루프백') +
+                    ' · 시계 ' + (d.clocks ? d.clocks.nodes : 0) + '개';
+                renderReach(d.reachability);
+                renderClocks(d.clocks);
+                renderExchange(d.exchange);
+            })
+            .catch(function (e) {
+                document.getElementById('fleet-summary').textContent = '읽기 실패';
+                document.getElementById('fleet-reach').textContent = e.message;
+            });
+    }
+
+    document.getElementById('fleet-go').addEventListener('click', loadFleet);
+    loadFleet();
+    setInterval(loadFleet, COMPUTED_REFRESH_MS);
     function loadInputs() {
         fetch('/api/inputs')
             .then(function (r) { return r.json(); })

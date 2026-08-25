@@ -57,6 +57,8 @@ public sealed class TelemetryIngestPump
     /// <summary>What this host has already taken, so a replayed link cannot count twice.</summary>
     public Core.Cluster.DuplicateFilter Duplicates { get; } = new();
 
+    private readonly bool _deduplicates;
+
     /// <summary>The record layer: per-stage tallies and the lines nothing could parse.</summary>
     public IngestRecordPath Records => _records;
 
@@ -109,7 +111,11 @@ public sealed class TelemetryIngestPump
         // Same reasoning: the pump is where a clock observation is made, so it is where the
         // ledger belongs and where it hands itself to whatever reports it.
         server.Clocks = Clocks.ObservedClocks;
-        server.Duplicates = Duplicates;
+        // Null rather than a block of zeros on a host nothing arrives at over a network. "Nobody
+        // is checking" and "checked, and clean" are the two facts this endpoint must not merge,
+        // and a local host reporting zero duplicates would be the second when it is the first.
+        _deduplicates = source.SamplesCarryTheirOwnOrigin;
+        if (_deduplicates) server.Duplicates = Duplicates;
 
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
@@ -195,7 +201,13 @@ public sealed class TelemetryIngestPump
                     // sending me anything", and a replayed sample genuinely did arrive on the
                     // wire; everything downstream counts, scores and archives, and those are the
                     // totals a duplicate would inflate.
-                    if (!Duplicates.Admit(packet.NodeId, packet.SourceEpoch, packet.SourceSequence))
+                    // Only for a source that could have carried a sequence. A device on this
+                    // machine's own port never sends one and never needs to -- there is no link to
+                    // replay -- and counting its samples as unsequenced filled the counter with
+                    // traffic that says nothing about exchange, then invited a fleet view to blame
+                    // a peer that does not exist.
+                    if (_deduplicates
+                        && !Duplicates.Admit(packet.NodeId, packet.SourceEpoch, packet.SourceSequence))
                     {
                         continue;
                     }
