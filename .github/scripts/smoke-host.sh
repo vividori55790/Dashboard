@@ -366,6 +366,142 @@ if [ "$stopped" -eq 0 ]; then
     if [ "$code" -eq 0 ]; then pass "it exited 0"; else printf '  NOTE  it exited %s (0 means the drain completed)\n' "$code"; fi
 fi
 
+# ---------------------------------------------------------------------------
+# Wide binding, and the credential it cannot be asked for without.
+# ---------------------------------------------------------------------------
+# This is the half of --listen network that cannot be checked on the development
+# machine. Windows reserves wildcard prefixes, so an unelevated run there fails at
+# the socket with a urlacl message before it ever serves a byte -- which proves the
+# product's own gate let it through and nothing beyond that. Linux and macOS have no
+# such reservation, so here the binding is real and every claim below is measured
+# against a listener that is genuinely open to the network.
+echo
+echo "--- wide binding ---"
+
+NET_PORT=$((PORT + 1))
+NET_BASE="http://127.0.0.1:$NET_PORT"
+NET_LOG="$HOST_DIR/smoke-network.log"
+CRED="$HOST_DIR/smoke.cred"
+# Not a constant in the repository: this credential exists for the next twenty seconds
+# on a throwaway runner, and a fixed string is one somebody eventually copies.
+SECRET="smoke-$$-$PORT"
+
+refusal=$("$BIN" --simulate --port "$NET_PORT" --listen network 2>&1)
+refused=$?
+# The refusal must name the flag that fixes it. An operator told only that something is
+# missing reaches for whatever silences the message, and here the silencing flag is the
+# one that closes the console back down.
+if [ "$refused" -ne 0 ] && printf '%s' "$refusal" | grep -q -- "--credential"; then
+    pass "--listen network without a credential is refused before anything binds"
+else
+    fail "--listen network without a credential is refused before anything binds" \
+         "exit=$refused output=$(printf '%s' "$refusal" | tr '\r\n' '  ' | cut -c1-200)"
+fi
+
+printf '%s\n' "$SECRET" | "$BIN" credential --out "$CRED" --force > "$HOST_DIR/cred.log" 2>&1
+check "a credential can be enrolled without a desktop" "$([ -s "$CRED" ] && echo 0 || echo 1)" \
+      "$(tail -3 "$HOST_DIR/cred.log" 2>/dev/null | tr '\r\n' '  ')"
+
+set -m
+"$BIN" --simulate --port "$NET_PORT" --listen network --credential "$CRED" > "$NET_LOG" 2>&1 &
+NET_PID=$!
+set +m
+cleanup() {
+    for p in "$HOST_PID" "${NET_PID:-}"; do
+        [ -n "$p" ] && kill -0 "$p" 2>/dev/null && kill -KILL "$p" 2>/dev/null
+    done
+    return 0
+}
+
+# 401 is the ready signal here, not a failure: the host cannot authenticate to itself
+# either, since it holds a PBKDF2 derivation and not the password.
+net_ready=1
+for _ in $(seq 1 60); do
+    if ! kill -0 "$NET_PID" 2>/dev/null; then break; fi
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$NET_BASE/api/status" 2>/dev/null)
+    if [ "$code" = "401" ] || [ "$code" = "200" ]; then net_ready=0; break; fi
+    sleep 1
+done
+# Windows is the one platform where failing here says nothing about the product.
+# A wildcard prefix is a reserved resource there, so an unelevated run is refused by
+# the OS -- after this host's own gate passed it, which is the part Windows can show.
+# Reported as unmeasured rather than failed, for the same reason the signal section
+# below does it: a red mark for something that was never attempted is as unfounded as
+# a green one. This script runs on Linux and macOS in CI, which is where it counts.
+if [ "$net_ready" -ne 0 ] && grep -q 'urlacl\|requires elevation' "$NET_LOG" 2>/dev/null; then
+    echo '  NOTE  wide binding not checked: this OS reserves wildcard prefixes and this'
+    echo '        run is not elevated. The product got as far as the socket, so its own'
+    echo '        credential check passed; everything past the bind is unmeasured here.'
+else
+    check "the host bound every interface and answered" "$net_ready" \
+          "$(tail -4 "$NET_LOG" 2>/dev/null | tr '\r\n' '  ')"
+fi
+
+if [ "$net_ready" -eq 0 ]; then
+    anon=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$NET_BASE/api/status")
+    check "an unauthenticated request to a wide-bound console is refused" \
+          "$([ "$anon" = "401" ] && echo 0 || echo 1)" \
+          "got $anon, and this listener is reachable from the whole segment"
+
+    authed=$(curl -s -u "ignored:$SECRET" --max-time 5 "$NET_BASE/api/status" -o "$HOST_DIR/net-status.json" -w '%{http_code}')
+    check "the credential opens it" "$([ "$authed" = "200" ] && echo 0 || echo 1)" "got $authed"
+
+    python3 - "$HOST_DIR/net-status.json" <<'PY'
+import json, sys
+reach = json.load(open(sys.argv[1])).get("reachability") or {}
+bad = []
+
+def want(name, ok, detail):
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+    if not ok:
+        print(f"        {detail}")
+        bad.append(name)
+
+want("the console reports itself as network-reachable", reach.get("scope") == "network",
+     f"scope={reach.get('scope')!r} -- an operator checking whether they exposed it is told no")
+want("it reports the credential as in force", reach.get("authenticated") is True,
+     f"authenticated={reach.get('authenticated')!r}")
+# The point of the field. Reporting authenticated without this beside it invites the
+# reading that the password is private on the wire, and over Basic on plain HTTP it is not.
+want("it does not claim the link is encrypted", reach.get("encrypted") is False,
+     f"encrypted={reach.get('encrypted')!r} -- nothing here terminates TLS")
+want("the prefixes it names are wildcards", any("+" in p for p in reach.get("prefixes") or []),
+     f"prefixes={reach.get('prefixes')!r}")
+sys.exit(1 if bad else 0)
+PY
+    check "the status payload describes the exposure honestly" "$?"
+
+    # The strongest form of the claim: reached at an address another machine could use,
+    # rather than at the loopback alias of a socket that happens to be bound wide.
+    lan=""
+    case "$(uname -s)" in
+        Darwin) for i in en0 en1 en2; do lan=$(ipconfig getifaddr "$i" 2>/dev/null); [ -n "$lan" ] && break; done ;;
+        Linux)  lan=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.' | grep -v '^127\.' | head -1) ;;
+    esac
+
+    if [ -n "$lan" ]; then
+        off=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$lan:$NET_PORT/api/status")
+        on=$(curl -s -u "ignored:$SECRET" -o /dev/null -w '%{http_code}' --max-time 5 "http://$lan:$NET_PORT/api/status")
+        check "it answers on $lan, an address off this machine's loopback" \
+              "$([ "$off" = "401" ] && [ "$on" = "200" ] && echo 0 || echo 1)" \
+              "anonymous=$off authenticated=$on (wanted 401 then 200)"
+    else
+        # Said rather than skipped silently: the wildcard prefix above is evidence, and
+        # this would have been proof. A harness that quietly drops its strongest check
+        # reports the same green as one that ran it.
+        echo '  NOTE  no non-loopback address found on this runner; the wildcard prefix is'
+        echo '        the evidence of wide binding here, not a connection from off-box'
+    fi
+fi
+
+kill -INT "$NET_PID" 2>/dev/null || true
+for _ in $(seq 1 10); do kill -0 "$NET_PID" 2>/dev/null || break; sleep 1; done
+kill -KILL "$NET_PID" 2>/dev/null || true
+rm -f "$CRED"
+
+echo "--- wide-binding host output ---"
+sed 's/^/        /' "$NET_LOG"
+
 echo "--- host output ---"
 sed 's/^/        /' "$LOG"
 

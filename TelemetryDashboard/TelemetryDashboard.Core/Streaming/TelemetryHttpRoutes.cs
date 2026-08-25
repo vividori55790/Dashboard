@@ -186,7 +186,25 @@ public static class TelemetryHttpRoutes
                 }).ToArray()
             }
             : null,
-        endpoints = new[] { "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned", "/api/computed", "/api/limits", "/api/inputs", "/api/control", "/api/history", "/api/incident", "/api/dvr/replay", "/api/dvr/report" }
+
+        // Who can reach this and what protects them, answered by the socket rather than by the
+        // documentation. An operator asking "did I actually open this to the bench, and is the
+        // password I type into it readable on the way" has both answers on the endpoint they are
+        // already polling -- and a reader elsewhere in the fleet can tell an exposed hub from a
+        // loopback one without being told.
+        reachability = new
+        {
+            scope = server.IsNetworkReachable ? "network" : "loopback",
+            prefixes = server.BoundPrefixes,
+            authenticated = server.Access is not null,
+
+            // False on every binding this product can construct today. Kept as a measured field
+            // rather than dropped, because the honest reading of "authenticated over a cleartext
+            // link" is that the credential is only as private as the segment, and a consumer that
+            // cannot see this field would have to assume the better of the two.
+            encrypted = server.IsLinkEncrypted
+        },
+        endpoints = TelemetryStreamingServer.AdvertisedEndpoints
     };
 
     /// <summary>

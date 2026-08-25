@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Streaming;
@@ -19,7 +17,7 @@ namespace TelemetryDashboard.Host.Startup;
 /// WebSocket, SSE, status and DVR endpoints, and standing up another listener beside it would give
 /// the console two sources of truth about the same telemetry.
 /// </remarks>
-public sealed class WebConsoleHost : IAsyncDisposable
+public sealed partial class WebConsoleHost : IAsyncDisposable
 {
     /// <summary>File names probed for the console page, in order, when none was specified.</summary>
     private static readonly string[] KnownClientFiles =
@@ -52,7 +50,10 @@ public sealed class WebConsoleHost : IAsyncDisposable
     /// <summary>Binds the port and begins serving. Throws when the port cannot be bound.</summary>
     public static WebConsoleHost Start(HostOptions options)
     {
-        var server = new TelemetryStreamingServer(options.Port, maxStreamClients: options.MaxStreamClients);
+        var server = new TelemetryStreamingServer(
+            options.Port,
+            acceptRemoteConnections: options.ListenOnAllInterfaces,
+            maxStreamClients: options.MaxStreamClients);
 
         // Attached before Start, so there is no window in which the port is open and the gate is
         // not. A credential configured but applied a moment late is a credential that was not
@@ -83,34 +84,6 @@ public sealed class WebConsoleHost : IAsyncDisposable
         server.Start(client ?? string.Empty);
 
         return new WebConsoleHost(server, roots, client);
-    }
-
-    /// <summary>
-    /// Asks the running server which endpoints it advertises, over its own HTTP surface.
-    /// </summary>
-    /// <remarks>
-    /// The banner prints what <c>/api/status</c> answers rather than a list compiled into this
-    /// host. A hardcoded copy would keep printing five endpoints the day the server stops serving
-    /// one of them, and the round trip doubles as proof the listener is actually answering.
-    /// </remarks>
-    public async Task<IReadOnlyList<string>> QueryAdvertisedEndpointsAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            string body = await client.GetStringAsync($"{BaseAddress}/api/status", cancellationToken).ConfigureAwait(false);
-
-            using JsonDocument document = JsonDocument.Parse(body);
-            return document.RootElement.GetProperty("endpoints")
-                .EnumerateArray()
-                .Select(element => element.GetString() ?? string.Empty)
-                .Where(path => path.Length > 0)
-                .ToArray();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
-        {
-            return Array.Empty<string>();
-        }
     }
 
     /// <inheritdoc />

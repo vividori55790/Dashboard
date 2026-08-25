@@ -53,6 +53,7 @@ internal sealed partial class HostOptionsDraft
         RetiredNodes = RetiredNodes,
         CoverageStatePath = CoverageStatePath,
         RulesPath = RulesPath,
-        CredentialPath = CredentialPath
+        CredentialPath = CredentialPath,
+        ListenOnAllInterfaces = ListenOnAllInterfaces
     };
 }

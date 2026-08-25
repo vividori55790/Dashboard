@@ -23,8 +23,11 @@ namespace TelemetryDashboard.Core.Streaming;
 /// <para>
 /// HTTP Basic because it is what <c>curl -u</c>, a browser and a reverse proxy all already speak.
 /// It is base64, not encryption: on a cleartext link the password is readable by anything on the
-/// path, which is exactly why the binding stays loopback until an operator puts TLS in front. The
-/// gate does not pretend otherwise and the start-up banner says it out loud.
+/// path. That is the whole of what this gives an operator, and it is why <c>--listen network</c>
+/// requires this gate and still carries a warning at every launch -- the credential decides who
+/// may connect, and nothing here decides who may read what crosses the wire. The gate does not
+/// pretend otherwise, the banner says it out loud, and <c>/api/status</c> reports
+/// <c>encrypted: false</c> so a consumer is not left to infer it.
 /// </para>
 /// </remarks>
 public sealed class ConsoleAccessGate

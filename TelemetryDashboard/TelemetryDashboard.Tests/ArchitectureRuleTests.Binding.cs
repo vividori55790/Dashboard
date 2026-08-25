@@ -6,43 +6,39 @@ namespace TelemetryDashboard.Tests;
 /// What the console binds to, pinned so the claim and the code cannot drift apart again.
 /// </summary>
 /// <remarks>
-/// <c>TelemetryStreamingServer</c> takes an <c>acceptRemoteConnections</c> argument, documents at
-/// length why it stays off by default, and <em>nothing in this repository ever passes it</em> —
-/// not the headless host, not the desktop shell, not a single test. There is no command-line flag
-/// for it and no environment variable. The browser console is loopback-only in every configuration
-/// this product ships, and no operator can change that.
+/// This rule used to record that <em>nothing in this repository ever passes</em>
+/// <c>acceptRemoteConnections</c> — no flag, no environment variable, no test — and it failed the
+/// moment anything did. Not because remote binding was forbidden, but because wiring it is not a
+/// wiring change: it is the point at which somebody has to decide how an endpoint that streams
+/// live telemetry and takes commands over its WebSocket authenticates. The rule's own instruction
+/// was to delete it once that decision was made, and say what was decided.
 /// <para>
-/// The start-up banner says so plainly. The Platform reach table said "Reaches the hub: any
-/// browser — desktop, tablet, Android, iOS", which is true only of a browser running on the same
-/// machine as the host, and a tablet never is. That is the whole cross-platform argument resting
-/// on a capability that is not wired.
+/// <strong>What was decided.</strong> <c>--listen network</c> binds every interface and cannot be
+/// asked for without <c>--credential</c>; the parser refuses the pair and
+/// <c>TelemetryStreamingServer.Start</c> refuses it again at the socket, so the unsafe state has no
+/// construction path rather than a convention against it. That is pinned by
+/// <see cref="ConsoleBindingTests"/> and <see cref="ListenScopeTests"/> against running objects,
+/// which is a stronger check than reading the source, so the source scan those replace is gone.
 /// </para>
 /// <para>
-/// This rule does not forbid remote binding. It records that it is absent, and fails the moment
-/// somebody enables it — because enabling it is not a wiring change, it is the point at which
-/// somebody has to decide about authentication. The endpoint streams live plant telemetry and
-/// accepts commands over its WebSocket, so opening it to a network without deciding that first
-/// would publish a plant to whatever shares the subnet. The refusal to wire it was deliberate, and
-/// this keeps it deliberate rather than forgotten.
+/// <strong>What was rejected, and why it matters here.</strong> The other candidate was to allow
+/// wide binding only behind a TLS-terminating reverse proxy. A process cannot verify that a proxy
+/// is in front of it — <c>X-Forwarded-Proto</c> is written by whoever connects — so that flag's
+/// safety would have rested on a sentence in a document. Proxying also needs no flag: it works
+/// against the loopback binding today, unchanged. So the honest half was taken instead: the link
+/// is plain HTTP, Basic is base64, the password crosses the segment readable, and the banner and
+/// <c>/api/status</c> both say so at every launch rather than once in a README.
 /// </para>
 /// <para>
-/// Half of that decision has since been made. <c>--credential</c> puts a
-/// <see cref="TelemetryDashboard.Core.Streaming.ConsoleAccessGate"/> in front of every path, and it
-/// was verified against a running host: the console page, the JSON endpoints, the SSE stream and
-/// the WebSocket upgrade all answer 401 without it and serve with it. The lock exists and works.
-/// </para>
-/// <para>
-/// What remains is the half the lock cannot supply. Basic over a cleartext link puts the password
-/// on the wire, so binding wide still needs TLS in front or a deliberate decision to accept that on
-/// an isolated segment — and whoever makes it must tie the two flags together rather than leaving
-/// them independent, so that wide binding cannot be asked for without a credential.
+/// What survives here is the narrower thing the decision does not license: wide binding must stay
+/// something an operator asks for, never something a call site chose on their behalf.
 /// </para>
 /// </remarks>
 public partial class ArchitectureRuleTests
 {
     [Fact]
     [Trait("Category", "Tier1")]
-    public void TheConsoleBindsLoopbackOnlyInEveryProductionConstruction()
+    public void NoProductionCallSiteHardcodesAWideBinding()
     {
         var construction = new Regex(@"new\s+TelemetryStreamingServer\s*\(([^;]*?)\)", RegexOptions.Singleline);
 
@@ -57,7 +53,8 @@ public partial class ArchitectureRuleTests
             {
                 string arguments = match.Groups[1].Value;
 
-                // Positional 'true' as the second argument, or the parameter named explicitly.
+                // A literal 'true', named or as the second positional argument. An option read
+                // from the command line is the intended spelling and does not match either.
                 bool named = Regex.IsMatch(arguments, @"acceptRemoteConnections\s*:\s*true");
                 bool positional = Regex.IsMatch(arguments, @"^\s*[^,]+,\s*true\s*(,|$)");
 
@@ -69,10 +66,9 @@ public partial class ArchitectureRuleTests
         }
 
         offenders.Should().BeEmpty(
-            "binding beyond loopback is not a wiring change -- it is the moment somebody has to "
-            + "decide how this endpoint authenticates, because it streams plant telemetry and "
-            + "accepts commands over its WebSocket. If that decision has now been made, delete this "
-            + "rule and say what was decided; until then the Platform reach table must not promise "
-            + "a browser on another device:\n" + string.Join("\n", offenders));
+            "exposing this console is the operator's decision to make and their segment to judge: "
+            + "the password crosses it readable, so 'is this network mine' is a question only they "
+            + "can answer. A call site that hardcodes the wide binding has answered it for every "
+            + "installation, including the ones on a plant network:\n" + string.Join("\n", offenders));
     }
 }

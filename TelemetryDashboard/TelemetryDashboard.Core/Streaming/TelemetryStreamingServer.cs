@@ -147,6 +147,40 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     public IReadOnlyList<string> BoundPrefixes { get; }
 
     /// <summary>
+    /// Whether the link this server binds encrypts what crosses it.
+    /// </summary>
+    /// <remarks>
+    /// Read off the scheme actually bound rather than stated, so it stays a measurement if a TLS
+    /// prefix is ever added. Today nothing constructs one, and this answers false everywhere --
+    /// which is the point: an operator asking "is my password protected on this hop" gets the
+    /// answer from the socket rather than from a document.
+    /// <para>
+    /// An empty prefix list answers false, because "no prefixes" is not "all of them encrypted".
+    /// </para>
+    /// </remarks>
+    public bool IsLinkEncrypted =>
+        BoundPrefixes.Count > 0
+        && BoundPrefixes.All(prefix => prefix.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The endpoint paths this server answers, in the order <c>/api/status</c> lists them.
+    /// </summary>
+    /// <remarks>
+    /// Public because the start-up banner prints it and used to obtain it by fetching
+    /// <c>/api/status</c> over HTTP. That round trip stopped working the moment a credential was
+    /// configured -- the host holds a PBKDF2 derivation and not the password, so it cannot
+    /// authenticate to itself -- and the banner reported "did not answer" for a listener that had
+    /// answered 401. One list, read by both, so the banner cannot describe a server that is not
+    /// this one.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> AdvertisedEndpoints =
+    [
+        "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned",
+        "/api/computed", "/api/limits", "/api/inputs", "/api/control", "/api/history",
+        "/api/incident", "/api/dvr/replay", "/api/dvr/report"
+    ];
+
+    /// <summary>
     /// Binds the console. Loopback only unless <paramref name="acceptRemoteConnections"/> is set.
     /// </summary>
     /// <param name="acceptRemoteConnections">
@@ -158,10 +192,12 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// all of them. That made loopback-only binding the single thing standing between a portable
     /// backbone and an actually usable one.
     ///
-    /// It stays the default regardless, and opening up is an explicit argument. This endpoint has
-    /// no authentication: it streams live telemetry and accepts commands over the WebSocket, so
-    /// binding every interface publishes plant data to whatever shares the network. That is a
-    /// decision an operator makes deliberately, not one a default makes for them.
+    /// It stays the default regardless, and opening up is an explicit argument. It is also no
+    /// longer an argument that can be given on its own: this endpoint streams live telemetry and
+    /// accepts commands over its WebSocket, so <see cref="Start"/> refuses to bind wide unless
+    /// <see cref="Access"/> is set. Which leaves confidentiality, and that this cannot supply --
+    /// Basic on a cleartext link puts the password on the wire, so a wide binding belongs on a
+    /// segment the operator controls or behind a TLS terminator, and the banner says which.
     ///
     /// On Windows a wildcard prefix normally needs an administrator or a <c>netsh http add
     /// urlacl</c> reservation; <see cref="Start"/> reports that plainly rather than failing with
@@ -203,9 +239,36 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// <summary>Registers an additional directory whose files may be served.</summary>
     public void AddContentRoot(string directory) => _content.AddRoot(directory);
 
+    /// <summary>
+    /// Refused rather than warned about: a listener on every interface with no credential.
+    /// </summary>
+    /// <remarks>
+    /// The host's argument parser refuses the same combination earlier and with a better message,
+    /// but a check that lives only in an argument parser protects only the callers that go through
+    /// it. This one is at the place that actually binds the socket, so the desktop shell, a test
+    /// and whatever calls this next all get it, and the unsafe state has no construction path at
+    /// all rather than a documented convention against it.
+    /// <para>
+    /// Before the prefixes are touched, so a refused configuration never opens the port even for
+    /// the instant it takes to throw.
+    /// </para>
+    /// </remarks>
+    private void RefuseWideBindingWithoutACredential()
+    {
+        if (!IsNetworkReachable || Access is not null) return;
+
+        throw new InvalidOperationException(
+            $"binding all interfaces on port {Port} was asked for with no credential set. This "
+            + "server streams live telemetry, replays recorded incidents and accepts commands over "
+            + "its WebSocket, so an open listener on a shared segment publishes the plant to it. "
+            + $"Set {nameof(Access)} before {nameof(Start)}, or bind loopback.");
+    }
+
     public void Start(string htmlClientFilePath)
     {
         if (IsRunning) return;
+
+        RefuseWideBindingWithoutACredential();
 
         _htmlClientPath = htmlClientFilePath ?? string.Empty;
         _content.AddRoot(AppDomain.CurrentDomain.BaseDirectory);

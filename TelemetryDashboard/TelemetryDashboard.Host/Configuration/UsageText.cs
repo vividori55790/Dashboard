@@ -82,6 +82,18 @@ public static class UsageText
                                 by anything on the path: this is for a console already behind TLS,
                                 or for scripts on the machine itself. Without it the console serves
                                 its own machine openly, which is today's behaviour and the default.
+              --listen <where>  'loopback' (the default) or 'network'. Loopback binds localhost
+                                and 127.0.0.1: reachable from this machine and nowhere else.
+                                'network' binds every interface, so a browser on a phone or a
+                                laptop on the same segment can reach it -- and it requires
+                                --credential, because this console streams live telemetry,
+                                replays incidents and takes commands over its WebSocket.
+                                What the credential does not do is hide anything: the link is
+                                plain HTTP and Basic is base64, so whatever can see the segment
+                                can read the password and the data. That makes 'network' a
+                                bench-LAN answer. On a plant network or anything routed, leave
+                                it on loopback and terminate TLS in a proxy in front of it --
+                                which needs no flag and works today.
 
               --rules <file>    What the device on this bench actually sends. The built-in rules
                                 read $TELE,node,channel,value,unit, which is the framing this

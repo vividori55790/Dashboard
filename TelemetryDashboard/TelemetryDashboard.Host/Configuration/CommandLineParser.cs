@@ -283,6 +283,22 @@ public static class CommandLineParser
                     draft.CredentialPath = Path.GetFullPath(rawCredential);
                     break;
 
+                case "--listen":
+                    if (!ArgumentCursor.TryValue(args, ref i, out string? rawListen)) return ArgumentCursor.MissingValue(argument);
+                    switch (rawListen)
+                    {
+                        case "loopback": draft.ListenOnAllInterfaces = false; break;
+                        case "network": draft.ListenOnAllInterfaces = true; break;
+                        default:
+                            // Named values rather than a bare --listen-network switch, so the
+                            // default has a name a script can write down. An operator pinning
+                            // 'loopback' explicitly should not have to express it as the absence
+                            // of a flag, which is indistinguishable from having forgotten it.
+                            return ArgumentCursor.Fail(
+                                $"--listen takes 'loopback' or 'network', not '{rawListen}'.");
+                    }
+                    break;
+
                 case "--rules":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawRules)) return ArgumentCursor.MissingValue(argument);
                     if (!File.Exists(rawRules)) return ArgumentCursor.Fail($"rule file '{rawRules}' does not exist.");
@@ -413,6 +429,21 @@ public static class CommandLineParser
             return ArgumentCursor.Fail(
                 "--signal needs a generated source (--simulate or --serial loopback). On a real rig "
                 + "the channel reads what the converter is doing, and this host does not decide it.");
+        }
+
+        // Checked here rather than beside the flag because argument order must not decide it:
+        // '--listen network --credential f' and '--credential f --listen network' are the same
+        // request, and an inline check would accept one and refuse the other.
+        // Checked here rather than beside the flag because argument order must not decide it:
+        // '--listen network --credential f' and '--credential f --listen network' are the same
+        // request, and an inline check would accept one and refuse the other.
+        if (draft.ListenOnAllInterfaces && draft.CredentialPath is null)
+        {
+            return ArgumentCursor.Fail(
+                "--listen network needs --credential. This console streams live telemetry, replays "
+                + "recorded incidents and accepts commands over its WebSocket; on a shared segment "
+                + "an open listener publishes all of it to whoever is on that segment. Enrol one "
+                + "with: telemetry-host credential --out console.cred");
         }
 
         if (draft.EmergencyLimits.Count > 0 && !draft.EmergencyStop)

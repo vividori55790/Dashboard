@@ -318,6 +318,29 @@ public sealed class HostOptions
     /// </remarks>
     public string? CredentialPath { get; init; }
 
+    /// <summary>
+    /// True when the console should bind every interface instead of loopback only.
+    /// </summary>
+    /// <remarks>
+    /// Cannot be set without <see cref="CredentialPath"/>; the parser refuses the pair and
+    /// <c>TelemetryStreamingServer.Start</c> refuses it again at the socket. What neither can
+    /// supply is confidentiality: HTTP Basic is base64, so on a cleartext link the password is
+    /// readable by anything on the path.
+    /// <para>
+    /// The alternative considered was allowing this only behind a reverse proxy. It was rejected
+    /// because a process cannot verify that a TLS terminator is in front of it -- an
+    /// <c>X-Forwarded-Proto</c> header is written by whoever connects -- so the flag's safety
+    /// would have rested entirely on a sentence in a document, which is the kind of claim this
+    /// codebase has rules against. Proxying also needs no flag: it works today against the
+    /// loopback binding, unchanged.
+    /// </para>
+    /// <para>
+    /// So this is the other answer, stated plainly instead: the operator declares that the segment
+    /// is theirs, and the banner and <c>/api/status</c> both say what is and is not protected.
+    /// </para>
+    /// </remarks>
+    public bool ListenOnAllInterfaces { get; init; }
+
     /// <summary>File the learned node set is remembered in, or null to forget on every restart.</summary>
     /// <remarks>
     /// Opt-in because it writes a file the operator did not otherwise ask for. Worth asking for:

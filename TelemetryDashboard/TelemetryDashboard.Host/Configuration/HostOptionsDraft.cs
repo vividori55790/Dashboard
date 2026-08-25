@@ -102,4 +102,5 @@ internal sealed partial class HostOptionsDraft
     public string? CoverageStatePath;
     public string? RulesPath;
     public string? CredentialPath;
+    public bool ListenOnAllInterfaces;
 }

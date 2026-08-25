@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TelemetryDashboard.Core.Cluster;
 using TelemetryDashboard.Core.Recording;
+using TelemetryDashboard.Core.Streaming;
 using TelemetryDashboard.Host.Ingest;
 
 namespace TelemetryDashboard.Host.Startup;
@@ -27,7 +28,7 @@ public static class StartupBanner
         TelemetryCsvRecorder? recorder,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<string> endpoints = await console.QueryAdvertisedEndpointsAsync(cancellationToken)
+        ConsoleReachedResult reached = await console.ProbeAsync(cancellationToken)
             .ConfigureAwait(false);
 
         Console.WriteLine();
@@ -40,7 +41,7 @@ public static class StartupBanner
         Console.WriteLine($"  pid           {Environment.ProcessId}");
         Console.WriteLine();
         Console.WriteLine($"  listening     {console.BaseAddress}   (port {console.BoundPort})");
-        PrintEndpoints(console, endpoints);
+        PrintEndpoints(console, reached);
         Console.WriteLine();
         PrintContent(console);
         Console.WriteLine();
@@ -48,8 +49,7 @@ public static class StartupBanner
         PrintIngest(source);
         PrintRecording(recorder);
         Console.WriteLine();
-        Console.WriteLine("  Reachability: the streaming server binds localhost and 127.0.0.1 only.");
-        Console.WriteLine("  A browser on another machine needs a tunnel or a reverse proxy in front of it.");
+        PrintReachability(console);
         PrintAccess(console);
         Console.WriteLine();
     }
@@ -66,21 +66,58 @@ public static class StartupBanner
         Console.WriteLine();
     }
 
-    private static void PrintEndpoints(WebConsoleHost console, IReadOnlyList<string> endpoints)
+    private static void PrintEndpoints(WebConsoleHost console, ConsoleReachedResult reached)
     {
-        if (endpoints.Count == 0)
+        if (reached == ConsoleReachedResult.NoAnswer)
         {
-            // Not a formatting fallback: the status endpoint did not answer, and claiming the
-            // usual five would be describing a server nobody just reached.
-            Console.WriteLine("  endpoints     unavailable -- /api/status did not answer");
+            // Not a formatting fallback: nothing answered on the port this host just bound, and
+            // listing what it would have served describes a server nobody reached.
+            Console.WriteLine("  endpoints     unavailable -- nothing answered on this port");
             return;
         }
 
-        Console.WriteLine("  endpoints     (as advertised by /api/status)");
-        foreach (string endpoint in endpoints)
+        Console.WriteLine(reached == ConsoleReachedResult.AnsweredAndDemandedCredential
+            ? "  endpoints     (the port answered 401, so the listener and its gate are both up)"
+            : "  endpoints     (the port answered, so this list is a running server's)");
+
+        foreach (string endpoint in TelemetryStreamingServer.AdvertisedEndpoints)
         {
             Console.WriteLine($"                {console.BaseAddress}{endpoint}");
         }
+    }
+
+    /// <summary>Who can reach this console, read off the prefixes the listener actually bound.</summary>
+    /// <remarks>
+    /// This block used to be two unconditional lines saying the server binds loopback only. That
+    /// was true of every configuration the product could be started in, and stopped being true
+    /// with <c>--listen network</c>. Printing what was bound rather than what is usually bound is
+    /// the difference between a banner and a slogan.
+    /// </remarks>
+    private static void PrintReachability(WebConsoleHost console)
+    {
+        if (!console.Server.IsNetworkReachable)
+        {
+            Console.WriteLine("  Reachability: the streaming server binds localhost and 127.0.0.1 only.");
+            Console.WriteLine("  A browser on another machine needs --listen network, a tunnel, or a proxy.");
+            return;
+        }
+
+        Console.WriteLine("  Reachability: OPEN TO THE NETWORK -- every interface on this machine.");
+        foreach (string prefix in console.Server.BoundPrefixes)
+        {
+            Console.WriteLine($"                {prefix}");
+        }
+
+        // Said at every launch, and deliberately not softened. The credential is guaranteed to be
+        // present here -- nothing can bind wide without one -- so the remaining exposure is the
+        // one thing this host cannot fix from inside itself, and the operator is the only person
+        // who knows whether the segment makes it acceptable.
+        Console.WriteLine("                The link is not encrypted, and Basic is base64 rather than");
+        Console.WriteLine("                encryption: anything that can see this segment can read the");
+        Console.WriteLine("                password and the telemetry. That is the whole protection this");
+        Console.WriteLine("                gives you -- appropriate on a bench LAN you control, and not on");
+        Console.WriteLine("                a plant network or anything routed. For those, bind loopback and");
+        Console.WriteLine("                terminate TLS in a proxy in front of it.");
     }
 
     private static void PrintContent(WebConsoleHost console)
@@ -147,9 +184,16 @@ public static class StartupBanner
         }
 
         Console.WriteLine("  access        a credential is required (HTTP Basic) on every path, including /ws.");
-        Console.WriteLine("                Basic is base64, not encryption. On a cleartext link the password is");
-        Console.WriteLine("                readable by anything on the path; put TLS in front before it leaves");
-        Console.WriteLine("                this machine.");
+
+        // Only when loopback. With --listen network the block above has already said this, at
+        // length and in the tense that matters there -- the password is crossing a wire now,
+        // rather than being safe until somebody exposes the port.
+        if (!console.Server.IsNetworkReachable)
+        {
+            Console.WriteLine("                Basic is base64, not encryption. On a cleartext link the password is");
+            Console.WriteLine("                readable by anything on the path; put TLS in front before it leaves");
+            Console.WriteLine("                this machine.");
+        }
     }
 
     private static void PrintIngest(ITelemetrySource? source)
