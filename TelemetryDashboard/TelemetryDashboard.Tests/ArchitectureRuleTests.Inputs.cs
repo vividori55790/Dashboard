@@ -30,6 +30,10 @@ public partial class ArchitectureRuleTests
         File.ReadAllText(Path.Combine(
             SolutionRoot, "TelemetryDashboard.Core", "Streaming", "InputsEndpoint.cs"));
 
+    private static string InputsClassificationSource() =>
+        File.ReadAllText(Path.Combine(
+            SolutionRoot, "TelemetryDashboard.Core", "Streaming", "InputsEndpoint.Classification.cs"));
+
     private static string StreamClientSource() =>
         File.ReadAllText(Path.Combine(
             Directory.GetParent(SolutionRoot)?.FullName ?? SolutionRoot, "stream_client.html"));
@@ -87,6 +91,26 @@ public partial class ArchitectureRuleTests
 
         page.Should().Contain("style.display",
             "and hiding must be exactly that -- a display change on the card");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void TheWireNeverCarriesAQuantityKindWithoutTheFieldsThatQualifyIt()
+    {
+        // ROADMAP W1's rule, at the boundary where it is easiest to lose. Downstream this is the
+        // field that picks an axis, a scale and an alarm band, and a consumer reading it alone
+        // cannot tell a derivation from a guess. Enforced against the source rather than only in
+        // behaviour because these are anonymous-object member names: deleting one is a compile-time
+        // nothing and a run-time consumer that silently stops seeing the qualification.
+        string classification = InputsClassificationSource();
+
+        classification.Should().Contain("kind = ", "the endpoint has to publish one at all");
+
+        foreach (string qualifier in new[] { "confidence = ", "proposal = ", "disputed = ", "why = ", "evidence = " })
+        {
+            classification.Should().Contain(qualifier,
+                $"a kind published without {qualifier.Trim(' ', '=')} reads as a fact whatever it was reached from");
+        }
     }
 
     [Fact]

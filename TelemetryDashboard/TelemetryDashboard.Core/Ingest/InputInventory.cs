@@ -38,6 +38,11 @@ public sealed class InputInventory
         public long Samples;
         public DateTimeOffset FirstSeen;
         public DateTimeOffset LastSeen;
+
+        // Null until a finite reading arrives. A channel that has only ever delivered NaN has a
+        // sample count and no range, which are different facts and are reported as two.
+        public double? Min;
+        public double? Max;
     }
 
     private readonly BoundedChannelRegistry<Entry> _entries;
@@ -98,6 +103,15 @@ public sealed class InputInventory
             entry.LastValue = packet.Value;
             entry.LastSeen = seen;
 
+            // Non-finite readings are excluded rather than folded in. One NaN in a Math.Min chain
+            // makes every later comparison NaN, and the range would then read as unmeasurable for a
+            // channel that has been reporting cleanly ever since.
+            if (double.IsFinite(packet.Value))
+            {
+                entry.Min = entry.Min is { } low ? Math.Min(low, packet.Value) : packet.Value;
+                entry.Max = entry.Max is { } high ? Math.Max(high, packet.Value) : packet.Value;
+            }
+
             // Last one wins, and an empty unit never overwrites a known one: a device that omits
             // the unit on some frames should not make the column flicker.
             if (!string.IsNullOrWhiteSpace(packet.Unit)) entry.Unit = packet.Unit;
@@ -111,7 +125,8 @@ public sealed class InputInventory
         {
             return _entries.Snapshot()
                 .Select(e => new InputChannel(
-                    e.Port, e.NodeId, e.Channel, e.Unit, e.LastValue, e.Samples, e.FirstSeen, e.LastSeen))
+                    e.Port, e.NodeId, e.Channel, e.Unit, e.LastValue, e.Samples, e.FirstSeen,
+                    e.LastSeen, e.Min, e.Max))
                 .OrderBy(c => c.Port, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(c => c.NodeId, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(c => c.Channel, StringComparer.OrdinalIgnoreCase)
