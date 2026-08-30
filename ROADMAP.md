@@ -36,26 +36,11 @@ prior art is recorded beside the code it governs, and the three findings worth r
   Both sides' tests passed. Every panel imported cleanly and drew nothing.
   `GrafanaScrapeContractTests` now asserts them against each other, which is the only place the
   disagreement exists.
-
-## W4 — Prove it against the real thing
-
-**Problem.** Two of those three rows read *Half built*, and both for the same reason: no real
-Prometheus has scraped this hub and no real Grafana has imported its dashboard. What exists is a
-document read back by the Prometheus project's own Python parser and a JSON validated against a
-schema. Two parsers agreeing is weaker evidence than a scraper storing a series, and a schema
-passing is weaker than Grafana drawing a line.
-
-This matters more than it would for an internal format. The moment an operator points their stack
-at `/metrics`, the metric names and labels become a contract their alert rules depend on, and the
-failure mode is the quiet one — a panel that imports without complaint and stays empty.
-
-**Build.** A CI job that stands up Prometheus and Grafana against a published host and asserts on
-what they actually store and render. The Linux runner has a working Docker engine; this machine
-does not, which is why it was not done at the time.
-
-**Done when.** A Prometheus container scrapes a running host and its query API returns the series
-the generated dashboard asks for; a Grafana container imports the dashboard without error. Both
-assertions fail if the label shape changes on either side.
+- **Verifying against a parser is not verifying.** Both endpoints shipped reading *Half built* for
+  the same reason, and a CI job now stands up `prom/prometheus` and `grafana/grafana` against a
+  published host. The first run scraped it, answered every generated query from stored series, and
+  stored the dashboard under uid `telemetry-hub-auto` with 5 panels, read back to prove the import
+  was not a 200 over nothing.
 
 ## W5 — Let an operator accept a proposal
 

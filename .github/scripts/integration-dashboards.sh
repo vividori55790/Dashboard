@@ -134,7 +134,7 @@ check "Prometheus reports the target up" "$scraped" \
 curl -fsS --max-time 10 "http://127.0.0.1:$PORT/api/export/grafana" -o "$WORK/dashboard.json"
 check "the host generates a dashboard" "$?" "the export endpoint did not answer"
 
-python3 - "$WORK/dashboard.json" "$PROM_PORT" <<'PY'
+python3 - "$WORK/dashboard.json" "$PROM_PORT" <<'PY' | tee "$WORK/contract.txt"
 import json, sys, urllib.parse, urllib.request
 
 dashboard = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -189,7 +189,19 @@ want(f"every generated query is answered by a stored series ({answered}/{len(que
 
 sys.exit(1 if bad else 0)
 PY
-check "the generated dashboard matches what Prometheus stored" "$?"
+# PIPESTATUS[0], not $?. Piping the block above through tee makes $? tee's exit,
+# and tee always succeeds -- the contract check would have passed no matter what
+# Prometheus answered. pipefail happens to save it here; not depending on that.
+contract=${PIPESTATUS[0]}
+check "the generated dashboard matches what Prometheus stored" "$contract"
+
+# The count, not just the verdict. Annotations are the only part of a run readable
+# without an account, and "all of them" is the fact worth reading -- a job that
+# checked one query and a job that checked forty are the same green otherwise.
+if [ "$contract" -eq 0 ]; then
+    notice "every generated query resolved against a stored series" \
+           "$(grep -o '([0-9]*/[0-9]*)' "$WORK/contract.txt" 2>/dev/null | tail -1)"
+fi
 
 # ---------------------------------------------------------------------------
 # Grafana
