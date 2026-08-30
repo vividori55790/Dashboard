@@ -18,7 +18,7 @@ namespace TelemetryDashboard.Core.Streaming;
 /// small; this grows with the rig, and a view that asks for it is asking on purpose.
 /// </para>
 /// </remarks>
-public static class InputsEndpoint
+public static partial class InputsEndpoint
 {
     /// <summary>The reply, or an explicit statement that nothing is tracking inputs.</summary>
     /// <remarks>
@@ -50,6 +50,10 @@ public static class InputsEndpoint
             // whole rig, which is the coverage failure this product's architecture opens with.
             evicted = inventory.Evictions,
 
+            // How much of the rig is actually identified, so an operator can see at a glance that
+            // eight of ten channels are guesses without reading ten rows to find out.
+            taxonomy = Summarise(channels),
+
             ports = channels
                 .GroupBy(c => c.Port, StringComparer.OrdinalIgnoreCase)
                 .Select(group => new
@@ -66,7 +70,14 @@ public static class InputsEndpoint
 
                         // Null while a channel has reported once. A cadence nobody could have
                         // measured is not reported as a number, here or anywhere else.
-                        meanIntervalSec = c.MeanInterval?.TotalSeconds
+                        meanIntervalSec = c.MeanInterval?.TotalSeconds,
+
+                        // Published beside the classification because they are what can veto it,
+                        // and a veto nobody can see the input to is not auditable.
+                        observedMin = c.ObservedMin,
+                        observedMax = c.ObservedMax,
+
+                        classification = Describe(c)
                     }).ToArray()
                 })
                 .ToArray()
