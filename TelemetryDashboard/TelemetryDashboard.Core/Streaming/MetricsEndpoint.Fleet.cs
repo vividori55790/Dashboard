@@ -57,7 +57,9 @@ public static partial class MetricsEndpoint
 
         foreach (NodeClock clock in observed)
         {
-            if (clock.Offset.SpreadSec is { } bar) spread.Sample(bar, "node", clock.NodeId);
+            // IsBounded rather than a bare null check, because the type draws the distinction
+            // already and a non-finite spread is not an error bar either.
+            if (clock.Offset is { IsBounded: true, SpreadSec: { } bar }) spread.Sample(bar, "node", clock.NodeId);
         }
 
         // Not _total: this is the occupancy of a fixed 64-deep window, so it stops rising and can

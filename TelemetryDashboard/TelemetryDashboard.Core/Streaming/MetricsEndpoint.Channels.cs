@@ -14,6 +14,15 @@ namespace TelemetryDashboard.Core.Streaming;
 /// the <c>unit</c> field on the wire is dropped before ingest reaches it. A suffix chosen here would
 /// be a claim about the quantity that nothing measured, on the endpoint whose whole argument is
 /// against exactly that. <c>telemetry_channel_value</c> claims a reading and nothing more.
+/// <para>
+/// <b>Product decision, not taken: how many channels belong on this endpoint.</b> Every channel the
+/// store holds appears here, in five families, so a host at its 20,000-channel ceiling exposes on
+/// the order of 100,000 series to every scraper. That is bounded rather than unbounded -- the store
+/// refuses channels past the ceiling -- but it is a bill somebody else pays, in their storage and
+/// their query latency, and the alternative is a configured subset. Exporting everything is the
+/// honest default because the channel an operator forgot to list is the one that goes quiet, and
+/// narrowing it is a choice about their monitoring system rather than about this one.
+/// </para>
 /// </remarks>
 public static partial class MetricsEndpoint
 {

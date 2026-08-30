@@ -54,13 +54,27 @@ public static partial class MetricsEndpoint
     public const string Path = "/metrics";
 
     /// <summary>
+    /// The exposition format this speaks, and not OpenMetrics.
+    /// </summary>
+    /// <remarks>
+    /// OpenMetrics is the stricter successor, and its rules are followed here wherever they are
+    /// stricter -- the same three label escapes, <c>_total</c> on counters and nowhere else. The
+    /// document is still not one: it carries no <c># EOF</c> marker and does not claim the
+    /// OpenMetrics content type. Serving it under a type the reader has to negotiate would trade a
+    /// format every one of the named agents reads unconditionally for one some of them do not, in
+    /// exchange for nothing this endpoint needs. Adding it later is a second content type behind an
+    /// <c>Accept</c> header rather than a rewrite.
+    /// </remarks>
+    public const string FormatVersion = "0.0.4";
+
+    /// <summary>
     /// The content type of the reply, version parameter included.
     /// </summary>
     /// <remarks>
     /// A missing version defaults to the most recent, which would make this document's meaning
-    /// depend on the scraper's build rather than on what was written. Stating 0.0.4 pins it.
+    /// depend on the scraper's build rather than on what was written. Naming it pins it.
     /// </remarks>
-    public const string ContentType = "text/plain; version=0.0.4; charset=utf-8";
+    public const string ContentType = "text/plain; version=" + FormatVersion + "; charset=utf-8";
 
     /// <summary>The namespace every metric here carries. See the type remarks.</summary>
     public const string Prefix = "telemetry_";
@@ -73,8 +87,9 @@ public static partial class MetricsEndpoint
     /// plant floor, and no consumer of a counter can tell a one-sample skew from scrape timing
     /// anyway.
     /// <para>
-    /// Host counters first, then channels, because the channel list is the unbounded part and a
-    /// reader tailing the response should reach the summary without paging through it.
+    /// The channel families go last because they are the part that scales with the plant. A person
+    /// reading this response by hand -- which is how an operator checks an exporter the first time
+    /// -- reaches every summary before the list that may run to thousands of lines.
     /// </para>
     /// </remarks>
     public static string Render(TelemetryStreamingServer server)

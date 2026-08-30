@@ -93,6 +93,21 @@ public class MetricsExpositionFormatTests
 
         document.Types.Keys.Should().BeEquivalentTo(families);
         document.Help.Keys.Should().BeEquivalentTo(families);
+
+        // The case a fully furnished host cannot show, and the one a live --simulate run is
+        // actually in: a collaborator attached and holding nothing. Its families must vanish
+        // entirely rather than leave three headers standing over no series.
+        var attachedAndEmpty = new TelemetryStreamingServer(port: 0)
+        {
+            Clocks = new TimeSyncJitterBuffer().ObservedClocks
+        };
+
+        MetricsExpositionParser.Document quiet =
+            MetricsExpositionParser.Parse(MetricsEndpoint.Render(attachedAndEmpty));
+
+        quiet.Types.Keys.Should().BeEquivalentTo(
+            quiet.Samples.Keys.Select(MetricsExpositionParser.Family).Distinct());
+        quiet.Types.Keys.Should().NotContain(family => family.StartsWith("telemetry_node_clock", StringComparison.Ordinal));
     }
 
     [Fact]
