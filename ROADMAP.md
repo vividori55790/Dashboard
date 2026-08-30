@@ -65,8 +65,4 @@ channel's unit can come from.
   has no HTTPS off Windows, so the honest options are a different HTTP stack or leaving TLS to the
   proxy it already works with.
 - **The peer's verdicts, kept attributed to the peer.** §7 asks for it; they are dropped instead.
-- **The anomaly score stamped on every numeric leaf.** `TelemetryFrameRecorder` gives
-  `NODE.bus_voltage.predicted` the score of `NODE.bus_voltage`, so the DVR replays a forecast's
-  verdict as its own. Found while building the metrics endpoint; the endpoint now refuses to export
-  those series at all, which contains the damage without fixing the cause.
 - **Desktop parity.** The WPF shell has neither the input inventory nor the fleet view.

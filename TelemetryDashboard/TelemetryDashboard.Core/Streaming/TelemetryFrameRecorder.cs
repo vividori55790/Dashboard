@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.Json;
 using TelemetryDashboard.Core.Models;
 using TelemetryDashboard.Core.Services;
@@ -129,6 +129,7 @@ public static class TelemetryFrameRecorder
         if (depth > 4) return; // guard against pathologically nested frames
 
         double? score = depth == 0 ? inheritedScore : ResolveAnomalyScore(element) ?? inheritedScore;
+        bool namesAVariable = ResolveVariable(element) is not null;
         string prefix = depth == 0 ? channelPrefix : $"{channelPrefix}";
 
         foreach (JsonProperty property in element.EnumerateObject())
@@ -142,9 +143,28 @@ public static class TelemetryFrameRecorder
 
                     // "value" is the measurement, so it is the channel; anything else beside it --
                     // a score, a forecast -- is a property of that channel and keeps its own name.
+                    // Two different questions, and collapsing them into one flag collapsed every
+                    // channel of an aggregate frame back into a single series -- the interleaving
+                    // this key was built to stop. The key asks which field IS the channel:
+                    // 'value' names the channel itself, any other field names one beside it.
                     string seriesKey = IsMeasurementField(property.Name)
                         ? prefix
                         : $"{prefix}.{property.Name}";
+
+                    // The verdict asks which fields are readings at all, and that depends on the
+                    // frame's shape. ResolveVariable already draws the line: a frame naming a
+                    // variable has exactly one reading, and everything numeric beside it is a
+                    // property of that reading. An aggregate frame names none, and there the field
+                    // name is the quantity, so every numeric field is a reading.
+                    bool isAReading = !namesAVariable || IsMeasurementField(property.Name);
+
+                    // And the verdict belongs to the readings alone. It used to be written onto
+                    // every numeric field, so a replay showed a forecast flagged as anomalous
+                    // whenever its channel was, carrying that channel's sigma as its own
+                    // -- a judgement about one quantity presented as a judgement about another,
+                    // which is the shape §7 names for a peer's score and reached here inside one
+                    // process by a loop that had one score in scope and several values.
+                    double? verdict = isAReading ? score : null;
 
                     sink.Append(seriesKey, value);
 
@@ -156,10 +176,10 @@ public static class TelemetryFrameRecorder
                     dvr.RecordFrame(
                         seriesKey,
                         value,
-                        score ?? 0.0,
-                        score.HasValue && score.Value >= threshold,
+                        verdict ?? 0.0,
+                        verdict.HasValue && verdict.Value >= threshold,
                         timestamp,
-                        score.HasValue ? DvrFrame.UnidentifiedAnalyzer : null);
+                        verdict.HasValue ? DvrFrame.UnidentifiedAnalyzer : null);
                     break;
 
                 case JsonValueKind.Object:
