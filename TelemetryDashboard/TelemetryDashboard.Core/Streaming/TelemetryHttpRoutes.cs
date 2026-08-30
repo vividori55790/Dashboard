@@ -106,6 +106,15 @@ public static class TelemetryHttpRoutes
                     server.Inputs, DateTimeOffset.UtcNow)).ConfigureAwait(false);
                 return;
 
+            // The bare dashboard object, not an envelope around it, so `curl -o rig.json` produces
+            // a file Grafana imports. What would normally go in an envelope -- how many channels
+            // this was built from, and whether any were left out -- is inside the dashboard's own
+            // description, where it survives being saved and mailed to somebody.
+            case "/api/export/grafana":
+                await WriteJsonAsync(response, GrafanaDashboardExport.Build(
+                    server.Inputs, DateTimeOffset.UtcNow)).ConfigureAwait(false);
+                return;
+
             case "/api/spectrum":
                 await WriteJsonAsync(response, SpectrumEndpoint.Compute(
                     server.Series,

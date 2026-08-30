@@ -101,6 +101,12 @@
     .tag.warn { background:rgba(255,176,32,.14); color:var(--warn); }
     .tag.bad  { background:rgba(255,77,94,.16); color:var(--alarm); }
     #empty { color:var(--text-3); padding:36px 0; text-align:center; }
+
+    /* A config block is meant to be selected and pasted, so it wraps rather than scrolls: a line
+       running off the right edge is a line an operator copies half of. */
+    .cfg { background:var(--bg); border:1px solid var(--line); border-radius:7px;
+           padding:10px 12px; font-size:11.5px; color:var(--text-2); margin:0;
+           white-space:pre-wrap; word-break:break-all; }
 </style>
 
 <header>
@@ -227,6 +233,39 @@
             </div>
             <div class="stat" id="in-stat"></div>
             <div id="in-list" style="margin-top:6px"></div>
+        </div>
+
+        <!--
+            Connecting this hub to Grafana, with nothing to type.
+
+            "쉽게 설정할 수 있게" is the requirement, and a scrape endpoint alone does not meet it:
+            it leaves a human building panels by hand for channels this host already knows the
+            name, unit and origin of. So the host generates the dashboard, and this panel hands
+            over the two files -- the scrape config and the dashboard -- rather than describing
+            them.
+
+            The panel refreshes on the button and not on a clock, deliberately. The dashboard is a
+            snapshot of the channels that had reported when it was made, and a panel that quietly
+            regenerated it every few seconds would suggest the file an operator downloaded earlier
+            is still current. It is not, and the wording says so.
+
+            It also asks /metrics whether it exists. The scrape config can be perfectly correct
+            against an endpoint this host does not serve yet, and an operator who pastes it and
+            waits is looking at the same empty graph this whole feature is written to prevent --
+            except the emptiness would be in Prometheus, where this console cannot see it.
+        -->
+        <div class="panel">
+            <h2>외부 연동 · /api/export/grafana</h2>
+            <div class="row">
+                <span class="chip mono" id="ex-summary">읽는 중…</span>
+                <button id="ex-go">다시 만들기</button>
+                <button id="ex-save">대시보드 내려받기</button>
+                <button id="ex-copy">스크레이프 설정 복사</button>
+                <span class="note" id="ex-note"></span>
+            </div>
+            <div class="stat" id="ex-stat"></div>
+            <pre class="cfg mono" id="ex-scrape" style="margin-top:8px"></pre>
+            <div class="stat" id="ex-metrics" style="margin-top:8px"></div>
         </div>
 
         <!--
@@ -1098,6 +1137,169 @@
     });
     loadInputs();
     setInterval(loadInputs, COMPUTED_REFRESH_MS);
+
+    // ---- external integration --------------------------------------------
+    //
+    // Two files and nothing to type: the Prometheus scrape config for this host, and the dashboard
+    // the host generated from the channels it has actually heard from.
+    //
+    // exportText holds the exact bytes the endpoint sent rather than a re-serialised copy, so the
+    // file an operator saves here and the file a curl of the same endpoint produces are the same
+    // file. A panel that claims to be handing over what the host generated must not quietly hand
+    // over its own rendering of it.
+    var EXPORT_FILE = 'telemetry-grafana-dashboard.json';
+    var exportText = null;
+    var scrapeText = '';
+
+    function scrapeConfig(authenticated) {
+        // Built from where this page was actually loaded from, because that is the one address
+        // known to reach this host. It is still not necessarily the address Prometheus should use
+        // -- a console opened on localhost would tell a Prometheus on another machine to scrape
+        // itself -- so the caveat is a comment inside the config rather than a line on this page,
+        // where it would be lost the moment the text is pasted somewhere else.
+        var lines = [
+            '# prometheus.yml',
+            '# targets 는 이 콘솔을 연 주소입니다. Prometheus 가 다른 기계에 있으면,',
+            '# 그 기계에서 이 호스트가 보이는 주소로 바꾸십시오.',
+            'scrape_configs:',
+            "  - job_name: 'telemetrydashboard'",
+            '    metrics_path: /metrics',
+            '    scheme: ' + location.protocol.replace(':', ''),
+            '    static_configs:',
+            "      - targets: ['" + location.host + "']"
+        ];
+
+        // A host behind --credential refuses an unauthenticated scrape, and a config that omits
+        // this fails with a 401 that looks, from Grafana, exactly like a host that is down. The
+        // password is not filled in because this console has never been told it.
+        if (authenticated) {
+            lines.push('    basic_auth:');
+            lines.push('      username: <콘솔 사용자 이름>');
+            lines.push('      password: <콘솔 암호>');
+        }
+
+        return lines.join('\n');
+    }
+
+    function renderExport(dash, inputs, reach) {
+        var summary = document.getElementById('ex-summary');
+        var stat = document.getElementById('ex-stat');
+        var panels = (dash && dash.panels) || [];
+        var drawn = panels.filter(function (p) { return p.type === 'timeseries'; });
+        var rows = panels.filter(function (p) { return p.type === 'row'; });
+
+        scrapeText = scrapeConfig(reach && reach.authenticated === true);
+        document.getElementById('ex-scrape').textContent = scrapeText;
+
+        // Three states, three renderings. As a file the first two are identical -- a dashboard
+        // with no graphs -- which is why the generator writes a sentence into it and why this
+        // panel refuses to cover both with one summary. "Nobody is counting" and "counting, and
+        // nothing has arrived" are the distinction this whole product is organised around.
+        if (!inputs || inputs.tracking !== true) {
+            summary.textContent = '집계 안 함';
+            stat.textContent = '이 호스트는 입력 목록을 유지하지 않아, 어떤 채널이 보고했는지 ' +
+                '말할 수 없습니다. 채널이 없다는 뜻이 아닙니다. 내려받는 파일은 빈 대시보드가 ' +
+                '아니라 그 사실을 적은 대시보드입니다.';
+            return;
+        }
+
+        if (drawn.length === 0) {
+            summary.textContent = '보고한 채널 없음';
+            stat.textContent = '입력을 집계하고 있지만 아직 아무 채널도 보고하지 않았습니다. ' +
+                '채널이 조용한 것이 아니라, 하나도 도착하지 않았습니다 — 장비가 보내기 시작한 ' +
+                '뒤 다시 만드십시오.';
+            return;
+        }
+
+        summary.textContent = '패널 ' + drawn.length + '개 · 포트 ' + rows.length + '개';
+        stat.textContent = '보고한 적 있는 채널만 패널이 됩니다 — 한 번도 보고하지 않은 채널의 ' +
+            '빈 그래프는 조용한 채널과 구별되지 않기 때문입니다. 이 파일은 지금 이 순간의 ' +
+            '스냅샷이므로, 채널이 늘면 다시 만드십시오.' +
+            (inputs.evicted > 0
+                ? ' 입력 ' + inputs.evicted + '개가 상한에 걸려 빠졌으므로, 이 대시보드는 이 ' +
+                  '장비가 보내는 전부가 아닙니다.'
+                : '');
+    }
+
+    // The scrape config can be perfectly correct against an endpoint this host does not serve, and
+    // an operator who pastes it and waits is then looking at an empty graph in Grafana -- the exact
+    // failure this feature exists to prevent, moved somewhere this console cannot see it.
+    function probeMetrics() {
+        var el = document.getElementById('ex-metrics');
+
+        fetch('/metrics')
+            .then(function (r) {
+                el.innerHTML = r.ok
+                    ? '<span class="tag ok">/metrics 응답함</span> Prometheus 가 가져갈 수 있습니다.'
+                    : '<span class="tag warn">/metrics 없음</span> 이 호스트는 아직 이 ' +
+                      '엔드포인트를 제공하지 않습니다 (HTTP ' + esc(String(r.status)) + '). 위 ' +
+                      '설정은 맞지만, 엔드포인트가 생기기 전까지 Prometheus 는 아무것도 가져가지 ' +
+                      '못하고 모든 패널이 비어 있습니다.';
+            })
+            .catch(function (e) {
+                el.innerHTML = '<span class="tag warn">/metrics 확인 실패</span> ' + esc(e.message);
+            });
+    }
+
+    function loadExport() {
+        document.getElementById('ex-summary').textContent = '읽는 중…';
+        document.getElementById('ex-note').textContent = '';
+
+        Promise.all([
+            fetch('/api/export/grafana').then(function (r) { return r.text(); }),
+            fetch('/api/inputs').then(function (r) { return r.json(); }),
+            fetch('/api/status').then(function (r) { return r.json(); })
+        ]).then(function (answers) {
+            exportText = answers[0];
+            renderExport(JSON.parse(exportText), answers[1], answers[2].reachability);
+        }).catch(function (e) {
+            // Cleared rather than left holding the previous answer, so the save button cannot
+            // hand over a dashboard built from a rig this host has since stopped describing.
+            exportText = null;
+            document.getElementById('ex-summary').textContent = '읽기 실패';
+            document.getElementById('ex-stat').textContent = e.message;
+        });
+
+        probeMetrics();
+    }
+
+    document.getElementById('ex-save').addEventListener('click', function () {
+        var note = document.getElementById('ex-note');
+
+        if (exportText === null) {
+            note.textContent = '아직 대시보드를 받지 못했습니다. "다시 만들기"를 누르십시오.';
+            return;
+        }
+
+        var url = URL.createObjectURL(new Blob([exportText], { type: 'application/json' }));
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = EXPORT_FILE;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+
+        note.textContent = EXPORT_FILE + ' 저장됨 — Grafana 의 Dashboards → New → Import 에 ' +
+            '올리십시오. 데이터소스는 이 기계의 Prometheus 가 자동으로 선택됩니다.';
+    });
+
+    document.getElementById('ex-copy').addEventListener('click', function () {
+        var note = document.getElementById('ex-note');
+
+        if (!navigator.clipboard) {
+            note.textContent = '이 브라우저에서는 자동 복사를 쓸 수 없습니다. 아래 상자를 직접 ' +
+                '선택해 복사하십시오.';
+            return;
+        }
+
+        navigator.clipboard.writeText(scrapeText).then(
+            function () { note.textContent = '스크레이프 설정을 복사했습니다.'; },
+            function () { note.textContent = '복사하지 못했습니다. 아래 상자를 직접 선택해 복사하십시오.'; });
+    });
+
+    document.getElementById('ex-go').addEventListener('click', loadExport);
+    loadExport();
 
     // ---- limits ----------------------------------------------------------
     //
