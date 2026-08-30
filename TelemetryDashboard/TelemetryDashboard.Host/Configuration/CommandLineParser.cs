@@ -283,6 +283,9 @@ public static class CommandLineParser
                     draft.CredentialPath = Path.GetFullPath(rawCredential);
                     break;
 
+                case "--backfill":
+                    draft.Backfill = true;
+                    break;
                 case "--listen":
                     if (!ArgumentCursor.TryValue(args, ref i, out string? rawListen)) return ArgumentCursor.MissingValue(argument);
                     switch (rawListen)
@@ -444,6 +447,15 @@ public static class CommandLineParser
                 + "recorded incidents and accepts commands over its WebSocket; on a shared segment "
                 + "an open listener publishes all of it to whoever is on that segment. Enrol one "
                 + "with: telemetry-host credential --out console.cred");
+        }
+
+        // Opt-in, like --retain and --archive, because it makes network requests the operator did
+        // not otherwise ask for -- to a peer, on a link that has just proved itself unreliable.
+        if (draft.Backfill && draft.SseEndpoint is null)
+        {
+            return ArgumentCursor.Fail(
+                "--backfill needs --sse: it asks the peer this host reads from for the interval a dropped "
+                + "link cost, and a host with no upstream has no peer to ask.");
         }
 
         if (draft.EmergencyLimits.Count > 0 && !draft.EmergencyStop)

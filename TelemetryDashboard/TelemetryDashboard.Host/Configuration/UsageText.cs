@@ -82,6 +82,17 @@ public static class UsageText
                                 by anything on the path: this is for a console already behind TLS,
                                 or for scripts on the machine itself. Without it the console serves
                                 its own machine openly, which is today's behaviour and the default.
+              --backfill        After a dropped link comes back, ask the peer for the interval
+                                that was missed. It knows: /api/history answers for a time that
+                                has passed, provided the peer runs with --archive. Recovered
+                                readings arrive marked late -- their own clocks are old -- and are
+                                deduplicated, so filling the same gap twice recovers it once.
+                                Off by default, like --retain and --archive: it sends requests you
+                                did not ask for, to a peer, across a link that has just proved
+                                unreliable. The gap itself is reported either way, so leaving this
+                                off costs the attempt and not the visibility. Needs --sse; a host
+                                with no upstream has no peer to ask. Past fifteen minutes it
+                                declines and says so rather than pulling an unbounded window.
               --listen <where>  'loopback' (the default) or 'network'. Loopback binds localhost
                                 and 127.0.0.1: reachable from this machine and nowhere else.
                                 'network' binds every interface, so a browser on a phone or a

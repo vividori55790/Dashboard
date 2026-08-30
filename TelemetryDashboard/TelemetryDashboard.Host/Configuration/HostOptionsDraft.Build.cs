@@ -54,6 +54,7 @@ internal sealed partial class HostOptionsDraft
         CoverageStatePath = CoverageStatePath,
         RulesPath = RulesPath,
         CredentialPath = CredentialPath,
-        ListenOnAllInterfaces = ListenOnAllInterfaces
+        ListenOnAllInterfaces = ListenOnAllInterfaces,
+        Backfill = Backfill
     };
 }

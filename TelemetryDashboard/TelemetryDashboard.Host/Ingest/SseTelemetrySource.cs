@@ -83,6 +83,14 @@ public sealed class SseTelemetrySource : ITelemetrySource
     /// situation. Kept here rather than only written to stderr, where a browser cannot see it.
     /// </remarks>
     public Core.Cluster.LinkOutageLedger Outages { get; } = new();
+
+    /// <summary>What has been recovered after an outage, or null when nobody is asking.</summary>
+    /// <remarks>
+    /// Null rather than an empty ledger, so "backfill is switched off" reads differently from
+    /// "backfill is on and has recovered nothing". The second means the peer had nothing or could
+    /// not answer, which is a fact about the fleet; the first is a fact about this command line.
+    /// </remarks>
+    public Core.Cluster.BackfillLedger? Backfill { get; init; }
     /// <summary>How many times the connection dropped and was re-established.</summary>
     public int Reconnects { get; private set; }
 
@@ -136,7 +144,16 @@ public sealed class SseTelemetrySource : ITelemetrySource
                     // The first event of a connection is what proves the link is back. Closing
                     // the interval when the request returns headers would count a peer that
                     // accepts and then sends nothing as restored.
-                    Outages.Restored(DateTime.UtcNow);
+                    // The interval comes back from Restored rather than being read off the ledger
+                    // afterwards, so nothing can close it in between.
+                    if (Outages.Restored(DateTime.UtcNow) is { } gap && Backfill is not null)
+                    {
+                        await foreach (RawPacket recovered in FillAsync(gap, cancellationToken)
+                            .ConfigureAwait(false))
+                        {
+                            yield return recovered;
+                        }
+                    }
                     EventsReceived++;
                     yield return new RawPacket(_endpoint.Host, payload, DateTime.UtcNow);
                 }
@@ -212,5 +229,27 @@ public sealed class SseTelemetrySource : ITelemetrySource
     {
         if (_ownsClient) _http.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Asks the peer for a closed gap and yields what it had, oldest first.</summary>
+    /// <remarks>
+    /// Emitted before the live events of the reconnected stream resume, which is the order the
+    /// samples were observed in. They still arrive marked late -- their own clocks are old -- so
+    /// nothing downstream mistakes the ordering for freshness.
+    /// </remarks>
+    private async IAsyncEnumerable<RawPacket> FillAsync(
+        Core.Cluster.LinkOutage gap,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        (Core.Cluster.GapFill fill, IReadOnlyList<string> frames) =
+            await ArchiveGapFill.FetchAsync(_http, _endpoint, gap, cancellationToken).ConfigureAwait(false);
+
+        Backfill!.Record(fill);
+        Console.Error.WriteLine($"[sse] {_endpoint.Host} backfill: {fill.Describe()}");
+
+        foreach (string frame in frames)
+        {
+            yield return new RawPacket(_endpoint.Host, frame, DateTime.UtcNow);
+        }
     }
 }

@@ -280,7 +280,26 @@ public static class TelemetryHttpRoutes
                     seconds = gap.Duration(DateTime.UtcNow).TotalSeconds,
                     open = gap.Open,
                     fault = gap.Fault
-                }).ToArray()
+                }).ToArray(),
+
+                // Null when backfill is switched off, so "nobody is asking" does not render as
+                // "asked and got nothing". Only the second says anything about the peer.
+                backfill = server.Backfill is { } filled
+                    ? new
+                    {
+                        attempts = filled.Attempts,
+                        recovered = filled.Recovered,
+                        recent = filled.Recent().Select(fill => new
+                        {
+                            fromUtc = fill.FromUtc,
+                            toUtc = fill.ToUtc,
+                            outcome = fill.Outcome.ToString(),
+                            recovered = fill.Recovered,
+                            truncated = fill.Truncated,
+                            summary = fill.Describe()
+                        }).ToArray()
+                    }
+                    : null
             }
             : null,
         endpoints = TelemetryStreamingServer.AdvertisedEndpoints

@@ -57,10 +57,6 @@ channel's unit can come from.
 
 ## Not in these, and not forgotten
 
-- **Peer exchange and local buffering.** The last *Not started* row. The exchange is pull, so a
-  returning receiver must ask for the interval it lost — a query the sender can already answer from
-  its archive, verified: an archiving host returns 448 samples for a 12-second window and a
-  non-archiving one answers `Error` with a reason rather than an empty result.
 - **Confidentiality.** `--listen network` puts a password on the wire in the clear. `HttpListener`
   has no HTTPS off Windows, so the honest options are a different HTTP stack or leaving TLS to the
   proxy it already works with.

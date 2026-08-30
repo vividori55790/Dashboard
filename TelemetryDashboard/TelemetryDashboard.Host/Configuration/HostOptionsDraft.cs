@@ -111,4 +111,5 @@ internal sealed partial class HostOptionsDraft
     public string? RulesPath;
     public string? CredentialPath;
     public bool ListenOnAllInterfaces;
+    public bool Backfill;
 }

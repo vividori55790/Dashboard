@@ -341,6 +341,16 @@ public sealed class HostOptions
     /// </remarks>
     public bool ListenOnAllInterfaces { get; init; }
 
+    /// <summary>Whether to ask the peer for the interval a dropped link cost.</summary>
+    /// <remarks>
+    /// Off by default because it makes requests the operator did not ask for, to a peer, on a link
+    /// that has just demonstrated it is unreliable -- and a flapping link would ask on every
+    /// reconnect. The gaps are reported either way, so leaving this off costs visibility of nothing:
+    /// the console says how long the hole is, and this only decides whether anything tries to fill
+    /// it.
+    /// </remarks>
+    public bool Backfill { get; init; }
+
     /// <summary>File the learned node set is remembered in, or null to forget on every restart.</summary>
     /// <remarks>
     /// Opt-in because it writes a file the operator did not otherwise ask for. Worth asking for:

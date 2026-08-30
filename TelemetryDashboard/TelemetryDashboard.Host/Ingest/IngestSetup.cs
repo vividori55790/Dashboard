@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -37,7 +37,12 @@ public static class IngestSetup
 
         if (options.SseEndpoint is not null)
         {
-            return new SseTelemetrySource(options.SseEndpoint);
+            // The ledger is what switches backfill on: null means nobody is asking, which reads
+            // differently from asking and recovering nothing.
+            return new SseTelemetrySource(options.SseEndpoint)
+            {
+                Backfill = options.Backfill ? new Core.Cluster.BackfillLedger() : null
+            };
         }
 
         if (options.ReplayPath is not null)

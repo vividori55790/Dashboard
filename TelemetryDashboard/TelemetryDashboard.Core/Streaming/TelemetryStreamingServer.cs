@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -161,6 +161,14 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// one and it has never dropped, which is a different and much better fact.
     /// </remarks>
     public Cluster.LinkOutageLedger? Link { get; set; }
+
+    /// <summary>What has been recovered after outages, or null when nobody is asking.</summary>
+    /// <remarks>
+    /// Null and "recovered nothing" are different claims. The first says this host was never told
+    /// to try; the second says it tried and the peer had nothing or could not answer, which is a
+    /// fact about the fleet rather than about this command line.
+    /// </remarks>
+    public Cluster.BackfillLedger? Backfill { get; set; }
 
     public IComputedChannelCounters? ComputedCounters { get; set; }
 

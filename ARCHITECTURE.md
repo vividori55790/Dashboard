@@ -124,12 +124,24 @@ so anything the peer observed in it is absent from this host's history. That is 
 needs before reading a flat stretch of chart as a quiet plant, and the console says it beside the
 chart rather than in a log.
 
-What no node does is the fourth half: buffer locally through a partition and replay afterwards. The
-exchange here is pull — a receiver subscribes to a sender's stream — so when the receiver comes
-back the sender has no memory of what it missed. Filling the gap would mean the receiver asking
-for the interval it now knows it lost, which is a query the sender can already answer from its
-archive. Nothing does it yet, so this product recognises a backfill and refuses a replay without
-ever producing either.
+**And a receiver now asks for what it lost.** The section is written as though a node buffers
+locally and pushes when the link returns; the exchange here is pull, so the sender has no memory
+of who was listening and nothing to push. The receiver asks instead — the outage ledger knows the
+interval and `/api/history` answers for a time that has passed. Recovered readings enter through the
+ordinary ingest path, so they are marked late-arriving because their own clocks are old, and
+deduplicated on identity because an archive stores a reading and not the frame that delivered it.
+
+Driven against a peer that keeps producing while the link to it drops, which is the only
+arrangement that tests anything — stopping the sender would make the gap genuinely empty. Four
+outages over 9.0 s, three fills, **180 samples recovered at exactly 60 per 3-second gap**, no
+duplicates; of what the receiver then republished, 151 frames carried `lateBySec` with a worst of
+3.01 — the gap, measured.
+
+It is opt-in (`--backfill`), like `--retain` and `--archive`, because it sends requests the operator did
+not ask for to a peer across a link that has just proved unreliable. Gaps are reported either way,
+so leaving it off costs the attempt and not the visibility. What it will not do is pull an
+unbounded window: past fifteen minutes it reports `TooLong` and asks for nothing, because a refusal
+to ask and an empty answer are the same result and only one is a reason to widen the bound.
 
 Three things about it are worth stating.
 
@@ -272,7 +284,7 @@ is the same kind of claim this document argues against.
 | Backfill marking | Built | `Core/Models/ArrivalAge`, `PacketFlags.LateArriving`, `lateBySec` and `ageUndetermined` on the wire. Driven against a peer emitting a four-hour-old sample: flagged at `lateBySec = 14400.0` with none of the 104 prompt samples around it touched |
 | Sequencing and deduplication | Built | `Core/Cluster/DuplicateFilter`, `epoch` and `seq` on the wire, counters under `exchange` on `/api/status`. Driven against a peer replaying 1..30 on every reconnect: 30 admitted, 150 refused over six connections. Per hop, not end to end |
 | Saying when a node was alone | Built | `Core/Cluster/LinkOutage`, `link` on `/api/status`, and a fleet panel in the console. Intervals rather than a tally. Driven against a peer whose connection ends after every batch: 26 outages, 78.271 s total, longest 3.025 s |
-| Peer exchange and local buffering | Not started | the exchange is pull, so a sender has no memory of what a returning receiver missed. Filling the gap means the receiver asking for the interval it now knows it lost — a query the sender can already answer from its archive, and nothing does it |
+| Peer exchange and gap recovery | Built | `Host/Ingest/ArchiveGapFill`, `Core/Cluster/GapFill`, reported under `link.backfill` on `/api/status`. Opt-in via `--backfill`. A peer with no archive, a peer with nothing in the window, and a gap too long to pull are three different outcomes because an operator acts differently on each. Local buffering is still absent and is not needed for this shape: the sender's archive is the buffer |
 | Channel taxonomy — what kind of quantity a channel is | Built | `Core/Analytics/ChannelClassifier` and the vocabulary beside it, published per channel and summarised under `taxonomy` on `/api/inputs`. Kinds and unit codes taken from UCUM, base-unit preference from Prometheus/OpenMetrics, name hierarchy from Prometheus subsystems and Sparkplug B folders; every source is recorded in `QuantityKind.cs` with what was rejected. Only a declared unit that names exactly one quantity reaches high confidence, because only that is a derivation — a name may propose and observed values may veto, and neither can promote. `unclassified` is a first-class answer and carries the sentence saying what would classify the channel. Driven against a live `--simulate` host: `%` read as a ratio and `°C` as UCUM `Cel` at high confidence; `rpm` resolved to `/min` by the unit alone, because `speed` is deliberately not a vocabulary word; and `g` — gram in UCUM, standard gravity on an accelerometer — held as a medium-confidence proposal that the name `vibration` resolved to acceleration |
 | **Confidence and provenance on that taxonomy** | Built | `Core/Analytics/ChannelClassification` — kind, confidence, evidence flags and a disputable sentence travel together, and `proposal` is a field rather than a comparison a consumer can invert. A name disagreeing with a declared unit is published as disputed rather than resolved: both are hand-written and this host cannot tell which is wrong |
 | Scrapeable by a monitoring system that already exists | Built | `Core/Streaming/MetricsEndpoint` serves `/metrics` in the Prometheus text exposition format. A family writes its HELP and TYPE from its first sample or never, so an unmeasured value is structurally unable to leave as a zero -- which matters here more than anywhere, because the format has no null and Prometheus interpolates. **A real `prom/prometheus` scrapes it in CI** and reports the target up from its own point of view; it was previously verified only against a parser |
@@ -291,5 +303,11 @@ optimistic direction.
 The row that split is the interesting one. "Clock offset and uncertainty across nodes" was one line
 covering two things, and the buffer having shipped the offset made it tempting to tick the whole
 row. §3's argument is entirely about the second half — an offset places a sample, an uncertainty is
-what says whether two samples can be ordered at all — so the row is now two, and the half that
-matters reads Not started.
+what says whether two samples can be ordered at all — so the row became two, and the half that
+mattered read Not started for as long as it was.
+
+Both halves are Built now, and the split is why that means anything: had they stayed one row it
+would have read Built the whole time, and the estimator would have gone on reporting a bare double
+— with 0.0 for a node nobody had ever compared clocks with — behind a table saying the section was
+satisfied. Splitting a row is how a document admits it is describing two things, and this one has
+since split twice more for the same reason.
