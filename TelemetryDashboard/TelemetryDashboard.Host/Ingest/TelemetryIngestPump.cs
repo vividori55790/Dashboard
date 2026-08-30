@@ -117,6 +117,11 @@ public sealed class TelemetryIngestPump
         _deduplicates = source.SamplesCarryTheirOwnOrigin;
         if (_deduplicates) server.Duplicates = Duplicates;
 
+        // Only a source that has a link to lose. A serial cable dropping is a different fact with
+        // its own reporting, and a null here says "no upstream" rather than "an upstream that has
+        // never failed".
+        if (source is SseTelemetrySource sse) server.Link = sse.Outages;
+
         // Through the same publisher as a measured sample, which is the whole point: a derived
         // channel that skipped the scoring, the recording or the archive would be a number on a
         // chart that no alert could fire on and no query could find afterwards.

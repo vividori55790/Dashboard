@@ -243,6 +243,28 @@ public static class TelemetryHttpRoutes
                 senderEvictions = filter.SenderEvictions
             }
             : null,
+
+        // Null when there is no upstream at all. Present with outages = 0 means there is one and
+        // it has never dropped -- much better news, and a different claim.
+        link = server.Link is { } outages
+            ? new
+            {
+                down = outages.IsDown,
+                outages = outages.Count,
+                totalDownSec = outages.Total.TotalSeconds,
+
+                // The intervals, not just the tally. Four reconnections in a minute and one
+                // four-hour gap give the same count, and only the second puts a hole in a chart.
+                recent = outages.Recent().Select(gap => new
+                {
+                    fromUtc = gap.BeganUtc,
+                    toUtc = gap.EndedUtc,
+                    seconds = gap.Duration(DateTime.UtcNow).TotalSeconds,
+                    open = gap.Open,
+                    fault = gap.Fault
+                }).ToArray()
+            }
+            : null,
         endpoints = TelemetryStreamingServer.AdvertisedEndpoints
     };
 

@@ -249,6 +249,7 @@
             <div class="stat" id="fleet-reach"></div>
             <div id="fleet-clocks" style="margin-top:6px"></div>
             <div class="stat" id="fleet-exchange" style="margin-top:6px"></div>
+            <div class="stat" id="fleet-link" style="margin-top:6px"></div>
         </div>
 
         <div class="panel">
@@ -1034,6 +1035,38 @@
         '못하므로, 실제 불확실성은 이보다 큽니다.</div>';
     }
 
+    function renderLink(l) {
+        var el = document.getElementById('fleet-link');
+
+        // Null is "no upstream"; present with zero outages is "an upstream that has never
+        // dropped". The second is much better news and has to be readable as such.
+        if (!l) { el.textContent = '상위 링크가 없습니다 — 이 호스트는 자기 포트에서만 읽습니다.'; return; }
+
+        if (l.down) {
+            el.innerHTML = '<span class="tag warn">링크 끊김</span> 지금 상위와 연결되어 ' +
+                '있지 않습니다. 이 시간 동안 상대가 관측한 것은 이 호스트의 기록에 없습니다.';
+            return;
+        }
+
+        if (!l.outages) {
+            el.innerHTML = '<span class="tag ok">끊긴 적 없음</span> 상위 링크가 한 번도 ' +
+                '끊기지 않았습니다.';
+            return;
+        }
+
+        // The intervals rather than the tally. Four drops in a minute and one four-hour gap give
+        // the same count, and only the second is a hole in the chart.
+        var worst = (l.recent || []).reduce(function (a, b) {
+            return (!a || b.seconds > a.seconds) ? b : a;
+        }, null);
+
+        el.innerHTML = '<span class="tag warn">끊김 ' + l.outages + '회</span> 합계 ' +
+            secs(l.totalDownSec) +
+            (worst ? ' · 가장 긴 끊김 ' + secs(worst.seconds) : '') +
+            ' — 이 구간들에 상대가 관측한 것은 이 호스트에 도착하지 못했고, 기록에 없습니다. ' +
+            '차트의 평평한 구간을 조용한 설비로 읽지 마십시오.';
+    }
+
     function renderExchange(x) {
         var el = document.getElementById('fleet-exchange');
         // Null means this host takes nothing from a network -- there is no link to replay, so
@@ -1071,6 +1104,7 @@
                 renderReach(d.reachability);
                 renderClocks(d.clocks);
                 renderExchange(d.exchange);
+                renderLink(d.link);
             })
             .catch(function (e) {
                 document.getElementById('fleet-summary').textContent = '읽기 실패';

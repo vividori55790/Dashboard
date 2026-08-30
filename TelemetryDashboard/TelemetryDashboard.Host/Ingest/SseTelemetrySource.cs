@@ -76,6 +76,13 @@ public sealed class SseTelemetrySource : ITelemetrySource
     /// <inheritdoc />
     public string Description => $"SSE {_endpoint}";
 
+    /// <summary>When this host could not reach the feed, and for how long.</summary>
+    /// <remarks>
+    /// The count below says a link flapped; this says a chart has a hole in it and where. Four
+    /// reconnections in a minute and one four-hour outage give the same count and are not the same
+    /// situation. Kept here rather than only written to stderr, where a browser cannot see it.
+    /// </remarks>
+    public Core.Cluster.LinkOutageLedger Outages { get; } = new();
     /// <summary>How many times the connection dropped and was re-established.</summary>
     public int Reconnects { get; private set; }
 
@@ -126,6 +133,10 @@ public sealed class SseTelemetrySource : ITelemetrySource
                         break;
                     }
 
+                    // The first event of a connection is what proves the link is back. Closing
+                    // the interval when the request returns headers would count a peer that
+                    // accepts and then sends nothing as restored.
+                    Outages.Restored(DateTime.UtcNow);
                     EventsReceived++;
                     yield return new RawPacket(_endpoint.Host, payload, DateTime.UtcNow);
                 }
@@ -135,6 +146,7 @@ public sealed class SseTelemetrySource : ITelemetrySource
 
             if (cancellationToken.IsCancellationRequested) yield break;
 
+            Outages.Dropped(DateTime.UtcNow, LastFault);
             Reconnects++;
             Console.Error.WriteLine(
                 $"[sse] {_endpoint.Host} disconnected after {EventsReceived:N0} events"

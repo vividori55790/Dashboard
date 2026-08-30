@@ -109,20 +109,27 @@ Exchange must also be idempotent. A reconnect that replays a buffer must not dou
 samples carry a per-node sequence and the receiver deduplicates. Otherwise a flaky link inflates
 every total, and the totals are what the operator trusts.
 
-**The marking and the idempotence are built; the buffering is not.** A receiver can say how old a
-sample was when it arrived — `ArrivalAge` works it out as `(arrival − the sender's clock) − offset`
-and publishes it as `lateBySec`, with `PacketFlags.LateArriving` on the packet. And a replayed link
-can no longer inflate a total: every frame carries the sending process's epoch and a per-node
-counter, and `DuplicateFilter` refuses what this host already took. What no node does yet is
-buffer locally through a partition and replay afterwards, so nothing here *produces* a backfill —
-both were driven against peers written to.
+**Three of the four halves are built.** A receiver can say how old a sample was when it arrived —
+`ArrivalAge` works it out as `(arrival − the sender's clock) − offset` and publishes it as
+`lateBySec`. A replayed link can no longer inflate a total: every frame carries the sending
+process's epoch and a per-node counter, and `DuplicateFilter` refuses what this host already
+took. And a host now says when it was alone: `LinkOutageLedger` keeps the intervals its upstream
+was unreachable, which the source previously wrote to stderr where a browser cannot see it.
 
-The duplicate case was observed rather than anticipated. While driving the backfill work the test
-peer's connection ended, `SseTelemetrySource` reconnected because that is what it is for, the peer
-replayed its buffer, and the receiver took the same four-hour-old sample twice and reported it
-twice. Driven properly afterwards — a peer replaying sequences 1..30 under one epoch on every
-connection — six connections gave `admitted: 30, duplicatesRefused: 150`, with the series store
-holding exactly the thirty distinct samples.
+That last one is this section's title, and a count was not the fact. Four reconnections in a minute
+and one four-hour outage give the same counter and are not the same situation — only the second
+puts a hole in a chart. The claim is also deliberately narrow: not that data was lost, since the
+peer may have had nothing to send, but that for this window nothing could have reached this host,
+so anything the peer observed in it is absent from this host's history. That is what an operator
+needs before reading a flat stretch of chart as a quiet plant, and the console says it beside the
+chart rather than in a log.
+
+What no node does is the fourth half: buffer locally through a partition and replay afterwards. The
+exchange here is pull — a receiver subscribes to a sender's stream — so when the receiver comes
+back the sender has no memory of what it missed. Filling the gap would mean the receiver asking
+for the interval it now knows it lost, which is a query the sender can already answer from its
+archive. Nothing does it yet, so this product recognises a backfill and refuses a replay without
+ever producing either.
 
 Three things about it are worth stating.
 
@@ -264,7 +271,8 @@ is the same kind of claim this document argues against.
 | **Uncertainty on that offset** | Built | `Core/Models/ClockOffsetEstimate` — never-measured, measured-once-with-no-error-bar and measured-with-a-spread are three different answers, and `CanOrder` refuses on the first two. The spread is published as a floor: one-way messages never separate transit from the offset, so `uncertaintyIsALowerBound` travels beside it |
 | Backfill marking | Built | `Core/Models/ArrivalAge`, `PacketFlags.LateArriving`, `lateBySec` and `ageUndetermined` on the wire. Driven against a peer emitting a four-hour-old sample: flagged at `lateBySec = 14400.0` with none of the 104 prompt samples around it touched |
 | Sequencing and deduplication | Built | `Core/Cluster/DuplicateFilter`, `epoch` and `seq` on the wire, counters under `exchange` on `/api/status`. Driven against a peer replaying 1..30 on every reconnect: 30 admitted, 150 refused over six connections. Per hop, not end to end |
-| Peer exchange and local buffering | Not started | nothing buffers through a partition, so this product recognises a backfill and refuses a replay without ever producing either |
+| Saying when a node was alone | Built | `Core/Cluster/LinkOutage`, `link` on `/api/status`, and a fleet panel in the console. Intervals rather than a tally. Driven against a peer whose connection ends after every batch: 26 outages, 78.271 s total, longest 3.025 s |
+| Peer exchange and local buffering | Not started | the exchange is pull, so a sender has no memory of what a returning receiver missed. Filling the gap means the receiver asking for the interval it now knows it lost — a query the sender can already answer from its archive, and nothing does it |
 | Authentication between instances | Half built | `--credential` gates every path -- page, endpoints, SSE and the WebSocket upgrade -- against a salted PBKDF2 credential, and `telemetry-host credential` enrols one without a desktop. `--listen network` binds every interface and cannot be asked for without it: `CommandLineParser` refuses the pair before anything binds and `TelemetryStreamingServer.Start` refuses it again at the socket, so the open-and-unlocked state has no construction path. What is missing is confidentiality -- Basic over cleartext puts the password on the wire, which makes this a bench-LAN answer and not a plant-network one. That is said at every launch by the banner and reported as `reachability.encrypted: false` on `/api/status`, rather than left to be inferred from `authenticated: true` |
 
 The right-hand columns are maintained by hand and are expected to be embarrassing. That is

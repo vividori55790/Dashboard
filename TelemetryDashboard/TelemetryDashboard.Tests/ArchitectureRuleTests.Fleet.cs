@@ -41,7 +41,8 @@ public partial class ArchitectureRuleTests
         [
             "reachability", "scope", "authenticated", "encrypted",
             "clocks", "perNode", "offsetSec", "spreadSec", "samples",
-            "exchange", "admitted", "duplicatesRefused", "unsequenced", "senderEvictions"
+            "exchange", "admitted", "duplicatesRefused", "unsequenced", "senderEvictions",
+            "link", "outages", "totalDownSec", "recent"
         ];
 
         string[] missingFromPayload = fields.Where(f => !payload.Contains(f + " =")).ToArray();
@@ -99,5 +100,34 @@ public partial class ArchitectureRuleTests
             "the panel has to branch on it, not merely receive it");
         page.Should().Contain("깨끗하다는 뜻이 아닙니다",
             "and say plainly what the zero does not mean");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void HavingNoUpstreamIsNotShownAsAnUpstreamThatNeverFailed()
+    {
+        // Two good-looking states with opposite meanings. "No link to lose" and "a link that has
+        // never dropped" would both render as an absence of bad news, and only the second is
+        // actually news. Same shape as the clocks block above, one layer out.
+        string page = StreamClientSource();
+
+        page.Should().Contain("상위 링크가 없습니다");
+        page.Should().Contain("끊긴 적 없음");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void AnOutageIsShownAsAnIntervalRatherThanACount()
+    {
+        // Four reconnections in a minute and one four-hour gap give the same counter. A panel
+        // showing only the counter hides the one that put a hole in the chart, which is the exact
+        // failure SseTelemetrySource's own summary describes and then wrote to stderr.
+        string page = StreamClientSource();
+
+        page.Should().Contain("totalDownSec", "the duration has to be read, not just the count");
+        page.Should().Contain("가장 긴 끊김", "and the worst single gap is the one that matters");
+        page.Should().Contain("조용한 설비로 읽지 마십시오",
+            "and the panel has to say what the gap means for the chart beside it -- an operator "
+            + "reading a flat stretch as a calm plant is the failure this is all for");
     }
 }

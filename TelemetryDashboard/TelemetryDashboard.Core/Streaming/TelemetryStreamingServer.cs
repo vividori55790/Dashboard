@@ -155,6 +155,13 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     /// </remarks>
     public Cluster.DuplicateFilter? Duplicates { get; set; }
 
+    /// <summary>Gaps in the upstream link, or null when this host has no upstream.</summary>
+    /// <remarks>
+    /// Null on a host reading a cable: there is no link to lose. Present and empty means there is
+    /// one and it has never dropped, which is a different and much better fact.
+    /// </remarks>
+    public Cluster.LinkOutageLedger? Link { get; set; }
+
     public IComputedChannelCounters? ComputedCounters { get; set; }
 
     /// <summary>Raised when a client sends a command upstream over the WebSocket.</summary>
