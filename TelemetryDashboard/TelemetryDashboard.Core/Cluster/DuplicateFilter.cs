@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TelemetryDashboard.Core.Resilience;
 
@@ -30,7 +30,7 @@ namespace TelemetryDashboard.Core.Cluster;
 /// a healthy peer's entire stream — a far worse failure than the one being prevented.
 /// </para>
 /// </remarks>
-public sealed class DuplicateFilter
+public sealed partial class DuplicateFilter
 {
     /// <summary>How many recent sequence numbers are remembered per node and epoch.</summary>
     /// <remarks>
@@ -48,7 +48,14 @@ public sealed class DuplicateFilter
     {
         public readonly HashSet<long> Seen = [];
         public readonly Queue<long> Order = new();
+
+        /// <summary>The natural-key half, for samples that arrived without a counter.</summary>
+        public readonly HashSet<string> Observations = new(StringComparer.Ordinal);
+        public readonly Queue<string> ObservationOrder = new();
     }
+
+    /// <summary>Separates the parts of a composite key, and cannot occur inside one.</summary>
+    private const char KeySeparator = '\u001f';
 
     private readonly BoundedChannelRegistry<Window> _senders;
     private readonly int _window;
@@ -90,34 +97,44 @@ public sealed class DuplicateFilter
 
     /// <summary>Whether this sample should be taken. False when it has already been taken.</summary>
     /// <param name="nodeId">The node the sample describes.</param>
+    /// <param name="variable">The channel within it.</param>
     /// <param name="epoch">The sending process's epoch, or null when it sent none.</param>
     /// <param name="sequence">The sender's per-node counter, or null when it sent none.</param>
-    public bool Admit(string nodeId, string? epoch, long? sequence)
+    /// <param name="observedAt">
+    /// The observing node's own clock, or null when the sample never crossed a network.
+    /// </param>
+    /// <remarks>
+    /// Two ways to recognise a sample, tried in that order, because they are not equally good. A
+    /// counter is what the sender actually assigned and settles the question outright. An identity
+    /// -- this node's this channel at this instant -- is inferred, and two genuinely distinct
+    /// readings sharing all three would be indistinguishable; on a real feed that means the same
+    /// sensor reporting twice in the same tick, which is itself a duplicate.
+    /// <para>
+    /// The second path is what makes a reading recovered from a peer's archive checkable at all: an
+    /// archive stores a reading, not the frame that delivered it, so there is no counter to have.
+    /// It also stops waving through a live peer that simply does not stamp sequences, which the
+    /// counter path could only count and admit.
+    /// </para>
+    /// <para>
+    /// <see cref="Unsequenced"/> now means what it says: neither a counter nor an instant, so
+    /// nothing could be checked. A local device on this machine's own port is the ordinary case,
+    /// and the pump does not consult this filter for one.
+    /// </para>
+    /// </remarks>
+    public bool Admit(
+        string nodeId, string variable, string? epoch, long? sequence, DateTime? observedAt)
     {
-        if (string.IsNullOrEmpty(epoch) || sequence is not { } seq)
+        if (!string.IsNullOrEmpty(epoch) && sequence is { } seq)
         {
-            lock (_gate) _unsequenced++;
-            return true;
+            return AdmitSequence(nodeId, epoch, seq);
         }
 
-        Window window = _senders.GetOrAdd($"{nodeId}{epoch}", _ => new Window(), out _);
-
-        lock (_gate)
+        if (observedAt is { } observed)
         {
-            if (!window.Seen.Add(seq))
-            {
-                _duplicates++;
-                return false;
-            }
-
-            window.Order.Enqueue(seq);
-            while (window.Order.Count > _window)
-            {
-                window.Seen.Remove(window.Order.Dequeue());
-            }
-
-            _admitted++;
-            return true;
+            return AdmitObservation(nodeId, variable, observed);
         }
+
+        lock (_gate) _unsequenced++;
+        return true;
     }
 }

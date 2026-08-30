@@ -1,4 +1,4 @@
-using TelemetryDashboard.Core.Cluster;
+﻿using TelemetryDashboard.Core.Cluster;
 
 namespace TelemetryDashboard.Tests;
 
@@ -30,10 +30,10 @@ public class DuplicateFilterTests
     {
         var filter = new DuplicateFilter();
 
-        for (int seq = 1; seq <= 30; seq++) filter.Admit(Node, Epoch, seq).Should().BeTrue();
+        for (int seq = 1; seq <= 30; seq++) filter.Admit(Node, "bus", Epoch, seq, null).Should().BeTrue();
         for (int replay = 0; replay < 5; replay++)
         {
-            for (int seq = 1; seq <= 30; seq++) filter.Admit(Node, Epoch, seq).Should().BeFalse();
+            for (int seq = 1; seq <= 30; seq++) filter.Admit(Node, "bus", Epoch, seq, null).Should().BeFalse();
         }
 
         filter.Admitted.Should().Be(30);
@@ -49,8 +49,8 @@ public class DuplicateFilterTests
         // stream would be silently discarded.
         var filter = new DuplicateFilter();
 
-        for (int seq = 1; seq <= 10; seq++) filter.Admit(Node, Epoch, seq).Should().BeTrue();
-        for (int seq = 1; seq <= 10; seq++) filter.Admit(Node, "afterrestart", seq).Should().BeTrue();
+        for (int seq = 1; seq <= 10; seq++) filter.Admit(Node, "bus", Epoch, seq, null).Should().BeTrue();
+        for (int seq = 1; seq <= 10; seq++) filter.Admit(Node, "bus", "afterrestart", seq, null).Should().BeTrue();
 
         filter.Admitted.Should().Be(20);
         filter.Duplicates.Should().Be(0);
@@ -64,9 +64,9 @@ public class DuplicateFilterTests
         // like a replay of node A's.
         var filter = new DuplicateFilter();
 
-        filter.Admit("NODE-A", Epoch, 7).Should().BeTrue();
-        filter.Admit("NODE-B", Epoch, 7).Should().BeTrue();
-        filter.Admit("NODE-A", Epoch, 7).Should().BeFalse();
+        filter.Admit("NODE-A", "bus", Epoch, 7, null).Should().BeTrue();
+        filter.Admit("NODE-B", "bus", Epoch, 7, null).Should().BeTrue();
+        filter.Admit("NODE-A", "bus", Epoch, 7, null).Should().BeFalse();
 
         filter.Admitted.Should().Be(2);
     }
@@ -82,9 +82,9 @@ public class DuplicateFilterTests
         // every source that is not a peer.
         var filter = new DuplicateFilter();
 
-        filter.Admit(Node, null, null).Should().BeTrue();
-        filter.Admit(Node, Epoch, null).Should().BeTrue();
-        filter.Admit(Node, null, 4).Should().BeTrue();
+        filter.Admit(Node, "bus", null, null, null).Should().BeTrue();
+        filter.Admit(Node, "bus", Epoch, null, null).Should().BeTrue();
+        filter.Admit(Node, "bus", null, 4, null).Should().BeTrue();
 
         filter.Unsequenced.Should().Be(3);
         filter.Admitted.Should().Be(0, "nothing was checked, so nothing was admitted on its merits");
@@ -101,11 +101,11 @@ public class DuplicateFilterTests
         // recoverable way -- stated here rather than discovered on a host that has been up a month.
         var filter = new DuplicateFilter(window: 4);
 
-        for (int seq = 1; seq <= 4; seq++) filter.Admit(Node, Epoch, seq);
-        filter.Admit(Node, Epoch, 1).Should().BeFalse("still inside the window");
+        for (int seq = 1; seq <= 4; seq++) filter.Admit(Node, "bus", Epoch, seq, null);
+        filter.Admit(Node, "bus", Epoch, 1, null).Should().BeFalse("still inside the window");
 
-        for (int seq = 5; seq <= 8; seq++) filter.Admit(Node, Epoch, seq);
-        filter.Admit(Node, Epoch, 1).Should().BeTrue("pushed out of the window, and taken again");
+        for (int seq = 5; seq <= 8; seq++) filter.Admit(Node, "bus", Epoch, seq, null);
+        filter.Admit(Node, "bus", Epoch, 1, null).Should().BeTrue("pushed out of the window, and taken again");
     }
 
     [Fact]
@@ -116,10 +116,51 @@ public class DuplicateFilterTests
         // without limit. Bounded, and the count of what fell off is reported rather than silent.
         var filter = new DuplicateFilter(senders: 4);
 
-        for (int i = 0; i < 12; i++) filter.Admit($"NODE-{i}", Epoch, 1);
+        for (int i = 0; i < 12; i++) filter.Admit($"NODE-{i}", "bus", Epoch, 1, null);
 
         filter.TrackedSenders.Should().BeLessThanOrEqualTo(4);
         filter.SenderEvictions.Should().BeGreaterThan(0,
             "a bound that discards without saying so is indistinguishable from one that never fills");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier1")]
+    public void APeerThatStampsNoSequenceIsStillCheckedByWhatItSent()
+    {
+        // The counter path can only count these and wave them through. A sample that crossed a
+        // network carries the observing node's own clock, and that plus the node and the channel
+        // is an identity -- inferred rather than assigned, but exact enough that two readings
+        // sharing all three are the same sensor reporting twice in one tick, which is a duplicate.
+        var filter = new DuplicateFilter();
+        DateTime observed = new(2026, 8, 25, 12, 0, 0, DateTimeKind.Utc);
+
+        filter.Admit(Node, "bus", null, null, observed).Should().BeTrue();
+        filter.Admit(Node, "bus", null, null, observed).Should().BeFalse(
+            "a peer replaying an unsequenced buffer used to be admitted every time");
+
+        filter.Admit(Node, "bus", null, null, observed.AddMilliseconds(50)).Should().BeTrue(
+            "a different instant is a different observation");
+        filter.Admit(Node, "current", null, null, observed).Should().BeTrue(
+            "and so is a different channel at the same instant");
+
+        filter.Duplicates.Should().Be(1);
+        filter.Unsequenced.Should().Be(0,
+            "unsequenced now means neither a counter nor an instant -- nothing checkable at all");
+    }
+
+    [Fact]
+    [Trait("Category", "Tier2")]
+    public void ACounterIsPreferredToAnIdentityWhenBothAreThere()
+    {
+        // The counter is what the sender actually assigned; the identity is inferred. When both
+        // are present the assigned one settles it, and a sender that legitimately reports the same
+        // channel twice in one tick is not punished for it.
+        var filter = new DuplicateFilter();
+        DateTime observed = new(2026, 8, 25, 12, 0, 0, DateTimeKind.Utc);
+
+        filter.Admit(Node, "bus", Epoch, 1, observed).Should().BeTrue();
+        filter.Admit(Node, "bus", Epoch, 2, observed).Should().BeTrue(
+            "same instant, different counter -- the sender says these are two samples");
+        filter.Admit(Node, "bus", Epoch, 1, observed).Should().BeFalse();
     }
 }

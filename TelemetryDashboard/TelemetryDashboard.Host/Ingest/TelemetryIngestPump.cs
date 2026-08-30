@@ -212,7 +212,9 @@ public sealed class TelemetryIngestPump
                     // traffic that says nothing about exchange, then invited a fleet view to blame
                     // a peer that does not exist.
                     if (_deduplicates
-                        && !Duplicates.Admit(packet.NodeId, packet.SourceEpoch, packet.SourceSequence))
+                        && !Duplicates.Admit(
+                            packet.NodeId, packet.Variable, packet.SourceEpoch,
+                            packet.SourceSequence, packet.ObservedAt))
                     {
                         continue;
                     }

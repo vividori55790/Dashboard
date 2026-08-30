@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace TelemetryDashboard.Core.Cluster;
@@ -78,12 +78,16 @@ public sealed class LinkOutageLedger
         }
     }
 
-    /// <summary>Records that the connection is back.</summary>
-    public void Restored(DateTime whenUtc)
+    /// <summary>Records that the connection is back, and returns the interval that just closed.</summary>
+    /// <remarks>
+    /// Returns it rather than only recording it, so a caller that wants to go and ask for what it
+    /// missed has the window without racing the ledger to read it back.
+    /// </remarks>
+    public LinkOutage? Restored(DateTime whenUtc)
     {
         lock (_gate)
         {
-            if (_open is not { } outage) return;
+            if (_open is not { } outage) return null;
 
             var closed = outage with { EndedUtc = whenUtc };
             _total += closed.Duration(whenUtc);
@@ -91,6 +95,7 @@ public sealed class LinkOutageLedger
 
             _recent.Enqueue(closed);
             while (_recent.Count > Kept) _recent.Dequeue();
+            return closed;
         }
     }
 
