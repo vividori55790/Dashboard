@@ -195,6 +195,55 @@ jobs:
           if-no-files-found: ignore
 
   # -------------------------------------------------------------------------
+  # Two of this product's endpoints are contracts with software it does not own.
+  # They shipped verified only against parsers and a JSON schema, which is a
+  # weaker claim than a scraper storing a series or Grafana accepting a file --
+  # and the failure they guard against is silent on both ends. This job settles
+  # it with the real thing. It runs on Linux only because that is where the
+  # runner has a working Docker engine.
+  # -------------------------------------------------------------------------
+  dashboards:
+    name: Prometheus and Grafana actually read it
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Publish the host (linux-x64, self-contained single file)
+        run: >
+          dotnet publish TelemetryDashboard/TelemetryDashboard.Host/TelemetryDashboard.Host.csproj
+          -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -o ${{ github.workspace }}/dist/host
+
+      - name: Scrape it with Prometheus and import its dashboard into Grafana
+        run: bash .github/scripts/integration-dashboards.sh "${{ github.workspace }}/dist/host" 8140
+
+      - name: Upload what the containers and the host said
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-integration
+          path: |
+            ${{ github.workspace }}/dist/host/integration-host.log
+            ${{ github.workspace }}/dist/host/integration
+          if-no-files-found: ignore
+
+  # -------------------------------------------------------------------------
   # The four [Trait("Category", "Benchmark")] tests, which no other job runs.
   #
   # On request only. They take minutes, they measure the runner's disk and CPU as
