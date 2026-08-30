@@ -117,6 +117,15 @@ public static class TelemetryHttpRoutes
             case "/api/series":
                 await WriteSeriesAsync(response, server, context.Request.QueryString).ConfigureAwait(false);
                 return;
+
+            // Not under /api, and not JSON. Every scraper in the ecosystem defaults to this exact
+            // path, so serving it anywhere else would make an operator configure their way to a
+            // hub that already answers -- and the content type carries the format version, because
+            // omitting it lets the scraper's build decide what this document means.
+            case MetricsEndpoint.Path:
+                await WriteAsync(response, MetricsEndpoint.ContentType,
+                    Encoding.UTF8.GetBytes(MetricsEndpoint.Render(server))).ConfigureAwait(false);
+                return;
         }
 
         await ServeStaticAsync(response, path, content, fallbackHtmlPath).ConfigureAwait(false);
