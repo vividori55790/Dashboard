@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace TelemetryDashboard.Core.Streaming;
 
@@ -78,5 +78,20 @@ public static partial class MetricsEndpoint
     {
         int dot = channel.IndexOf('.');
         return dot > 0 ? channel[(dot + 1)..] : channel;
+    }
+
+    /// <summary>Writes one channel sample with the labels its key actually supports.</summary>
+    /// <remarks>
+    /// A key with no dot gets no <c>node</c> label rather than an empty one. Prometheus matches an
+    /// empty label value and an absent label alike, so this changes no query -- it changes what the
+    /// document says. <c>node=""</c> reads as a node whose name is the empty string, and this
+    /// codebase spent the afternoon removing exactly that kind of claim from the other endpoints.
+    /// </remarks>
+    private static void SampleChannel(Family family, double value, string channel)
+    {
+        string node = Node(channel);
+
+        if (node.Length == 0) family.Sample(value, "channel", Within(channel));
+        else family.Sample(value, "node", node, "channel", Within(channel));
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -204,7 +204,8 @@ public partial class TelemetryStreamingServer : IAsyncDisposable
     [
         "/ws", "/stream", "/api/status", "/api/series", "/api/spectrum", "/api/aligned",
         "/api/computed", "/api/limits", "/api/inputs", "/api/control", "/api/history",
-        "/api/incident", "/api/dvr/replay", "/api/dvr/report", MetricsEndpoint.Path
+        "/api/incident", "/api/dvr/replay", "/api/dvr/report", MetricsEndpoint.Path,
+        "/api/export/grafana"
     ];
 
     /// <summary>

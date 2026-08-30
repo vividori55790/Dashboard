@@ -1,4 +1,4 @@
-using TelemetryDashboard.Core.Analytics;
+﻿using TelemetryDashboard.Core.Analytics;
 using TelemetryDashboard.Core.Cluster;
 using TelemetryDashboard.Core.Query;
 using TelemetryDashboard.Core.Services;
@@ -25,6 +25,15 @@ public class MetricsEndpointTests
 {
     private const string Channel = "SIM:COM3.dab.bus_voltage";
 
+    /// <summary>The same channel as the endpoint labels it: the node is a dimension of its own.</summary>
+    /// <remarks>
+    /// These assertions read <c>channel="SIM:COM3.dab.bus_voltage"</c> until the exporter and the
+    /// generated Grafana dashboard were checked against each other. The dashboard asked for
+    /// <c>{node=..., channel=...}</c>, which is what Prometheus's conventions and ARCHITECTURE §2
+    /// both call for, and every panel imported cleanly and matched nothing.
+    /// </remarks>
+    private const string ChannelLabels = "node=" + "\"SIM:COM3\",channel=\"dab.bus_voltage\"";
+
     private static TelemetryStreamingServer Host() => new(port: 0);
 
     private static MetricsExpositionParser.Document Read(TelemetryStreamingServer server) =>
@@ -50,10 +59,10 @@ public class MetricsEndpointTests
 
         MetricsExpositionParser.Document document = Read(server);
 
-        document.Samples.Should().ContainKey($"telemetry_channel_value{{channel=\"{Channel}\"}}");
+        document.Samples.Should().ContainKey($"telemetry_channel_value{{{ChannelLabels}}}");
         document.Samples.Keys
             .Where(key => key.StartsWith("telemetry_channel_", StringComparison.Ordinal))
-            .Should().OnlyContain(key => key.Contains(Channel, StringComparison.Ordinal),
+            .Should().OnlyContain(key => key.Contains(ChannelLabels, StringComparison.Ordinal),
                 "no channel this host never heard from may appear, and a zero for one would");
     }
 
@@ -68,9 +77,9 @@ public class MetricsEndpointTests
 
         MetricsExpositionParser.Document document = Read(server);
 
-        document.Samples.Should().NotContainKey($"telemetry_channel_value{{channel=\"{Channel}\"}}");
+        document.Samples.Should().NotContainKey($"telemetry_channel_value{{{ChannelLabels}}}");
         document.Samples.Should().ContainKey(
-            $"telemetry_channel_last_sample_timestamp_seconds{{channel=\"{Channel}\"}}",
+            $"telemetry_channel_last_sample_timestamp_seconds{{{ChannelLabels}}}",
             "the channel exists and the silence itself is the measurement worth exporting");
     }
 

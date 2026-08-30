@@ -1,4 +1,4 @@
-using TelemetryDashboard.Core.Streaming;
+﻿using TelemetryDashboard.Core.Streaming;
 
 namespace TelemetryDashboard.Tests;
 
@@ -40,14 +40,14 @@ public class MetricsVerdictExportTests
     {
         string exposition = MetricsEndpoint.Render(ServerWithAScoredChannel());
 
-        exposition.Should().Contain("channel=\"RIG-01.bus_voltage\"",
+        exposition.Should().Contain("node=\"RIG-01\",channel=\"bus_voltage\"",
             "the measurement itself still goes out -- excluding everything would pass this test "
             + "for the wrong reason");
 
-        exposition.Should().NotContain("RIG-01.bus_voltage.predicted",
+        exposition.Should().NotContain("bus_voltage.predicted",
             "a forecast presented to somebody else's alerting rules as a measurement is this "
             + "product's central failure, exported");
-        exposition.Should().NotContain("RIG-01.bus_voltage.anomalyScore",
+        exposition.Should().NotContain("bus_voltage.anomalyScore",
             "and a verdict about a channel is not a reading of one");
     }
 
@@ -75,7 +75,7 @@ public class MetricsVerdictExportTests
 
         string exposition = MetricsEndpoint.Render(server);
 
-        exposition.Should().Contain("RIG-01.predicted_load");
-        exposition.Should().Contain("RIG-01.anomalyScore_setpoint");
+        exposition.Should().Contain("channel=\"predicted_load\"");
+        exposition.Should().Contain("channel=\"anomalyScore_setpoint\"");
     }
 }

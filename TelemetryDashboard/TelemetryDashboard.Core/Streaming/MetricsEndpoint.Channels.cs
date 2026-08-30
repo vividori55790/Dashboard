@@ -78,7 +78,7 @@ public static partial class MetricsEndpoint
 
         foreach (Reading reading in readings)
         {
-            if (reading.Value is { } current) value.Sample(current, "node", Node(reading.Channel), "channel", Within(reading.Channel));
+            if (reading.Value is { } current) SampleChannel(value, current, reading.Channel);
         }
 
         Family seen = document.Open("channel_last_sample_timestamp_seconds", "gauge",
@@ -86,27 +86,27 @@ public static partial class MetricsEndpoint
             + "every channel that has ever spoken, including ones now too stale to have a value, "
             + "so a scraper can subtract it from time() and see the silence for itself.");
 
-        foreach (Reading reading in readings) seen.Sample(reading.NewestSec, "node", Node(reading.Channel), "channel", Within(reading.Channel));
+        foreach (Reading reading in readings) SampleChannel(seen, reading.NewestSec, reading.Channel);
 
         Family appended = document.Open("channel_samples_total", "counter",
             "Samples this host has written for a channel since it started. Its rate is the "
             + "channel's real sample rate, which is the number that falls before a reading does.");
 
-        foreach (Reading reading in readings) appended.Sample(reading.Appended, "node", Node(reading.Channel), "channel", Within(reading.Channel));
+        foreach (Reading reading in readings) SampleChannel(appended, reading.Appended, reading.Channel);
 
         Family evicted = document.Open("channel_evicted_samples_total", "counter",
             "Samples overwritten by newer ones because the channel's ring was full. Non-zero means "
             + "history is being lost, and a query reaching further back than the ring holds will "
             + "return a window shorter than it asked for.");
 
-        foreach (Reading reading in readings) evicted.Sample(reading.Evicted, "node", Node(reading.Channel), "channel", Within(reading.Channel));
+        foreach (Reading reading in readings) SampleChannel(evicted, reading.Evicted, reading.Channel);
 
         Family disordered = document.Open("channel_out_of_order_samples_total", "counter",
             "Samples that arrived stamped earlier than their predecessor. Non-zero means the "
             + "channel's timeline is not monotonic, so a window query may include or exclude a "
             + "sample at its boundary.");
 
-        foreach (Reading reading in readings) disordered.Sample(reading.OutOfOrder, "node", Node(reading.Channel), "channel", Within(reading.Channel));
+        foreach (Reading reading in readings) SampleChannel(disordered, reading.OutOfOrder, reading.Channel);
     }
 
     /// <summary>One channel's standing, or null when it has nothing to report.</summary>

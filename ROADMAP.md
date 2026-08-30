@@ -15,102 +15,73 @@ worse than none, because it is read as a statement of what is missing.
 **An operator should be able to see exactly what is arriving, know what each channel actually is,
 and wire it into the dashboards they already run — in minutes, without hand-writing a config.**
 
-Three things are missing for that, and they are the three workstreams below.
-
 The second constraint is as important as the first: **use the conventions the rest of the industry
 already has.** A telemetry hub that invents its own metric naming, its own unit vocabulary and its
-own dashboard format is a hub nobody can connect anything to. Each workstream begins by reading the
-relevant specification and prior art, and records what it took from where.
+own dashboard format is a hub nobody can connect anything to.
 
-## Where the product is today
+## What has shipped, and where it went
 
-Ingest is in good shape and honest about itself. A sample carries where it came from, whether it
-was measured or generated, whether it was computed, how old it was when it arrived and whether that
-was knowable; a peer's stream keeps its channel identities and units; a replayed link cannot inflate
-a total; the clock offset between two nodes is estimated with an error bar that is published as a
-lower bound. `/api/inputs` lists what every port is delivering.
+The first three workstreams are done and their rows are in ARCHITECTURE.md. What they took from
+prior art is recorded beside the code it governs, and the three findings worth remembering are:
 
-What an operator gets from all of that is a list of names. `dab.bus_voltage` arrives with a unit
-because a rule file said so; `field1` arrives because nobody has written one yet. Nothing says what
-kind of quantity a channel is, nothing groups a rig's channels into the subsystems they belong to,
-and nothing exports any of it anywhere. The browser console is the only view, and it is the only
-view because there is no way to feed anything else.
+- **Sparkplug B does not define `engUnit`.** The keys everyone associates with it are an Ignition
+  convention inside a free-text `PropertySet`; the spec names exactly one well-known property,
+  `Quality`. So Sparkplug answers *where a unit travels* and says nothing about quantity kind. That
+  gap is what the taxonomy fills, and it is why a declared unit here is a string.
+- **The metrics endpoint had to be structurally unable to export a zero for an unmeasured value.**
+  A family writes its `HELP`/`TYPE` from its first sample or never, so a collaborator holding
+  nothing contributes zero bytes — one place instead of twenty call sites.
+- **Two correct halves made a broken whole.** The exporter asked for
+  `telemetry_channel_value{node=…, channel=…}` and the endpoint emitted one glued `channel` label.
+  Both sides' tests passed. Every panel imported cleanly and drew nothing.
+  `GrafanaScrapeContractTests` now asserts them against each other, which is the only place the
+  disagreement exists.
 
-## W1 — Say what each channel actually is
+## W4 — Prove it against the real thing
 
-**Problem.** Classification today is binary: either a rule file declared a channel, or it did not
-and the parser named it positionally. There is no notion of *what kind of thing* a reading is, so
-nothing downstream can pick a unit, an axis, a scale or a colour without being told each time.
+**Problem.** Two of those three rows read *Half built*, and both for the same reason: no real
+Prometheus has scraped this hub and no real Grafana has imported its dashboard. What exists is a
+document read back by the Prometheus project's own Python parser and a JSON validated against a
+schema. Two parsers agreeing is weaker evidence than a scraper storing a series, and a schema
+passing is weaker than Grafana drawing a line.
 
-**Build.** A channel taxonomy: quantity kind (voltage, current, temperature, rate, ratio,
-dimensionless…), unit, and the subsystem it belongs to, derived from the channel name, the declared
-unit and the values themselves.
+This matters more than it would for an internal format. The moment an operator points their stack
+at `/metrics`, the metric names and labels become a contract their alert rules depend on, and the
+failure mode is the quiet one — a panel that imports without complaint and stays empty.
 
-**The rule that governs it.** It must answer **unclassified** rather than guess. A channel
-confidently labelled a temperature because its name contains `t` and its values sit near 20 is the
-same defect as a confident zero — worse, because it will pick the axis and the alarm band. Every
-classification carries how it was reached, and a low-confidence one is presented as a *proposal for
-the operator to accept*, never as a fact.
+**Build.** A CI job that stands up Prometheus and Grafana against a published host and asserts on
+what they actually store and render. The Linux runner has a working Docker engine; this machine
+does not, which is why it was not done at the time.
 
-**Read first.** Prometheus metric and unit naming conventions; OpenMetrics units; UCUM; Sparkplug B
-metric metadata (the industrial-telemetry answer to exactly this question); OPC-UA
-`EngineeringUnits`. Take the vocabulary from whichever of these the industry actually uses rather
-than inventing one.
+**Done when.** A Prometheus container scrapes a running host and its query API returns the series
+the generated dashboard asks for; a Grafana container imports the dashboard without error. Both
+assertions fail if the label shape changes on either side.
 
-**Done when.** `/api/inputs` carries a classification for every channel; a rig of unnamed `fieldN`
-channels produces proposals an operator can accept in one action; and a planted mislabel is caught
-by a rule.
+## W5 — Let an operator accept a proposal
 
-## W2 — Let anything scrape this hub
+**Problem.** The taxonomy proposes a classification for a channel it cannot derive one for, and
+there is nowhere for the operator's answer to go. The engineering half is built and the
+`fieldN` case the goal names produces no proposals at all by design — there is nothing to accept
+for a channel with no unit and no recognisable name.
 
-**Problem.** There is no way to get data out of this product into a system that already exists. MQTT
-relay and Slack alerts exist; a metrics endpoint does not. Every monitoring stack in use — Grafana,
-Prometheus, VictoriaMetrics, Datadog agents, Telegraf — can read the Prometheus exposition format,
-and none of them can read anything this hub currently serves.
+**Decide first, then build.** Where an accepted proposal is written is a product decision and is
+recorded rather than guessed at: the operator's **routing rules file** makes the decision
+reviewable and diffable alongside the rest of the rig config, but edits a file they may
+hand-maintain; a **separate overrides store** leaves their file alone but creates a second place a
+channel's unit can come from.
 
-**Build.** `/metrics`, in Prometheus text exposition format, from the live channel set.
+## Not in these, and not forgotten
 
-**The rule that governs it.** A channel with no verdict, no baseline or no sample must be **absent
-from the output**, not exported as zero. This is the single most important detail of the whole
-workstream: Prometheus fills gaps by interpolation and alerting rules fire on values, so a zero
-exported for "not measured" becomes a confident reading inside somebody else's alert. The same rule
-this codebase already applies to its own analytics applies at the boundary, and it is easier to get
-wrong here because the format has no null.
-
-**Read first.** The Prometheus exposition format and OpenMetrics specifications; the naming and base
-units conventions; how established exporters (`node_exporter`) handle absent series and staleness.
-
-**Done when.** A real Prometheus scrapes this host and the series that appear are exactly the
-channels that have data; an unmeasured channel is absent rather than zero, verified by planting one.
-
-## W3 — Generate the dashboard rather than asking for one
-
-**Problem.** Even with `/metrics`, connecting this to Grafana means a human building panels by hand
-for channels the hub already knows about. "쉽게 설정할 수 있게" is the requirement, and a scrape
-endpoint alone does not meet it.
-
-**Build.** A generated Grafana dashboard: `/api/export/grafana` returns dashboard JSON built from
-the channels this host actually has, grouped by the W1 taxonomy, with units and axes already
-correct. Plus a console panel that hands the operator the exact scrape config and the dashboard
-file, with nothing to type.
-
-**The rule that governs it.** The generated dashboard must not draw panels for channels that have
-never reported. An auto-generated dashboard full of empty graphs is how an operator learns to
-distrust the generator, and an empty graph is again indistinguishable from a quiet one.
-
-**Read first.** The Grafana dashboard JSON schema and provisioning format; how projects that already
-generate dashboards structure theirs; what a Prometheus datasource panel needs at minimum.
-
-**Done when.** A generated dashboard imports into a real Grafana without editing, its panels carry
-the right units, and it contains no panel for a channel that has never reported.
-
-## Not in these three, and not forgotten
-
-- **Peer exchange and local buffering.** The last "Not started" row in ARCHITECTURE.md. The exchange
-  is pull, so a returning receiver must ask for the interval it lost — a query the sender can
-  already answer from its archive.
+- **Peer exchange and local buffering.** The last *Not started* row. The exchange is pull, so a
+  returning receiver must ask for the interval it lost — a query the sender can already answer from
+  its archive, verified: an archiving host returns 448 samples for a 12-second window and a
+  non-archiving one answers `Error` with a reason rather than an empty result.
 - **Confidentiality.** `--listen network` puts a password on the wire in the clear. `HttpListener`
   has no HTTPS off Windows, so the honest options are a different HTTP stack or leaving TLS to the
-  proxy it already works with. A product decision, recorded rather than guessed at.
+  proxy it already works with.
 - **The peer's verdicts, kept attributed to the peer.** §7 asks for it; they are dropped instead.
+- **The anomaly score stamped on every numeric leaf.** `TelemetryFrameRecorder` gives
+  `NODE.bus_voltage.predicted` the score of `NODE.bus_voltage`, so the DVR replays a forecast's
+  verdict as its own. Found while building the metrics endpoint; the endpoint now refuses to export
+  those series at all, which contains the damage without fixing the cause.
 - **Desktop parity.** The WPF shell has neither the input inventory nor the fleet view.
